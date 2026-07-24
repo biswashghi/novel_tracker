@@ -1,0 +1,12 @@
+{
+  "name": "novel-tracker-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A browser extension to track web novel reading progress across sites.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "test": "node --test"
+  }
+}

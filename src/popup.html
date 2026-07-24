@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Novel Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+      body {
+        width: 380px;
+      }
+
+      .popup {
+        display: grid;
+        gap: 14px;
+      }
+
+      .hero {
+        padding: 16px;
+      }
+
+      .hero h1 {
+        margin: 0 0 6px;
+        font-size: 1.4rem;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      form {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page popup">
+      <section class="panel hero">
+        <span class="pill" id="site-pill">Waiting for page</span>
+        <h1>Track this novel</h1>
+        <p>Save the chapter you are on now, then jump back here later from your library.</p>
+      </section>
+
+      <form class="panel" id="novel-form">
+        <div class="field">
+          <label for="title">Novel title</label>
+          <input id="title" name="title" required>
+        </div>
+
+        <div class="field">
+          <label for="chapter-label">Current chapter</label>
+          <input id="chapter-label" name="chapterLabel" placeholder="Chapter 142">
+        </div>
+
+        <div class="field">
+          <label for="chapter-url">Current page URL</label>
+          <input id="chapter-url" name="chapterUrl" required>
+        </div>
+
+        <div class="field">
+          <label for="home-url">Novel home URL</label>
+          <input id="home-url" name="homeUrl" placeholder="Optional">
+        </div>
+
+        <div class="field">
+          <label for="cover-url">Cover image URL</label>
+          <input id="cover-url" name="coverUrl" placeholder="Optional">
+        </div>
+
+        <div class="field">
+          <label for="status">Reading status</label>
+          <select id="status" name="status">
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="completed">Completed</option>
+            <option value="dropped">Dropped</option>
+          </select>
+        </div>
+
+        <div class="status" id="status-message"></div>
+
+        <div class="actions">
+          <button type="submit" id="save-button">Save progress</button>
+          <button type="button" class="secondary" id="open-library">Open library</button>
+        </div>
+      </form>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
