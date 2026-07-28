@@ -133,6 +133,146 @@ test("upsertNovel keeps Royal Road chapter history on one novel", async () => {
   );
 });
 
+test("upsertNovel updates existing entries for supported smaller chapter sites", async () => {
+  const cases = [
+    {
+      title: "Scarlet Steel",
+      sourceSite: "scribblehub.com",
+      novelHomeUrl: "https://www.scribblehub.com/series/2291530/scarlet-steel/",
+      firstUrl: "https://www.scribblehub.com/read/2291530-scarlet-steel/chapter/2470326/",
+      firstLabel: "Chapter 2470326",
+      nextUrl: "https://www.scribblehub.com/read/2291530-scarlet-steel/chapter/2470450/",
+      nextLabel: "Chapter 2470450"
+    },
+    {
+      title: "The Fractured Light",
+      sourceSite: "creativenovels.com",
+      novelHomeUrl: "https://creativenovels.com/302045/",
+      firstUrl: "https://creativenovels.com/302045/chapter-1-the-boy-the-world-forgot/",
+      firstLabel: "Chapter 1 — The Boy the World Forgot",
+      nextUrl: "https://creativenovels.com/302045/chapter-2-the-mark-that-should-not-exist/",
+      nextLabel: "Chapter 2 — The Mark That Should Not Exist"
+    },
+    {
+      title: "I Became A Living Cheat",
+      sourceSite: "lightnovelstranslations.com",
+      novelHomeUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/",
+      firstUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/chapter-364-approaching-the-seventh/",
+      firstLabel: "Chapter 364: Approaching The Seventh",
+      nextUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/chapter-365-returning-home/",
+      nextLabel: "Chapter 365: Returning Home"
+    },
+    {
+      title: "Starting a New Life for the Discarded All-Rounder",
+      sourceSite: "shintranslations.com",
+      novelHomeUrl: "https://shintranslations.com",
+      firstUrl: "https://shintranslations.com/starting-a-new-life-for-the-discarded-all-rounder-vol-7-chapter-26-part-3/",
+      firstLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 26 Part 3",
+      nextUrl: "https://shintranslations.com/starting-a-new-life-for-the-discarded-all-rounder-vol-7-chapter-27-part-1/",
+      nextLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 27 Part 1"
+    }
+  ];
+
+  for (const scenario of cases) {
+    globalThis.localStorage.clear();
+
+    await upsertNovel({
+      title: scenario.title,
+      sourceSite: scenario.sourceSite,
+      novelHomeUrl: scenario.novelHomeUrl,
+      lastReadChapterUrl: scenario.firstUrl,
+      lastReadChapterLabel: scenario.firstLabel,
+      coverImageUrl: "",
+      status: "active"
+    });
+
+    await upsertNovel({
+      title: scenario.title,
+      sourceSite: scenario.sourceSite,
+      novelHomeUrl: scenario.novelHomeUrl,
+      lastReadChapterUrl: scenario.nextUrl,
+      lastReadChapterLabel: scenario.nextLabel,
+      coverImageUrl: "",
+      status: "active"
+    });
+
+    const novels = await getNovels();
+    assert.equal(novels.length, 1, `${scenario.sourceSite} should update the existing novel`);
+    assert.equal(novels[0].lastReadChapterUrl, scenario.nextUrl);
+    assert.equal(novels[0].chapterHistory.length, 2);
+  }
+});
+
+test("autoUpdateNovelProgress ignores non-chapter pages on supported smaller chapter sites", async () => {
+  const cases = [
+    {
+      title: "Scarlet Steel",
+      sourceSite: "scribblehub.com",
+      novelHomeUrl: "https://www.scribblehub.com/series/2291530/scarlet-steel/",
+      chapterUrl: "https://www.scribblehub.com/read/2291530-scarlet-steel/chapter/2470326/",
+      chapterLabel: "Chapter 2470326",
+      nonChapterUrl: "https://www.scribblehub.com/series/2291530/scarlet-steel/",
+      nonChapterLabel: "Scarlet Steel"
+    },
+    {
+      title: "The Fractured Light",
+      sourceSite: "creativenovels.com",
+      novelHomeUrl: "https://creativenovels.com/302045/",
+      chapterUrl: "https://creativenovels.com/302045/chapter-1-the-boy-the-world-forgot/",
+      chapterLabel: "Chapter 1 — The Boy the World Forgot",
+      nonChapterUrl: "https://creativenovels.com/302045/",
+      nonChapterLabel: "The Fractured Light"
+    },
+    {
+      title: "I Became A Living Cheat",
+      sourceSite: "lightnovelstranslations.com",
+      novelHomeUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/",
+      chapterUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/chapter-364-approaching-the-seventh/",
+      chapterLabel: "Chapter 364: Approaching The Seventh",
+      nonChapterUrl: "https://lightnovelstranslations.com/novel/i-became-a-living-cheat/",
+      nonChapterLabel: "I Became A Living Cheat"
+    },
+    {
+      title: "Starting a New Life for the Discarded All-Rounder",
+      sourceSite: "shintranslations.com",
+      novelHomeUrl: "https://shintranslations.com",
+      chapterUrl: "https://shintranslations.com/starting-a-new-life-for-the-discarded-all-rounder-vol-7-chapter-26-part-3/",
+      chapterLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 26 Part 3",
+      nonChapterUrl: "https://shintranslations.com",
+      nonChapterLabel: "Shin Translations"
+    }
+  ];
+
+  for (const scenario of cases) {
+    globalThis.localStorage.clear();
+
+    await upsertNovel({
+      title: scenario.title,
+      sourceSite: scenario.sourceSite,
+      novelHomeUrl: scenario.novelHomeUrl,
+      lastReadChapterUrl: scenario.chapterUrl,
+      lastReadChapterLabel: scenario.chapterLabel,
+      coverImageUrl: "",
+      status: "active"
+    });
+
+    const result = await autoUpdateNovelProgress({
+      title: scenario.title,
+      sourceSite: scenario.sourceSite,
+      novelHomeUrl: scenario.novelHomeUrl,
+      lastReadChapterUrl: scenario.nonChapterUrl,
+      lastReadChapterLabel: scenario.nonChapterLabel,
+      coverImageUrl: ""
+    });
+
+    assert.equal(result.updated, false, `${scenario.sourceSite} non-chapter page should not update progress`);
+
+    const [novel] = await getNovels();
+    assert.equal(novel.lastReadChapterUrl, scenario.chapterUrl);
+    assert.equal(novel.chapterHistory.length, 1);
+  }
+});
+
 test("importNovelsJson merges a backup into the existing library", async () => {
   globalThis.localStorage.clear();
 
@@ -176,4 +316,26 @@ test("importNovelsJson merges a backup into the existing library", async () => {
   const exported = JSON.parse(await exportNovelsJson());
   assert.equal(exported.version, 1);
   assert.equal(exported.novels.length, 1);
+});
+
+test("importNovelsJson skips blank novel entries", async () => {
+  globalThis.localStorage.clear();
+
+  await importNovelsJson(
+    JSON.stringify({
+      version: 1,
+      novels: [
+        {
+          title: "",
+          sourceSite: "",
+          novelHomeUrl: "",
+          lastReadChapterUrl: "",
+          lastReadChapterLabel: ""
+        }
+      ]
+    })
+  );
+
+  const novels = await getNovels();
+  assert.equal(novels.length, 0);
 });

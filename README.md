@@ -1,47 +1,99 @@
 # Novel Tracker Extension
 
-Novel Tracker is a lightweight Manifest V3 browser extension for saving and
-updating web novel reading progress across chapter sites such as Webnovel,
-Wuxiaworld, NovelBin, and similar pages.
+Novel Tracker is a local-first Manifest V3 browser extension for saving and
+automatically updating web novel and light novel reading progress across chapter
+sites.
 
-## Status
+It keeps a small reading library in the browser, lets readers reopen the exact
+chapter where they stopped, and keeps chapter history so accidental backtracking
+can be corrected.
 
-MVP browser extension. It is designed around local-first tracking rather than a
-cloud account: the extension stores reading state in `chrome.storage.local` and
-lets the user manually correct imperfect site metadata.
+## Features
 
-## What It Does
+- Save the current chapter URL from the active browser tab.
+- Capture novel title, source site, chapter label, cover image URL, and reading status.
+- Automatically update tracked novels when matching chapter URLs change.
+- Browse, search, sort, edit, delete, and reopen novels from the library page.
+- Keep a per-novel chapter history trail.
+- Export and import JSON backups.
+- Keep reading data local to the browser profile.
 
-- Save the current chapter URL from the active tab
-- Capture title, source site, chapter label, cover image URL, and reading status
-- Update saved progress from the popup
-- Automatically update tracked novels when matching chapter URLs change
-- Browse, search, filter, edit, and delete saved novels from the library page
-- Reopen the exact chapter URL where reading stopped
-- Keep all data local to the browser profile
+## Supported Site Profiles
 
-## Extension Architecture
+Novel Tracker includes site-specific parsers for:
+
+- Royal Road
+- Patreon
+- Wuxiaworld
+- NovelBin
+- ScribbleHub
+- Creative Novels
+- Light Novels Translations
+- Shin Translations
+
+Other sites fall back to generic page metadata and can still be saved manually.
+NovelUpdates is useful for discovery, but it is not treated as a reading source
+because it indexes releases rather than hosting chapters.
+
+## Privacy Policy
+
+Novel Tracker is designed as a local-first reading tracker.
+
+Data handled by the extension:
+
+- Chapter URLs you save or visit for tracked novels.
+- Novel titles, chapter labels, source site hostnames, cover image URLs, reading status, and chapter history timestamps.
+- JSON backup files that you explicitly export or import.
+
+How data is used:
+
+- Reading data is used only to provide the extension's single purpose: tracking where you stopped reading web novels and reopening those pages later.
+- Reading data is stored in `chrome.storage.local` in your browser profile.
+- The extension does not create an account, run ads, use analytics, sell data, or transmit reading data to a remote server.
+- The extension does not share user data with third parties.
+- Exported JSON backups are created only when you click `Export JSON`; imported backups are read only when you choose a local JSON file.
+
+Permissions:
+
+- `storage`: stores the reading library locally.
+- `tabs` and `activeTab`: reads the active tab URL/title when saving progress from the popup.
+- `scripting`: injects the shared parser into the active page so the popup can read chapter metadata.
+- Supported-site host permissions: allow automatic progress updates only on the supported HTTPS novel sites listed above. The popup can still use `activeTab` when you explicitly open it on the current page.
+
+Limited Use statement:
+
+Novel Tracker's use of information received from browser APIs adheres to the
+Chrome Web Store User Data Policy, including the Limited Use requirements.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    Popup["Popup UI"] --> Storage["chrome.storage.local"]
+    Page["Novel chapter page"] --> Parser["Parser registry"]
+    Parser --> Metadata["PageMetadata domain model"]
+    Metadata --> Popup["Popup save flow"]
+    Metadata --> Content["Auto-update content script"]
+    Content --> Background["Background service worker"]
+    Popup --> Storage["chrome.storage.local"]
+    Background --> Storage
     Options["Library / options page"] --> Storage
-    Content["Content script"] --> Metadata["Page metadata extraction"]
-    Metadata --> Popup
-    Background["Background service worker"] --> Storage
-    Popup --> Tabs["Active tab URL/title"]
 ```
 
-The popup captures the active tab, the content script helps infer metadata from
-the current page, and the options page acts as the searchable library/editor.
+The parsing layer normalizes each page into a shared `PageMetadata` shape:
 
-## Stack
+```js
+{
+  title,
+  sourceSite,
+  novelHomeUrl,
+  lastReadChapterUrl,
+  lastReadChapterLabel,
+  coverImageUrl
+}
+```
 
-- Manifest V3 browser extension
-- Plain JavaScript, HTML, and CSS
-- `chrome.storage.local` for persistence
-- Custom Node build script
-- Node test runner for storage behavior
+Business logic in `storage.js` works against this domain model instead of
+site-specific DOM details.
 
 ## Repository Layout
 
@@ -53,24 +105,28 @@ src/
   background.js
   content-script.js
   lib/
-    site-metadata.js
+    parser-core.js
+    page-metadata.js
     storage.js
+    site-parsers/
+      royalroad.js
+      patreon.js
+      wuxiaworld.js
+      novelbin.js
+      scribblehub.js
+      creativenovels.js
+      lightnovelstranslations.js
+      shintranslations.js
 scripts/
   build.mjs
   generate-icons.mjs
+  package-webstore.mjs
 tests/
+  site-metadata.test.mjs
   storage.test.mjs
 ```
 
-## Local Development
-
-Build the extension:
-
-```bash
-npm run build
-```
-
-The unpacked extension is written to `dist/`.
+## Development
 
 Run tests:
 
@@ -78,23 +134,92 @@ Run tests:
 npm test
 ```
 
-## Load In Chrome Or Edge
+Build the unpacked extension:
 
-1. Open `chrome://extensions` or `edge://extensions`.
-2. Enable Developer Mode.
-3. Choose `Load unpacked`.
-4. Select the generated `dist/` folder.
+```bash
+npm run build
+```
 
-## Design Notes
+The unpacked extension is written to `dist/`.
 
-Novel sites expose inconsistent metadata, so the extension treats automatic
-detection as a convenience rather than a source of truth. The library view keeps
-manual editing available so users can fix titles, chapter labels, cover images,
-or status when a site does something unusual.
+Package a Chrome Web Store ZIP:
+
+```bash
+npm run package:webstore
+```
+
+The upload package is written to `release/novel-tracker-extension-<version>.zip`.
+The ZIP contains the contents of `dist/`, not the repository root.
+
+## Load Locally In Chrome Or Edge
+
+1. Run `npm run build`.
+2. Open `chrome://extensions` or `edge://extensions`.
+3. Enable Developer Mode.
+4. Choose `Load unpacked`.
+5. Select the generated `dist/` folder.
+6. After code or manifest changes, click `Reload` on the unpacked extension.
+
+## Manual Release Test Checklist
+
+Before submitting a public Chrome Web Store release:
+
+- `npm test` passes.
+- `npm run build` succeeds.
+- `npm run package:webstore` creates a ZIP without validation errors.
+- `dist/manifest.json` version matches `package.json`.
+- Icons exist at 16, 32, 48, and 128 pixels.
+- Popup can save the active chapter.
+- Auto-update advances a tracked novel after navigating to the next matching chapter.
+- Library page can search, sort, edit, delete, open chapters, and show history.
+- Export JSON downloads a backup.
+- Import JSON merges a backup and skips blank entries.
+- Privacy disclosure in this README matches actual behavior.
+
+## Chrome Web Store Submission
+
+1. Register a Chrome Web Store developer account if needed.
+2. Run `npm run package:webstore`.
+3. Open the Chrome Developer Dashboard.
+4. Add a new item and upload the ZIP from `release/`.
+5. Fill in the Store listing:
+   - Name: `Novel Tracker`
+   - Summary: `Track web novel reading progress and reopen the chapter where you stopped.`
+   - Category: `Productivity`
+   - Language: English
+   - Visibility: Public
+   - Support/contact URL: GitHub repository or personal site contact page
+   - Privacy policy URL: this README on GitHub
+6. Complete the Privacy practices tab:
+   - Disclose local handling of website URLs/page metadata used for reading progress.
+   - Certify Limited Use.
+   - Do not claim analytics, ads, remote sync, or third-party data sharing.
+7. Upload screenshots of the popup and library page.
+8. Submit for review.
+
+## Mobile And Sync Options
+
+The first Chrome Web Store release does not include phone sync.
+
+Current behavior:
+
+- Desktop Chrome/Edge extension data stays in that browser profile.
+- Chrome Android does not run this extension as a normal mobile extension.
+- JSON export/import can be used as a manual backup, not continuous sync.
+
+Future options:
+
+- Add a small cloud sync backend with an account or private sync token.
+- Port the extension to Firefox for Android and sync through the same backend.
+- Convert to a Safari Web Extension for iOS/iPadOS/macOS and sync through the same backend.
+- Build a lightweight companion web app for phones that reads/writes the same backend.
+
+The recommended future direction is a small sync backend first, then mobile
+browser clients as separate surfaces.
 
 ## Limitations
 
-- Metadata extraction varies by site.
-- Data sync across browser profiles is not implemented.
-- There is no remote backup service.
-- Store packaging has not been completed yet.
+- Metadata extraction varies by site and may require manual correction.
+- Some sites block extension or automation-based page inspection.
+- Data sync across browser profiles is not implemented yet.
+- Chrome Web Store submission must be completed manually in the Developer Dashboard.

@@ -10,8 +10,14 @@
     "scripting"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*"
+    "https://*.royalroad.com/*",
+    "https://*.patreon.com/*",
+    "https://*.wuxiaworld.com/*",
+    "https://*.novelbin.com/*",
+    "https://*.scribblehub.com/*",
+    "https://*.creativenovels.com/*",
+    "https://*.lightnovelstranslations.com/*",
+    "https://*.shintranslations.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -26,10 +32,26 @@
   "content_scripts": [
     {
       "matches": [
-        "http://*/*",
-        "https://*/*"
+        "https://*.royalroad.com/*",
+        "https://*.patreon.com/*",
+        "https://*.wuxiaworld.com/*",
+        "https://*.novelbin.com/*",
+        "https://*.scribblehub.com/*",
+        "https://*.creativenovels.com/*",
+        "https://*.lightnovelstranslations.com/*",
+        "https://*.shintranslations.com/*"
       ],
       "js": [
+        "lib/parser-core.js",
+        "lib/site-parsers/royalroad.js",
+        "lib/site-parsers/patreon.js",
+        "lib/site-parsers/wuxiaworld.js",
+        "lib/site-parsers/novelbin.js",
+        "lib/site-parsers/scribblehub.js",
+        "lib/site-parsers/creativenovels.js",
+        "lib/site-parsers/lightnovelstranslations.js",
+        "lib/site-parsers/shintranslations.js",
+        "lib/page-metadata.js",
         "content-script.js"
       ],
       "run_at": "document_idle"

@@ -26,6 +26,13 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
+function hasRequiredNovelIdentity(input) {
+  return Boolean(
+    normalizeUrl(input?.lastReadChapterUrl) ||
+    (String(input?.title || "").trim() && String(input?.sourceSite || "").trim())
+  );
+}
+
 function normalizeChapterHistory(history) {
   if (!Array.isArray(history)) {
     return [];
@@ -97,7 +104,7 @@ function looksNumeric(value) {
 }
 
 function looksChapterSlug(value) {
-  return /(chapter|chap|ch|episode|ep|prologue|epilogue|volume|vol|book|part)-?\d*/i.test(value);
+  return /(^|[-_])(chapter|chap|ch|episode|ep|prologue|epilogue|volume|vol|book|part)([-_]*\d+|[-_]|$)/i.test(value);
 }
 
 function segmentShape(segment) {
@@ -433,6 +440,10 @@ export async function importNovelsJson(text) {
       coverImageUrl: item.coverImageUrl || "",
       status: item.status || "active"
     };
+
+    if (!hasRequiredNovelIdentity(input)) {
+      continue;
+    }
 
     const existing = findExistingNovelForSave(merged, input);
     if (!existing) {
