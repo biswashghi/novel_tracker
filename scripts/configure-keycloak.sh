@@ -27,12 +27,9 @@ printf %s '"'"'{"attributes":{"pkce.code.challenge.method":"S256"}}'"'"' >/tmp/n
 rm -f /tmp/novel-client-pkce.json
 
 printf %s '"'"'{"name":"novel-tracker-api-audience","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","consentRequired":false,"config":{"included.client.audience":"novel-tracker-api","access.token.claim":"true","id.token.claim":"false"}}'"'"' >/tmp/novel-audience-mapper.json
-MAPPER_LINE=$("$KCADM" get "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes | grep ",${MAPPER}$" || true)
-if [ -z "$MAPPER_LINE" ]; then
+MAPPER_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields name --format csv --noquotes | grep -Fx "$MAPPER" || true)
+if [ -z "$MAPPER_EXISTS" ]; then
   "$KCADM" create "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM" -f /tmp/novel-audience-mapper.json >/dev/null
-else
-  MAPPER_UUID=${MAPPER_LINE%%,*}
-  "$KCADM" update "clients/$CLIENT_UUID/protocol-mappers/models/$MAPPER_UUID" -r "$REALM" -f /tmp/novel-audience-mapper.json
 fi
 rm -f /tmp/novel-audience-mapper.json
 
