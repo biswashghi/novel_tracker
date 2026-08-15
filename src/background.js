@@ -18,8 +18,11 @@ async function accountSnapshot() {
 
 async function handleMessage(message) {
   switch (message?.type) {
-    case "novel-tracker:auto-progress":
-      return autoUpdateNovelProgress(message.payload);
+    case "novel-tracker:auto-progress": {
+      const result = await autoUpdateNovelProgress(message.payload);
+      if (result.updated) syncNow().catch((error) => console.warn("Novel Tracker automatic sync deferred", error));
+      return result;
+    }
     case "novel-tracker:account-status":
       return accountSnapshot();
     case "novel-tracker:account-sign-in": {
