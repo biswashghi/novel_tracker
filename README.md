@@ -40,72 +40,11 @@ because it indexes releases rather than hosting chapters.
 
 ## Privacy Policy
 
-Novel Tracker is designed as a local-first reading tracker.
-
-Data handled by the extension:
-
-- Chapter URLs you save or visit for tracked novels.
-- Novel titles, chapter labels, source site hostnames, cover image URLs, reading status, and chapter history timestamps.
-- JSON backup files that you explicitly export or import.
-
-How data is used:
-
-- Reading data is used only to provide the extension's single purpose: tracking where you stopped reading web novels and reopening those pages later.
-- Reading data is stored in `chrome.storage.local` in your browser profile.
-- The extension does not require an account, run ads, use analytics, or sell data.
-- When the reader explicitly signs in with Google, Novel Tracker transmits the
-  library and chapter history to `api.novel.bghimire.com` for synchronization.
-- Google and Keycloak process account authentication; Google credentials are
-  never exposed to the extension or Novel Tracker API.
-- Signing out stops synchronization and retains the local library.
-- Exported JSON backups are created only when you click `Export JSON`; imported backups are read only when you choose a local JSON file.
-
-Permissions:
-
-- `storage`: stores the reading library locally.
-- `tabs` and `activeTab`: reads the active tab URL/title when saving progress from the popup.
-- `scripting`: injects the shared parser into the active page so the popup can read chapter metadata.
-- `identity`: opens the optional Google/Keycloak PKCE sign-in flow.
-- `alarms`: retries optional synchronization periodically while signed in.
-- Supported-site host permissions: allow automatic progress updates only on the supported HTTPS novel sites listed above. The popup can still use `activeTab` when you explicitly open it on the current page.
-
-Limited Use statement:
-
-Novel Tracker's use of information received from browser APIs adheres to the
-Chrome Web Store User Data Policy, including the Limited Use requirements.
+The full privacy policy and data-handling details are maintained in the documentation: see [docs/privacy-policy.md](docs/privacy-policy.md).
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Page["Novel chapter page"] --> Parser["Parser registry"]
-    Parser --> Metadata["PageMetadata domain model"]
-    Metadata --> Popup["Popup save flow"]
-    Metadata --> Content["Auto-update content script"]
-    Content --> Background["Background service worker"]
-    Popup --> Storage["chrome.storage.local"]
-    Background --> Storage
-    Options["Library / account page"] --> Storage
-    Storage --> Merge["HLC merge core"]
-    Merge -. "only after sign-in" .-> API["Novel Tracker sync API"]
-    API --> Keycloak["Keycloak / Google"]
-```
-
-The parsing layer normalizes each page into a shared `PageMetadata` shape:
-
-```js
-{
-  title,
-  sourceSite,
-  novelHomeUrl,
-  lastReadChapterUrl,
-  lastReadChapterLabel,
-  coverImageUrl
-}
-```
-
-Business logic in `storage.js` works against this domain model instead of
-site-specific DOM details.
+High-level architecture, diagrams, and design rationale are in the docs: see [docs/platform-architecture.md](docs/platform-architecture.md).
 
 ## Repository Layout
 
@@ -138,32 +77,10 @@ tests/
   storage.test.mjs
 ```
 
-## Development
 
-Run tests:
+## Development and Local Testing
 
-```bash
-npm test
-```
-
-Build the unpacked extension:
-
-```bash
-npm run build
-npm run build:firefox
-npm run build:safari
-```
-
-The unpacked extension is written to `dist/`.
-
-Package a Chrome Web Store ZIP:
-
-```bash
-npm run package:webstore
-```
-
-The upload package is written to `release/novel-tracker-extension-<version>.zip`.
-The ZIP contains the contents of `dist/`, not the repository root.
+Development, build, packaging, and platform-specific testing instructions (including Safari macOS and iOS) have moved to the documentation: see [docs/development.md](docs/development.md).
 
 ## Load Locally In Chrome Or Edge
 
@@ -222,10 +139,10 @@ Before submitting a public Chrome Web Store release:
 - Firefox declares synchronization data categories as optional and requests
   consent at the sign-in gesture.
 - Safari is packaged as a Safari Web Extension for macOS/iOS/iPadOS. Sign in with
-  Apple is intentionally deferred; Google is the only cloud identity provider.
-- See `docs/platform-architecture.md` for the shared-domain boundary,
-  `docs/release.md` for browser-specific build and testing steps, and
-  `docs/operations.md` for deployment, backup, and restore procedures.
+  Google from the containing app before using cloud sync on iOS/iPadOS. The app
+  and extension share the session through the system Keychain. Sign in with
+  Apple is intentionally deferred.
+- See [platform architecture](docs/platform-architecture.md) for the shared-domain boundary, [release instructions](docs/release.md) for browser-specific build and testing steps, and [operations](docs/operations.md) for deployment, backup, and restore procedures.
 
 ## Limitations
 

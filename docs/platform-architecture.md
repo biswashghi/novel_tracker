@@ -10,7 +10,7 @@ flowchart TB
     Popup["Extension popup<br/>save and inspect progress"]
     Library["Library/options page<br/>manage, import, export, sync"]
     Content["Content scripts<br/>automatic chapter detection"]
-    SafariApp["Safari containing app<br/>installation and permissions"]
+    SafariApp["Safari containing app<br/>iOS sign-in, installation, permissions"]
   end
 
   subgraph Application["Application services and ports"]
@@ -31,10 +31,10 @@ flowchart TB
 
   subgraph Adapters["Platform and backend adapters"]
     ExtensionAPI["WebExtension adapter<br/>storage, tabs, scripting, alarms"]
-    AuthPlatform["Interactive-auth adapter<br/>Chrome/Firefox identity or Safari native"]
+    AuthPlatform["Interactive-auth adapter<br/>WebExtension or Safari native PKCE"]
     HTTPPlatform["HTTP transport adapter<br/>browser fetch or Safari native message"]
     Parsers["Site parser adapters<br/>Royal Road, Chikari, etc."]
-    SafariNative["Safari native app extension<br/>ASWebAuthenticationSession + URLSession"]
+    SafariNative["Safari native adapter<br/>OAuth, shared Keychain, URLSession"]
     API["Novel Tracker API<br/>sync, account deletion"]
     Keycloak["Keycloak<br/>Google OIDC federation"]
     Postgres["PostgreSQL<br/>cloud state and mutation audit"]
@@ -92,7 +92,12 @@ session state do not depend on a particular browser.
 adapters:
 
 - Chrome and Firefox use the WebExtension `identity` API.
-- Safari sends one native message to the generated Safari app extension.
+- macOS Safari asks its native app extension to present
+  `ASWebAuthenticationSession` and return the verified callback.
+- On iOS/iPadOS, the containing app presents `ASWebAuthenticationSession` on
+  first launch. The Safari extension imports the resulting session from a
+  shared Keychain access group because an extension process has no dependable
+  presentation window.
 
 `src/lib/platform-http.js` provides a separate outbound HTTP port. Chrome and
 Firefox use `fetch`; Safari sends allowlisted HTTPS requests through its native
@@ -102,16 +107,18 @@ and API hosts. Neither adapter can read or merge the library.
 ## Generated Safari application
 
 Apple's converter generates the Xcode application and extension targets. The
-generated Swift message handler is a placeholder, so the release script replaces
-it with the maintained implementation in
-`safari-native/SafariWebExtensionHandler.swift`.
+generated Swift sources are placeholders, so the release script replaces the
+app controller and extension handler with maintained implementations under
+`safari-native/`, adds the callback URL scheme, and configures shared Keychain
+entitlements.
 
 `npm run package:safari` always converts into a temporary directory and emits a
 versioned Xcode-project ZIP under `release/`. This prevents regeneration from
 overwriting developer-team, signing, or other local settings in an existing
 Xcode project.
 
-The maintained Swift handler exposes two narrow platform capabilities: opening
-`ASWebAuthenticationSession`, and performing HTTPS requests restricted to the
-Novel Tracker Keycloak and API hosts. All authorization validation, sync
-sequencing, conflict resolution, and application behavior remain in JavaScript.
+The native boundary exposes only OAuth authorization, shared-session
+read/write/clear, and HTTPS requests restricted to the Novel Tracker Keycloak
+and API hosts. Tokens are stored in the Keychain with this-device-only
+accessibility. Sync sequencing, conflict resolution, and novel behavior remain
+in the shared JavaScript domain and application layers.
