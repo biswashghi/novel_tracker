@@ -16,7 +16,7 @@ function sendNative(runtime, message) {
       finish(value, runtimeError ? new Error(runtimeError.message || String(runtimeError)) : null);
     };
     try {
-      const result = runtime.sendNativeMessage(SAFARI_NATIVE_APP_ID, message, callback);
+      const result = runtime.sendNativeMessage(message);
       if (result?.then) result.then((value) => finish(value), (error) => finish(undefined, error));
     } catch (error) {
       finish(undefined, error);

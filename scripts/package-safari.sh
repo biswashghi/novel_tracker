@@ -25,17 +25,50 @@ xcrun safari-web-extension-converter "$stage_dir" \
 generated_app_dir="$project_dir/Novel Tracker"
 handler_path="$generated_app_dir/Shared (Extension)/SafariWebExtensionHandler.swift"
 cp "$root_dir/safari-native/SafariWebExtensionHandler.swift" "$handler_path"
-echo "Installed Safari native OAuth bridge: $handler_path"
+app_controller_path="$generated_app_dir/Shared (App)/ViewController.swift"
+cp "$root_dir/safari-native/SafariAppViewController.swift" "$app_controller_path"
+echo "Installed Safari native authentication and session bridge"
+
+shared_keychain_group='$(AppIdentifierPrefix)app.noveltracker.shared'
+for target in "iOS (App)" "iOS (Extension)" "macOS (Extension)"; do
+  entitlements_path="$generated_app_dir/$target/NovelTracker.entitlements"
+  /usr/libexec/PlistBuddy -c 'Add :keychain-access-groups array' "$entitlements_path"
+  /usr/libexec/PlistBuddy -c "Add :keychain-access-groups:0 string $shared_keychain_group" "$entitlements_path"
+  info_path="$generated_app_dir/$target/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :NovelTrackerKeychainAccessGroup string $shared_keychain_group" "$info_path"
+done
+
+ios_app_info="$generated_app_dir/iOS (App)/Info.plist"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleURLTypes array' "$ios_app_info"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleURLTypes:0 dict' "$ios_app_info"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleURLTypes:0:CFBundleURLName string app.noveltracker.oauth' "$ios_app_info"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleURLTypes:0:CFBundleURLSchemes array' "$ios_app_info"
+/usr/libexec/PlistBuddy -c 'Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string noveltracker' "$ios_app_info"
 
 node --input-type=module -e '
   import { readFile, writeFile } from "node:fs/promises";
   const projectPath = process.argv[1];
   let project = await readFile(projectPath, "utf8");
-  const marker = /ENABLE_HARDENED_RUNTIME = YES;\n(\s+)ENABLE_USER_SELECTED_FILES = readonly;\n(\s+)GENERATE_INFOPLIST_FILE = YES;\n(\s+)INFOPLIST_FILE = "macOS \(Extension\)\/Info\.plist";/g;
+  const entitlementByInfo = new Map([
+    ["iOS (App)/Info.plist", "iOS (App)/NovelTracker.entitlements"],
+    ["iOS (Extension)/Info.plist", "iOS (Extension)/NovelTracker.entitlements"],
+    ["macOS (Extension)/Info.plist", "macOS (Extension)/NovelTracker.entitlements"]
+  ]);
+  for (const [info, entitlement] of entitlementByInfo) {
+    const escaped = info.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const marker = new RegExp(`(GENERATE_INFOPLIST_FILE = YES;\\n)(\\s+)(INFOPLIST_FILE = "${escaped}";)`, "g");
+    let matches = 0;
+    project = project.replace(marker, (_match, generated, indent, plist) => {
+      matches += 1;
+      return `CODE_SIGN_ENTITLEMENTS = "${entitlement}";\n${indent}${generated}${indent}${plist}`;
+    });
+    if (matches !== 2) throw new Error(`Expected two configurations for ${info}, found ${matches}`);
+  }
+  const marker = /ENABLE_HARDENED_RUNTIME = YES;\n(\s+)ENABLE_USER_SELECTED_FILES = readonly;\n(\s+)CODE_SIGN_ENTITLEMENTS = "macOS \(Extension\)\/NovelTracker\.entitlements";\n(\s+)GENERATE_INFOPLIST_FILE = YES;\n(\s+)INFOPLIST_FILE = "macOS \(Extension\)\/Info\.plist";/g;
   let replacements = 0;
-  project = project.replace(marker, (_match, indent1, indent2, indent3) => {
+  project = project.replace(marker, (_match, indent1, indent2, indent3, indent4) => {
     replacements += 1;
-    return `ENABLE_HARDENED_RUNTIME = YES;\n${indent1}ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;\n${indent1}ENABLE_USER_SELECTED_FILES = readonly;\n${indent2}GENERATE_INFOPLIST_FILE = YES;\n${indent3}INFOPLIST_FILE = "macOS (Extension)/Info.plist";`;
+    return `ENABLE_HARDENED_RUNTIME = YES;\n${indent1}ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;\n${indent1}ENABLE_USER_SELECTED_FILES = readonly;\n${indent2}CODE_SIGN_ENTITLEMENTS = "macOS (Extension)/NovelTracker.entitlements";\n${indent3}GENERATE_INFOPLIST_FILE = YES;\n${indent4}INFOPLIST_FILE = "macOS (Extension)/Info.plist";`;
   });
   if (replacements !== 2) throw new Error(`Expected two macOS extension configurations, found ${replacements}`);
   await writeFile(projectPath, project);

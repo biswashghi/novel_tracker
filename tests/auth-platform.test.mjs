@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  getAuthPlatform,
-  SAFARI_NATIVE_APP_ID,
-  SAFARI_OAUTH_REDIRECT_URI
-} from "../src/lib/auth-platform.js";
+import { getAuthPlatform } from "../src/lib/auth-platform.js";
 
 test("web extension identity adapter is preferred when available", async () => {
   const calls = [];
@@ -24,34 +20,24 @@ test("web extension identity adapter is preferred when available", async () => {
   assert.deepEqual(calls, [{ url: "https://auth.test", interactive: true }]);
 });
 
-test("Safari adapter delegates only interactive authorization to native messaging", async () => {
-  let nativeCall;
+test("Safari adapter uses native OAuth and shared session messages", async () => {
+  const messages = [];
   const platform = getAuthPlatform({
     runtime: {
-      sendNativeMessage(applicationId, message) {
-        nativeCall = { applicationId, message };
-        return Promise.resolve({ callbackUrl: `${SAFARI_OAUTH_REDIRECT_URI}?code=ok` });
+      sendNativeMessage(_app, message, callback) {
+        messages.push(message);
+        callback(message.type === "novel-tracker.oauth.authorize"
+          ? { callbackUrl: "noveltracker://oauth/callback?code=ok" }
+          : message.type === "novel-tracker.auth.get" ? { session: { accessToken: "token" } } : {});
       }
     }
   });
   assert.equal(platform.kind, "safari-native");
-  assert.equal(platform.redirectUri("oauth2"), SAFARI_OAUTH_REDIRECT_URI);
-  assert.equal(await platform.authorize("https://auth.test"), `${SAFARI_OAUTH_REDIRECT_URI}?code=ok`);
-  assert.equal(nativeCall.applicationId, SAFARI_NATIVE_APP_ID);
-  assert.equal(nativeCall.message.authorizationUrl, "https://auth.test");
-});
-
-test("Safari adapter supports callback-only native messaging", async () => {
-  const platform = getAuthPlatform({
-    runtime: {
-      sendNativeMessage(_applicationId, message, callback) {
-        callback({ callbackUrl: `${SAFARI_OAUTH_REDIRECT_URI}?code=callback` });
-      }
-    }
-  });
-
-  assert.equal(
-    await platform.authorize("https://auth.test"),
-    `${SAFARI_OAUTH_REDIRECT_URI}?code=callback`
-  );
+  assert.equal(await platform.authorize("https://auth.test"), "noveltracker://oauth/callback?code=ok");
+  assert.deepEqual(await platform.sharedSession(), { accessToken: "token" });
+  await platform.storeSharedSession({ accessToken: "next" });
+  await platform.clearSharedSession();
+  assert.deepEqual(messages.map(({ type }) => type), [
+    "novel-tracker.oauth.authorize", "novel-tracker.auth.get", "novel-tracker.auth.store", "novel-tracker.auth.clear"
+  ]);
 });

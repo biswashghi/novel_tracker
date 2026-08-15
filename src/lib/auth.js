@@ -109,42 +109,75 @@ function tokenRecord(tokens, previous = {}) {
   };
 }
 
+async function importSafariSession(auth, platform = getAuthPlatform()) {
+  if (platform.kind !== "safari-native" || auth.active?.accessToken) return auth;
+  const shared = await platform.sharedSession();
+  if (!shared?.accessToken) return auth;
+  auth.active = tokenRecord({
+    access_token: shared.accessToken,
+    refresh_token: shared.refreshToken,
+    id_token: shared.idToken,
+    expires_in: Math.max(0, Math.ceil((Number(shared.expiresAt || 0) - Date.now()) / 1000))
+  }, shared);
+  auth.lastSubject = auth.active.subject;
+  auth.lastEmail = auth.active.email;
+  await writeAuth(auth);
+  return auth;
+}
+
+async function persistSafariSession(session, platform) {
+  if (platform.kind === "safari-native") await platform.storeSharedSession(session);
+}
+
 export async function getAccountStatus() {
-  return publicAccount(await readAuth());
+  return publicAccount(await importSafariSession(await readAuth()));
 }
 
 export async function signIn({ hasLocalData = false } = {}) {
   const platform = getAuthPlatform();
-  const redirectUri = oauthRedirectUri(platform.redirectUri("oauth2"));
-  const verifier = randomValue(64);
-  const state = randomValue(24);
-  const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
-  authorize.search = new URLSearchParams({
-    client_id: AUTH_CONFIG.clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: AUTH_CONFIG.scopes,
-    state,
-    nonce: randomValue(24),
-    code_challenge: await sha256(verifier),
-    code_challenge_method: "S256",
-    kc_idp_hint: "google"
-  }).toString();
+  if (platform.kind === "safari-native") {
+    const shared = await platform.sharedSession();
+    if (shared?.accessToken) return activateTokens(tokenRecord({
+      access_token: shared.accessToken,
+      refresh_token: shared.refreshToken,
+      id_token: shared.idToken,
+      expires_in: Math.max(0, Math.ceil((Number(shared.expiresAt || 0) - Date.now()) / 1000))
+    }, shared), hasLocalData, platform);
+  }
 
-  const callbackUrl = new URL(await platform.authorize(authorize.toString()));
-  if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");
-  const providerError = callbackUrl.searchParams.get("error");
-  if (providerError) throw new Error(callbackUrl.searchParams.get("error_description") || providerError);
-  const code = callbackUrl.searchParams.get("code");
-  if (!code) throw new Error("Sign-in did not return an authorization code");
+    const redirectUri = oauthRedirectUri(platform.redirectUri("oauth2"));
+    const verifier = randomValue(64);
+    const state = randomValue(24);
+    const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
+    authorize.search = new URLSearchParams({
+      client_id: AUTH_CONFIG.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: AUTH_CONFIG.scopes,
+      state,
+      nonce: randomValue(24),
+      code_challenge: await sha256(verifier),
+      code_challenge_method: "S256",
+      kc_idp_hint: "google"
+    }).toString();
 
-  const tokens = tokenRecord(await exchangeToken({
-    grant_type: "authorization_code",
-    client_id: AUTH_CONFIG.clientId,
-    redirect_uri: redirectUri,
-    code,
-    code_verifier: verifier
-  }));
+    const callbackUrl = new URL(await platform.authorize(authorize.toString()));
+    if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");
+    const providerError = callbackUrl.searchParams.get("error");
+    if (providerError) throw new Error(callbackUrl.searchParams.get("error_description") || providerError);
+    const code = callbackUrl.searchParams.get("code");
+    if (!code) throw new Error("Sign-in did not return an authorization code");
+    const tokenPayload = await exchangeToken({
+      grant_type: "authorization_code",
+      client_id: AUTH_CONFIG.clientId,
+      redirect_uri: redirectUri,
+      code,
+      code_verifier: verifier
+    });
+  return activateTokens(tokenRecord(tokenPayload), hasLocalData, platform);
+}
+
+async function activateTokens(tokens, hasLocalData, platform) {
   if (!tokens.subject) throw new Error("Sign-in token did not identify an account");
 
   const auth = await readAuth();
@@ -159,6 +192,7 @@ export async function signIn({ hasLocalData = false } = {}) {
   auth.lastSubject = tokens.subject;
   auth.lastEmail = tokens.email;
   await writeAuth(auth);
+  await persistSafariSession(tokens, platform);
   return publicAccount(auth);
 }
 
@@ -170,6 +204,7 @@ export async function confirmPendingAccount() {
   auth.lastSubject = auth.active.subject;
   auth.lastEmail = auth.active.email;
   await writeAuth(auth);
+  await persistSafariSession(auth.active, getAuthPlatform());
   return publicAccount(auth);
 }
 
@@ -177,16 +212,23 @@ export async function cancelPendingAccount() {
   const auth = await readAuth();
   auth.pending = null;
   await writeAuth(auth);
+  const platform = getAuthPlatform();
+  if (platform.kind === "safari-native") {
+    if (auth.active) await platform.storeSharedSession(auth.active);
+    else await platform.clearSharedSession();
+  }
   return publicAccount(auth);
 }
 
 export async function getAccessToken() {
-  const auth = await readAuth();
+  const platform = getAuthPlatform();
+  const auth = await importSafariSession(await readAuth(), platform);
   if (!auth.active?.accessToken) return "";
   if (auth.active.expiresAt > Date.now()) return auth.active.accessToken;
   if (!auth.active.refreshToken) {
     auth.active = null;
     await writeAuth(auth);
+    if (platform.kind === "safari-native") await platform.clearSharedSession();
     return "";
   }
   try {
@@ -199,20 +241,24 @@ export async function getAccessToken() {
     auth.lastSubject = auth.active.subject;
     auth.lastEmail = auth.active.email;
     await writeAuth(auth);
+    await persistSafariSession(auth.active, platform);
     return auth.active.accessToken;
   } catch (error) {
     auth.active = null;
     await writeAuth(auth);
+    if (platform.kind === "safari-native") await platform.clearSharedSession();
     throw error;
   }
 }
 
 export async function signOut() {
+  const platform = getAuthPlatform();
   const auth = await readAuth();
   const refreshToken = auth.active?.refreshToken;
   auth.active = null;
   auth.pending = null;
   await writeAuth(auth);
+  if (platform.kind === "safari-native") await platform.clearSharedSession();
   if (refreshToken) {
     platformFetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/logout`, {
       method: "POST",
