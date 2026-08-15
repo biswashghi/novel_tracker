@@ -9,6 +9,7 @@ npm run build
 npm run build:firefox
 npm run build:safari
 npm run package:webstore
+npm run package:firefox
 ```
 
 Test local-only save/edit/delete/import/export, Google sign-in, first sync,
@@ -24,7 +25,8 @@ Upload the ZIP from `release/` after incrementing `package.json` version.
 
 ## Firefox desktop and Android
 
-Load `dist-firefox/` temporarily in Firefox, then submit it to AMO using the
+Load `dist-firefox/` temporarily in Firefox. Run `npm run package:firefox`, then
+submit `release/novel-tracker-extension-firefox-<version>.zip` to AMO using the
 stable ID `novel-tracker@bghimire.com`. Firefox desktop 140 and Android 142 are
 the minimum versions because they provide built-in optional data-transmission
 consent. Register the exact `identity.getRedirectURL("oauth2")` callback in
