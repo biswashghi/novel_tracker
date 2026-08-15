@@ -32,6 +32,7 @@ Novel Tracker includes site-specific parsers for:
 - Creative Novels
 - Light Novels Translations
 - Shin Translations
+- Chikari
 
 Other sites fall back to generic page metadata and can still be saved manually.
 NovelUpdates is useful for discovery, but it is not treated as a reading source

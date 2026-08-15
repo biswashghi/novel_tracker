@@ -186,6 +186,15 @@ test("upsertNovel updates existing entries for supported smaller chapter sites",
       firstLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 26 Part 3",
       nextUrl: "https://shintranslations.com/starting-a-new-life-for-the-discarded-all-rounder-vol-7-chapter-27-part-1/",
       nextLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 27 Part 1"
+    },
+    {
+      title: "Omniscient Reader",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/series/omniscient-reader",
+      firstUrl: "https://chikari.moe/series/omniscient-reader/8",
+      firstLabel: "Chapter 8 Protagonist (Part 2)",
+      nextUrl: "https://chikari.moe/series/omniscient-reader/9",
+      nextLabel: "Chapter 9 Protagonist (Part 3)"
     }
   ];
 
@@ -256,6 +265,15 @@ test("autoUpdateNovelProgress ignores non-chapter pages on supported smaller cha
       chapterLabel: "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 26 Part 3",
       nonChapterUrl: "https://shintranslations.com",
       nonChapterLabel: "Shin Translations"
+    },
+    {
+      title: "Omniscient Reader",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/series/omniscient-reader",
+      chapterUrl: "https://chikari.moe/series/omniscient-reader/8",
+      chapterLabel: "Chapter 8 Protagonist (Part 2)",
+      nonChapterUrl: "https://chikari.moe/series/omniscient-reader",
+      nonChapterLabel: "Omniscient Reader"
     }
   ];
 

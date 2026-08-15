@@ -12,7 +12,8 @@ const supportedHostPatterns = [
   "https://*.scribblehub.com/*",
   "https://*.creativenovels.com/*",
   "https://*.lightnovelstranslations.com/*",
-  "https://*.shintranslations.com/*"
+  "https://*.shintranslations.com/*",
+  "https://chikari.moe/*"
 ];
 
 test("manifest limits automatic host access to supported novel sites", () => {

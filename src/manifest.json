@@ -20,6 +20,7 @@
     "https://*.creativenovels.com/*",
     "https://*.lightnovelstranslations.com/*",
     "https://*.shintranslations.com/*",
+    "https://chikari.moe/*",
     "https://api.novel.bghimire.com/*",
     "https://auth.novel.bghimire.com/*"
   ],
@@ -43,7 +44,8 @@
         "https://*.scribblehub.com/*",
         "https://*.creativenovels.com/*",
         "https://*.lightnovelstranslations.com/*",
-        "https://*.shintranslations.com/*"
+        "https://*.shintranslations.com/*",
+        "https://chikari.moe/*"
       ],
       "js": [
         "lib/parser-core.js",
@@ -55,6 +57,7 @@
         "lib/site-parsers/creativenovels.js",
         "lib/site-parsers/lightnovelstranslations.js",
         "lib/site-parsers/shintranslations.js",
+        "lib/site-parsers/chikari.js",
         "lib/page-metadata.js",
         "content-script.js"
       ],

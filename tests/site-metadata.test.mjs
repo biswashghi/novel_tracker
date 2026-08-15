@@ -11,6 +11,7 @@ const PARSER_FILES = [
   "../src/lib/site-parsers/creativenovels.js",
   "../src/lib/site-parsers/lightnovelstranslations.js",
   "../src/lib/site-parsers/shintranslations.js",
+  "../src/lib/site-parsers/chikari.js",
   "../src/lib/page-metadata.js"
 ];
 
@@ -222,4 +223,27 @@ test("extractPageMetadataFromRoot uses Shin Translations chapter stripping", () 
     metadata.lastReadChapterLabel,
     "Starting a New Life for the Discarded All-Rounder Vol. 7 Chapter 26 Part 3"
   );
+});
+
+test("extractPageMetadataFromRoot maps Chikari chapters to their canonical series", () => {
+  const root = createRoot({
+    title: "Omniscient Reader - Chapter 8 | chikari.moe",
+    selectors: {
+      "a[href='/series/omniscient-reader'], a[href$='/series/omniscient-reader']": {
+        textContent: "Omniscient Reader"
+      },
+      ".chapter-title": { textContent: "Chapter 8 Protagonist (Part 2)" },
+      'meta[property="og:image"]': { content: "https://cdn.chikari.moe/omniscient-reader.webp" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://chikari.moe/series/omniscient-reader/8"
+  );
+
+  assert.equal(metadata.title, "Omniscient Reader");
+  assert.equal(metadata.novelHomeUrl, "https://chikari.moe/series/omniscient-reader");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 8 Protagonist (Part 2)");
+  assert.equal(metadata.coverImageUrl, "https://cdn.chikari.moe/omniscient-reader.webp");
 });

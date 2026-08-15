@@ -6,6 +6,7 @@ const extensionApi = getExtensionApi();
 const PARSER_FILES = [
   "lib/parser-core.js",
   "lib/site-parsers/royalroad.js",
+  "lib/site-parsers/chikari.js",
   "lib/site-parsers/patreon.js",
   "lib/site-parsers/wuxiaworld.js",
   "lib/site-parsers/novelbin.js",
