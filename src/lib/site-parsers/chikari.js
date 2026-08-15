@@ -13,26 +13,30 @@
         return null;
       }
 
-      const seriesLink = root.querySelector(`a[href='/series/${seriesSlug}'], a[href$='/series/${seriesSlug}']`);
       const chapterHeading = core.firstText(root, [
         "[data-chapter-title]",
         ".chapter-title",
         ".reader-title",
         "main h2"
       ]);
-      const titleFromPage = core.stripSiteSuffix(ogTitle || root.title, "chikari.moe")
+      const pageTitle = core.stripSiteSuffix(ogTitle || root.title, "chikari.moe");
+      const chapterFirstTitle = pageTitle.match(
+        /^chapter\s+([^·|–—]+?)\s*[·|–—]\s*(.+)$/i
+      );
+      const titleFromPage = chapterFirstTitle?.[2]?.trim() || pageTitle
         .replace(/\s*[-–—|:]\s*chapter\s+\d+(?:\.\d+)?(?:\s+.*)?$/i, "")
         .trim();
+      const chapterFromPage = chapterFirstTitle?.[1]?.trim();
 
       return {
         title:
-          core.usefulText(seriesLink?.textContent, "chikari.moe") ||
-          core.usefulText(core.firstText(root, ["[data-series-title]", ".series-title", "main h1"]), "chikari.moe") ||
+          core.usefulText(core.firstText(root, ["[data-series-title]", ".series-title"]), "chikari.moe") ||
           core.usefulText(titleFromPage, "chikari.moe") ||
           core.titleCaseFromSlug(seriesSlug),
         novelHomeUrl: core.normalizePathUrl(url.toString(), `/series/${seriesSlug}`),
         lastReadChapterLabel:
           core.usefulText(chapterHeading, "chikari.moe") ||
+          (chapterFromPage ? `Chapter ${chapterFromPage}` : "") ||
           `Chapter ${chapterId}`,
         coverImageUrl:
           ogImage ||

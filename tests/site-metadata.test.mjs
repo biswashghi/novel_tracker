@@ -227,12 +227,8 @@ test("extractPageMetadataFromRoot uses Shin Translations chapter stripping", () 
 
 test("extractPageMetadataFromRoot maps Chikari chapters to their canonical series", () => {
   const root = createRoot({
-    title: "Omniscient Reader - Chapter 8 | chikari.moe",
+    title: "Chapter 8 · Omniscient Reader",
     selectors: {
-      "a[href='/series/omniscient-reader'], a[href$='/series/omniscient-reader']": {
-        textContent: "Omniscient Reader"
-      },
-      ".chapter-title": { textContent: "Chapter 8 Protagonist (Part 2)" },
       'meta[property="og:image"]': { content: "https://cdn.chikari.moe/omniscient-reader.webp" }
     }
   });
@@ -244,6 +240,6 @@ test("extractPageMetadataFromRoot maps Chikari chapters to their canonical serie
 
   assert.equal(metadata.title, "Omniscient Reader");
   assert.equal(metadata.novelHomeUrl, "https://chikari.moe/series/omniscient-reader");
-  assert.equal(metadata.lastReadChapterLabel, "Chapter 8 Protagonist (Part 2)");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 8");
   assert.equal(metadata.coverImageUrl, "https://cdn.chikari.moe/omniscient-reader.webp");
 });
