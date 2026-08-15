@@ -5,7 +5,26 @@ import { SyncClient } from "./sync-client.js";
 
 export const SYNC_META_KEY = "novel-tracker:sync-meta";
 const API_BASE_URL = "https://api.novel.bghimire.com";
-let activeSync = null;
+
+export function createQueuedTask(task) {
+  let activeTask = null;
+  let rerunRequested = false;
+  return function run() {
+    if (activeTask) {
+      rerunRequested = true;
+      return activeTask;
+    }
+    activeTask = (async () => {
+      do {
+        rerunRequested = false;
+        await task();
+      } while (rerunRequested);
+    })().finally(() => {
+      activeTask = null;
+    });
+    return activeTask;
+  };
+}
 
 function storageArea() {
   const storage = getStorageLocal();
@@ -51,13 +70,10 @@ async function synchronize() {
   }
 }
 
+const runQueuedSync = createQueuedTask(synchronize);
+
 export function syncNow() {
-  if (!activeSync) {
-    activeSync = synchronize().finally(() => {
-      activeSync = null;
-    });
-  }
-  return activeSync;
+  return runQueuedSync();
 }
 
 export async function deleteCloudAccount() {
