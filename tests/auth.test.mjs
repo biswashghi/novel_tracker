@@ -47,6 +47,13 @@ globalThis.fetch = async () => ({
 
 const auth = await import("../src/lib/auth.js");
 
+test("Firefox uses Mozilla's stable loopback OAuth callback", () => {
+  assert.equal(
+    auth.oauthRedirectUri("https://firefox-addon-id.extensions.allizom.org/oauth2"),
+    "http://127.0.0.1/mozoauth2/firefox-addon-id"
+  );
+});
+
 test("Google sign-in uses authorization code PKCE and activates the first account", async () => {
   store.clear();
   nextSubject = "google-user-1";

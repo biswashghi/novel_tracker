@@ -74,6 +74,18 @@ async function launchAuthFlow(url) {
   return identity.launchWebAuthFlow({ url, interactive: true });
 }
 
+export function oauthRedirectUri(generatedUrl) {
+  const redirect = new URL(generatedUrl);
+  if (redirect.hostname.endsWith(".extensions.allizom.org")) {
+    const extensionSubdomain = redirect.hostname.slice(0, -".extensions.allizom.org".length);
+    if (!extensionSubdomain || extensionSubdomain.includes(".")) {
+      throw new Error("Firefox returned an invalid extension callback URL");
+    }
+    return `http://127.0.0.1/mozoauth2/${extensionSubdomain}`;
+  }
+  return redirect.toString();
+}
+
 async function exchangeToken(parameters) {
   const response = await fetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/token`, {
     method: "POST",
@@ -108,7 +120,7 @@ export async function getAccountStatus() {
 export async function signIn({ hasLocalData = false } = {}) {
   const identity = getExtensionApi()?.identity;
   if (!identity?.getRedirectURL) throw new Error("This browser does not support extension sign-in");
-  const redirectUri = identity.getRedirectURL("oauth2");
+  const redirectUri = oauthRedirectUri(identity.getRedirectURL("oauth2"));
   const verifier = randomValue(64);
   const state = randomValue(24);
   const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);

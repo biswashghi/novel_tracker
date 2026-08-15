@@ -22,6 +22,12 @@ if [ -z "$CLIENT_UUID" ]; then
   exit 1
 fi
 
+FIREFOX_REDIRECT=http://127.0.0.1/mozoauth2/*
+REDIRECT_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID" -r "$REALM" --fields redirectUris --format csv --noquotes | grep -F "$FIREFOX_REDIRECT" || true)
+if [ -z "$REDIRECT_EXISTS" ]; then
+  "$KCADM" update "clients/$CLIENT_UUID" -r "$REALM" -s 'redirectUris+="http://127.0.0.1/mozoauth2/*"'
+fi
+
 printf %s '"'"'{"attributes":{"pkce.code.challenge.method":"S256"}}'"'"' >/tmp/novel-client-pkce.json
 "$KCADM" update "clients/$CLIENT_UUID" -r "$REALM" -f /tmp/novel-client-pkce.json
 rm -f /tmp/novel-client-pkce.json
