@@ -1,4 +1,5 @@
 import { deleteNovel, exportNovelsJson, getNovels, importNovelsJson, updateNovel } from "./lib/storage.js";
+import { getExtensionApi } from "./lib/extension-api.js";
 
 const library = document.querySelector("#library");
 const searchInput = document.querySelector("#search");
@@ -8,8 +9,74 @@ const headerStats = document.querySelector("#header-stats");
 const exportJsonButton = document.querySelector("#export-json");
 const importJsonButton = document.querySelector("#import-json");
 const importFileInput = document.querySelector("#import-file");
+const accountTitle = document.querySelector("#account-title");
+const accountDetail = document.querySelector("#account-detail");
+const syncDetail = document.querySelector("#sync-detail");
+const signInButton = document.querySelector("#sign-in");
+const signOutButton = document.querySelector("#sign-out");
+const syncNowButton = document.querySelector("#sync-now");
+const deleteCloudButton = document.querySelector("#delete-cloud");
 
 let novels = [];
+
+async function sendMessage(type) {
+  const result = await getExtensionApi().runtime.sendMessage({ type });
+  if (result?.error) throw new Error(result.error);
+  return result;
+}
+
+function renderAccount(snapshot) {
+  const account = snapshot?.account || {};
+  const sync = snapshot?.sync || {};
+  signInButton.hidden = account.signedIn;
+  signOutButton.hidden = !account.signedIn;
+  syncNowButton.hidden = !account.signedIn;
+  deleteCloudButton.hidden = !account.signedIn;
+  if (account.signedIn) {
+    accountTitle.textContent = `Syncing as ${account.name || account.email}`;
+    accountDetail.textContent = "Your library stays on this device and synchronizes through your Novel Tracker account.";
+  } else {
+    accountTitle.textContent = "Stored locally on this device";
+    accountDetail.textContent = "Sign in with Google only if you want cloud synchronization across browsers.";
+  }
+  if (sync.state === "syncing") {
+    syncDetail.textContent = "Synchronizing…";
+  } else if (sync.state === "error") {
+    syncDetail.textContent = `Sync paused: ${sync.lastError || "unknown error"}`;
+  } else if (sync.lastSyncedAt) {
+    syncDetail.textContent = `Last synced ${formatDate(sync.lastSyncedAt)}`;
+  } else {
+    syncDetail.textContent = account.signedIn ? "Ready to synchronize." : "No account is required.";
+  }
+}
+
+async function refreshAccount() {
+  try {
+    renderAccount(await sendMessage("novel-tracker:account-status"));
+  } catch (error) {
+    syncDetail.textContent = error.message;
+  }
+}
+
+async function withBusy(button, operation) {
+  button.disabled = true;
+  try {
+    return await operation();
+  } catch (error) {
+    window.alert(error.message || "The account request failed.");
+    return null;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function requestFirefoxSyncConsent() {
+  const extensionApi = getExtensionApi();
+  const declared = extensionApi.runtime.getManifest()?.browser_specific_settings?.gecko?.data_collection_permissions?.optional;
+  if (!declared?.length || !extensionApi.permissions?.request) return;
+  const granted = await extensionApi.permissions.request({ data_collection: declared });
+  if (!granted) throw new Error("Cloud sync remains off because data transmission permission was not granted.");
+}
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (char) => {
@@ -326,4 +393,33 @@ importFileInput.addEventListener("change", async (event) => {
   }
 });
 
-refresh();
+signInButton.addEventListener("click", () => withBusy(signInButton, async () => {
+  await requestFirefoxSyncConsent();
+  let snapshot = await sendMessage("novel-tracker:account-sign-in");
+  if (snapshot.account?.needsAccountConfirmation) {
+    const email = snapshot.account.pendingEmail || "the new account";
+    const confirmed = window.confirm(`Merge the library retained on this device into ${email}?`);
+    snapshot = await sendMessage(confirmed ? "novel-tracker:account-confirm" : "novel-tracker:account-cancel");
+  }
+  renderAccount(snapshot);
+  await refresh();
+}));
+
+syncNowButton.addEventListener("click", () => withBusy(syncNowButton, async () => {
+  syncDetail.textContent = "Synchronizing…";
+  const snapshot = await sendMessage("novel-tracker:sync-now");
+  renderAccount(snapshot);
+  await refresh();
+}));
+
+signOutButton.addEventListener("click", () => withBusy(signOutButton, async () => {
+  renderAccount(await sendMessage("novel-tracker:account-sign-out"));
+}));
+
+deleteCloudButton.addEventListener("click", () => withBusy(deleteCloudButton, async () => {
+  const confirmed = window.confirm("Permanently delete this account's synchronized Novel Tracker data? Your library will remain on this device.");
+  if (!confirmed) return;
+  renderAccount(await sendMessage("novel-tracker:account-delete-cloud"));
+}));
+
+Promise.all([refresh(), refreshAccount()]);

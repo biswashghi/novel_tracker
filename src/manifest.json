@@ -7,7 +7,9 @@
     "storage",
     "tabs",
     "activeTab",
-    "scripting"
+    "scripting",
+    "identity",
+    "alarms"
   ],
   "host_permissions": [
     "https://*.royalroad.com/*",
@@ -17,7 +19,9 @@
     "https://*.scribblehub.com/*",
     "https://*.creativenovels.com/*",
     "https://*.lightnovelstranslations.com/*",
-    "https://*.shintranslations.com/*"
+    "https://*.shintranslations.com/*",
+    "https://api.novel.bghimire.com/*",
+    "https://auth.novel.bghimire.com/*"
   ],
   "background": {
     "service_worker": "background.js",

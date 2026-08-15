@@ -88,6 +88,41 @@
         align-items: end;
       }
 
+      .account-panel {
+        padding: 14px 18px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+      }
+
+      .account-copy {
+        display: grid;
+        gap: 4px;
+      }
+
+      .account-copy h2,
+      .account-copy p {
+        margin: 0;
+      }
+
+      .account-copy h2 {
+        font-size: 1rem;
+      }
+
+      .account-copy p {
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.35;
+      }
+
+      .account-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: end;
+      }
+
       .library {
         display: grid;
         gap: 12px;
@@ -269,8 +304,13 @@
         }
 
         .toolbar,
-        .card {
+        .card,
+        .account-panel {
           grid-template-columns: 1fr;
+        }
+
+        .account-actions {
+          justify-content: start;
         }
 
         .title-row {
@@ -303,6 +343,20 @@
             <input type="file" id="import-file" accept="application/json,.json" hidden>
           </div>
           <div class="header-stats" id="header-stats"></div>
+        </div>
+      </section>
+
+      <section class="panel account-panel" aria-live="polite">
+        <div class="account-copy">
+          <h2 id="account-title">Stored locally on this device</h2>
+          <p id="account-detail">Sign in with Google only if you want encrypted-in-transit cloud synchronization across browsers.</p>
+          <p id="sync-detail"></p>
+        </div>
+        <div class="account-actions">
+          <button type="button" id="sign-in">Sign in with Google</button>
+          <button type="button" id="sync-now" class="secondary" hidden>Sync now</button>
+          <button type="button" id="sign-out" class="ghost" hidden>Sign out</button>
+          <button type="button" id="delete-cloud" class="danger" hidden>Delete cloud data</button>
         </div>
       </section>
 

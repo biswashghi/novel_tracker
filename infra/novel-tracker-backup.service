@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Novel Tracker PostgreSQL
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/novel-tracker
+ExecStart=/opt/novel-tracker/scripts/backup-vps.sh

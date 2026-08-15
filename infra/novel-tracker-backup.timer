@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Novel Tracker PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=20m
+
+[Install]
+WantedBy=timers.target

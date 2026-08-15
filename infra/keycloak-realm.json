@@ -17,12 +17,28 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
       "redirectUris": [
         "https://noveltracker.app/oauth/callback",
         "https://*.extensions.allizom.org/*",
         "https://*.chromiumapp.org/*"
       ],
-      "webOrigins": ["+"]
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "novel-tracker-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "novel-tracker-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "identityProviders": []

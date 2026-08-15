@@ -39,11 +39,14 @@ if (target === "firefox") {
   manifest.background = { scripts: ["background.js"], type: "module" };
   manifest.browser_specific_settings = {
     gecko: {
-      id: "novel-tracker@noveltracker.app",
-      strict_min_version: "128.0",
-      data_collection_permissions: { required: ["none"] }
+      id: "novel-tracker@bghimire.com",
+      strict_min_version: "140.0",
+      data_collection_permissions: {
+        required: ["none"],
+        optional: ["authenticationInfo", "personallyIdentifyingInfo", "browsingActivity", "websiteContent"]
+      }
     },
-    gecko_android: {}
+    gecko_android: { strict_min_version: "142.0" }
   };
 }
 if (!new Set(["chrome", "firefox", "safari"]).has(target)) {

@@ -23,7 +23,16 @@ function createLocalStorage() {
 globalThis.localStorage = createLocalStorage();
 
 const storageModule = await import("../src/lib/storage.js");
-const { autoUpdateNovelProgress, exportNovelsJson, getNovels, importNovelsJson, upsertNovel } = storageModule;
+const {
+  autoUpdateNovelProgress,
+  exportNovelsJson,
+  getNovels,
+  getSyncState,
+  importNovelsJson,
+  prepareSyncForAccount,
+  saveSyncState,
+  upsertNovel
+} = storageModule;
 
 test("upsertNovel updates an existing Patreon entry when saving the next chapter manually", async () => {
   globalThis.localStorage.clear();
@@ -338,4 +347,35 @@ test("importNovelsJson skips blank novel entries", async () => {
 
   const novels = await getNovels();
   assert.equal(novels.length, 0);
+});
+
+test("legacy local data is queued for first cloud sync", async () => {
+  globalThis.localStorage.clear();
+  globalThis.localStorage.setItem("novel-tracker:novels", JSON.stringify([{
+    id: "legacy-novel",
+    title: "Legacy Novel",
+    sourceSite: "example.test",
+    lastReadChapterUrl: "https://example.test/chapter-1",
+    lastReadChapterLabel: "Chapter 1",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  }]));
+  const state = await getSyncState();
+  assert.ok(state.pendingMutations.length >= 1);
+});
+
+test("switching accounts queues a fresh snapshot of the retained local library", async () => {
+  globalThis.localStorage.clear();
+  await upsertNovel({
+    title: "Local Novel",
+    sourceSite: "example.test",
+    lastReadChapterUrl: "https://example.test/chapter-1",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  const synced = await getSyncState();
+  synced.pendingMutations = [];
+  synced.syncAccountSubject = "old-account";
+  await saveSyncState(synced);
+  const switched = await prepareSyncForAccount("new-account");
+  assert.equal(switched.syncAccountSubject, "new-account");
+  assert.ok(switched.pendingMutations.some((item) => item.type === "novel.create"));
 });

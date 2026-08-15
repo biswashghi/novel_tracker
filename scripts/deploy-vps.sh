@@ -50,5 +50,24 @@ sudo cp "${SERVER_ENV_FILE}" "${APP_DIR}/.env.prod"
 sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}/.env.prod"
 cd "${APP_DIR}"
 sudo NOVEL_API_HOST_PORT="${API_PORT}" NOVEL_AUTH_HOST_PORT="${AUTH_PORT}" docker compose --env-file .env.prod -f infra/docker-compose.yml up -d --build
+for attempt in \$(seq 1 60); do
+  if curl --fail --silent "http://127.0.0.1:${AUTH_PORT}/realms/novel-tracker/.well-known/openid-configuration" >/dev/null; then
+    break
+  fi
+  if [[ "\${attempt}" -eq 60 ]]; then
+    echo "Keycloak did not become ready in time." >&2
+    exit 1
+  fi
+  sleep 2
+done
+./scripts/configure-keycloak.sh
+sudo install -m 0644 infra/novel-tracker-backup.service /etc/systemd/system/novel-tracker-backup.service
+sudo install -m 0644 infra/novel-tracker-backup.timer /etc/systemd/system/novel-tracker-backup.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now novel-tracker-backup.timer
 sudo docker compose --env-file .env.prod -f infra/docker-compose.yml ps
+curl --fail --silent "http://127.0.0.1:${API_PORT}/health" >/dev/null
+curl --fail --silent "https://api.novel.bghimire.com/health" >/dev/null
+curl --fail --silent "https://auth.novel.bghimire.com/realms/novel-tracker/.well-known/openid-configuration" >/dev/null
+echo "Novel Tracker API, authentication, and backup timer are ready."
 EOF

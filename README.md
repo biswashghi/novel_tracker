@@ -16,7 +16,9 @@ can be corrected.
 - Browse, search, sort, edit, delete, and reopen novels from the library page.
 - Keep a per-novel chapter history trail.
 - Export and import JSON backups.
-- Keep reading data local to the browser profile.
+- Work without an account and keep reading data local to the browser profile.
+- Optionally sign in with Google to synchronize through the Novel Tracker API.
+- Resolve offline changes with deterministic HLC/remove-wins merge rules.
 
 ## Supported Site Profiles
 
@@ -49,8 +51,12 @@ How data is used:
 
 - Reading data is used only to provide the extension's single purpose: tracking where you stopped reading web novels and reopening those pages later.
 - Reading data is stored in `chrome.storage.local` in your browser profile.
-- The extension does not create an account, run ads, use analytics, sell data, or transmit reading data to a remote server.
-- The extension does not share user data with third parties.
+- The extension does not require an account, run ads, use analytics, or sell data.
+- When the reader explicitly signs in with Google, Novel Tracker transmits the
+  library and chapter history to `api.novel.bghimire.com` for synchronization.
+- Google and Keycloak process account authentication; Google credentials are
+  never exposed to the extension or Novel Tracker API.
+- Signing out stops synchronization and retains the local library.
 - Exported JSON backups are created only when you click `Export JSON`; imported backups are read only when you choose a local JSON file.
 
 Permissions:
@@ -58,6 +64,8 @@ Permissions:
 - `storage`: stores the reading library locally.
 - `tabs` and `activeTab`: reads the active tab URL/title when saving progress from the popup.
 - `scripting`: injects the shared parser into the active page so the popup can read chapter metadata.
+- `identity`: opens the optional Google/Keycloak PKCE sign-in flow.
+- `alarms`: retries optional synchronization periodically while signed in.
 - Supported-site host permissions: allow automatic progress updates only on the supported HTTPS novel sites listed above. The popup can still use `activeTab` when you explicitly open it on the current page.
 
 Limited Use statement:
@@ -76,7 +84,10 @@ flowchart LR
     Content --> Background["Background service worker"]
     Popup --> Storage["chrome.storage.local"]
     Background --> Storage
-    Options["Library / options page"] --> Storage
+    Options["Library / account page"] --> Storage
+    Storage --> Merge["HLC merge core"]
+    Merge -. "only after sign-in" .-> API["Novel Tracker sync API"]
+    API --> Keycloak["Keycloak / Google"]
 ```
 
 The parsing layer normalizes each page into a shared `PageMetadata` shape:
@@ -138,6 +149,8 @@ Build the unpacked extension:
 
 ```bash
 npm run build
+npm run build:firefox
+npm run build:safari
 ```
 
 The unpacked extension is written to `dist/`.
@@ -193,33 +206,29 @@ Before submitting a public Chrome Web Store release:
 6. Complete the Privacy practices tab:
    - Disclose local handling of website URLs/page metadata used for reading progress.
    - Certify Limited Use.
-   - Do not claim analytics, ads, remote sync, or third-party data sharing.
+   - Disclose optional account authentication and encrypted cloud synchronization.
+   - State that local-only use remains available without signing in.
+   - Do not claim analytics, ads, or sale/sharing of customer data.
 7. Upload screenshots of the popup and library page.
 8. Submit for review.
 
-## Mobile And Sync Options
+## Cross-platform and optional sync
 
-The first Chrome Web Store release does not include phone sync.
-
-Current behavior:
-
-- Desktop Chrome/Edge extension data stays in that browser profile.
-- Chrome Android does not run this extension as a normal mobile extension.
-- JSON export/import can be used as a manual backup, not continuous sync.
-
-Future options:
-
-- Add a small cloud sync backend with an account or private sync token.
-- Port the extension to Firefox for Android and sync through the same backend.
-- Convert to a Safari Web Extension for iOS/iPadOS/macOS and sync through the same backend.
-- Build a lightweight companion web app for phones that reads/writes the same backend.
-
-The recommended future direction is a small sync backend first, then mobile
-browser clients as separate surfaces.
+- Chrome/Edge, Firefox desktop/Android, and Safari builds share the same storage,
+  parser, mutation, and merge modules.
+- Local-only operation is the default. No library data is transmitted until the
+  reader chooses **Sign in with Google**.
+- Firefox declares synchronization data categories as optional and requests
+  consent at the sign-in gesture.
+- Safari is packaged as a Safari Web Extension for macOS/iOS/iPadOS. Sign in with
+  Apple is intentionally deferred; Google is the only cloud identity provider.
+- See `docs/release.md` for browser-specific build and testing steps and
+  `docs/operations.md` for deployment, backup, and restore procedures.
 
 ## Limitations
 
 - Metadata extraction varies by site and may require manual correction.
 - Some sites block extension or automation-based page inspection.
-- Data sync across browser profiles is not implemented yet.
+- Safari OAuth behavior still requires verification in the generated Xcode
+  project on a physical iPhone/iPad before App Store submission.
 - Chrome Web Store submission must be completed manually in the Developer Dashboard.

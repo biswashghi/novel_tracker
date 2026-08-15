@@ -12,6 +12,10 @@ returns:
 ```json
 {
   "acknowledgedMutationIds": ["uuid"],
+  "novelIdMappings": [
+    { "localNovelId": "uuid", "canonicalNovelId": "uuid" }
+  ],
+  "state": { "version": 1, "novels": {} },
   "mutations": [],
   "cursor": "opaque-cursor"
 }
@@ -19,7 +23,8 @@ returns:
 
 ## `GET /v1/sync?cursor=opaque-cursor`
 
-Returns mutations visible after the cursor plus the next cursor. A missing
+Returns up to 1,000 mutations visible after the cursor plus the next cursor and
+`hasMore`. A missing
 cursor performs the initial account pull. The server returns tombstones as
 ordinary `novel.delete` mutations so clients suppress stale updates.
 
@@ -33,6 +38,10 @@ the extension; it must not replace a complete novel document.
 ## Identity-provider setup
 
 After the Keycloak container is available at the configured auth domain, add
-Google and Apple under **Identity providers** in the `novel-tracker` realm.
+Google under **Identity providers** in the `novel-tracker` realm.
 Keep their client secrets in Keycloak's database/admin UI rather than in this
 repository or the Docker Compose environment.
+
+The extension uses Authorization Code with PKCE. `novel-tracker-extension`
+must have an audience mapper that adds `novel-tracker-api` to access tokens.
+`scripts/configure-keycloak.sh` makes that mapper idempotently on deployment.

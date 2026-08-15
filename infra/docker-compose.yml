@@ -25,6 +25,8 @@ services:
       KC_HOSTNAME: ${AUTH_HOST:?set AUTH_HOST}
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
     depends_on:
@@ -53,6 +55,11 @@ services:
     networks: [private]
     ports:
       - "127.0.0.1:${NOVEL_API_HOST_PORT:-8792}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
 volumes:

@@ -242,3 +242,45 @@ export function materializeNovel(novel) {
 export function materializeNovels(state) {
   return Object.values(state.novels).map(materializeNovel).filter(Boolean);
 }
+
+function normalizeIdentityText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeIdentityUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return String(value).trim();
+  }
+}
+
+export function matchesNovelIdentity(existing, incoming) {
+  const existingHome = normalizeIdentityUrl(existing?.novelHomeUrl);
+  const incomingHome = normalizeIdentityUrl(incoming?.novelHomeUrl);
+  if (existingHome && incomingHome && existingHome === incomingHome) return true;
+  const existingChapter = normalizeIdentityUrl(existing?.lastReadChapterUrl);
+  const incomingChapter = normalizeIdentityUrl(incoming?.lastReadChapterUrl);
+  if (existingChapter && incomingChapter && existingChapter === incomingChapter) return true;
+  const title = normalizeIdentityText(incoming?.title);
+  const source = normalizeIdentityText(incoming?.sourceSite);
+  return Boolean(
+    title && source &&
+    normalizeIdentityText(existing?.title) === title &&
+    normalizeIdentityText(existing?.sourceSite) === source
+  );
+}
+
+export function findCanonicalNovelId(state, mutation) {
+  if (state.novels?.[mutation.novelId]) return mutation.novelId;
+  const event = mutation.payload?.event;
+  const candidate = {
+    ...mutation.payload,
+    lastReadChapterUrl: event?.url || mutation.payload?.lastReadChapterUrl || "",
+    lastReadChapterLabel: event?.label || mutation.payload?.lastReadChapterLabel || ""
+  };
+  return materializeNovels(state).find((novel) => matchesNovelIdentity(novel, candidate))?.id || mutation.novelId;
+}

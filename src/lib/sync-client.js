@@ -1,11 +1,33 @@
-import { applyMutationBatch } from "./sync-core.js";
+import { applyMutationBatch, observeClock } from "./sync-core.js";
+
+function adoptCanonicalState(localState, result, acknowledged) {
+  if (!result.state) return applyMutationBatch(localState, result.mutations || []);
+  const mappings = new Map((result.novelIdMappings || []).map((item) => [item.localNovelId, item.canonicalNovelId]));
+  const pendingMutations = localState.pendingMutations
+    .filter((item) => !acknowledged.has(item.mutationId))
+    .map((item) => {
+      const novelId = mappings.get(item.novelId) || item.novelId;
+      const generation = result.state.novels?.[novelId]?.generation || item.generation;
+      return { ...item, novelId, generation };
+    });
+  let next = {
+    ...result.state,
+    deviceId: localState.deviceId,
+    clock: observeClock(localState.clock, result.state.clock, localState.deviceId),
+    pendingMutations,
+    syncAccountSubject: localState.syncAccountSubject
+  };
+  next = applyMutationBatch(next, pendingMutations);
+  next.pendingMutations = pendingMutations;
+  return next;
+}
 
 /**
  * Transport-neutral client for the documented /v1/sync API. Authentication is
  * supplied by the host so local-only users never need to construct this class.
  */
 export class SyncClient {
-  constructor({ baseUrl, getAccessToken, fetchImpl = globalThis.fetch }) {
+  constructor({ baseUrl, getAccessToken, fetchImpl = globalThis.fetch?.bind(globalThis) }) {
     this.baseUrl = String(baseUrl || "").replace(/\/$/, "");
     this.getAccessToken = getAccessToken;
     this.fetchImpl = fetchImpl;
@@ -33,16 +55,21 @@ export class SyncClient {
       body: JSON.stringify({ mutations: state.pendingMutations })
     });
     const acknowledged = new Set(result.acknowledgedMutationIds || state.pendingMutations.map((item) => item.mutationId));
-    const next = applyMutationBatch(state, result.mutations || []);
+    const next = adoptCanonicalState(state, result, acknowledged);
     next.pendingMutations = next.pendingMutations.filter((item) => !acknowledged.has(item.mutationId));
     next.cursor = result.cursor || next.cursor || "";
     return { state: next, cursor: next.cursor };
   }
 
   async pull(state) {
-    const result = await this.request(`/v1/sync?cursor=${encodeURIComponent(state.cursor || "")}`);
-    const next = applyMutationBatch(state, result.mutations || []);
-    next.cursor = result.cursor || next.cursor || "";
+    let next = state;
+    let hasMore = false;
+    do {
+      const result = await this.request(`/v1/sync?cursor=${encodeURIComponent(next.cursor || "")}`);
+      next = applyMutationBatch(next, result.mutations || []);
+      next.cursor = result.cursor || next.cursor || "";
+      hasMore = Boolean(result.hasMore);
+    } while (hasMore);
     return { state: next, cursor: next.cursor };
   }
 }

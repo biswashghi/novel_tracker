@@ -4,6 +4,7 @@ import {
   applyMutation,
   applyMutationBatch,
   createSyncState,
+  findCanonicalNovelId,
   materializeNovel,
   purgeExpiredTombstones,
   TOMBSTONE_RETENTION_MS
@@ -97,4 +98,41 @@ test("expired tombstones are purged after the retention window", () => {
   state = applyMutation(state, mutation({ mutationId: "delete", type: "novel.delete", clock: baseClock(100) }), { now: 100 });
   state = purgeExpiredTombstones(state, 100 + TOMBSTONE_RETENTION_MS);
   assert.equal(state.novels["novel-1"], undefined);
+});
+
+test("first sync maps a matching local novel to the cloud canonical id", () => {
+  let state = createSyncState({ deviceId: deviceA, now: 0 });
+  state = applyMutation(state, mutation({
+    novelId: "cloud-id",
+    payload: {
+      title: "The Same Novel",
+      sourceSite: "royalroad.com",
+      novelHomeUrl: "https://www.royalroad.com/fiction/42/the-same-novel"
+    }
+  }));
+  const canonicalId = findCanonicalNovelId(state, mutation({
+    mutationId: "local-create",
+    novelId: "local-id",
+    deviceId: deviceB,
+    payload: {
+      title: "The Same Novel",
+      sourceSite: "royalroad.com",
+      novelHomeUrl: "https://www.royalroad.com/fiction/42/the-same-novel"
+    }
+  }));
+  assert.equal(canonicalId, "cloud-id");
+});
+
+test("first sync keeps a distinct local novel id when no identity matches", () => {
+  const state = createSyncState({ deviceId: deviceA, now: 0 });
+  assert.equal(findCanonicalNovelId(state, mutation({ novelId: "local-id" })), "local-id");
+});
+
+test("equal field clocks use server sequence and then mutation id deterministically", () => {
+  let state = createSyncState({ deviceId: deviceA, now: 0 });
+  const clock = baseClock(100);
+  state = applyMutation(state, mutation({ mutationId: "a", clock, serverSequence: 1, payload: { title: "First" } }));
+  state = applyMutation(state, mutation({ mutationId: "b", type: "novel.patch", clock, serverSequence: 2, payload: { title: "Second" } }));
+  state = applyMutation(state, mutation({ mutationId: "z", type: "novel.patch", clock, serverSequence: 2, payload: { title: "Tie winner" } }));
+  assert.equal(materializeNovel(state.novels["novel-1"]).title, "Tie winner");
 });
