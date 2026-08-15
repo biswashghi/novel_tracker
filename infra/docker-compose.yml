@@ -8,6 +8,11 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks: [private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novel_tracker -d novel_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.1
@@ -19,14 +24,18 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
       KC_HOSTNAME: ${AUTH_HOST:?set AUTH_HOST}
       KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./keycloak-realm.json:/opt/keycloak/data/import/novel-tracker-realm.json:ro
     networks: [private]
     ports:
       - "127.0.0.1:${NOVEL_AUTH_HOST_PORT:-8793}:8080"
+    restart: unless-stopped
 
   api:
     build:
@@ -36,10 +45,15 @@ services:
       DATABASE_URL: postgresql://novel_tracker:${POSTGRES_PASSWORD}@postgres:5432/novel_tracker
       KEYCLOAK_ISSUER: https://${AUTH_HOST}/realms/novel-tracker
       KEYCLOAK_AUDIENCE: novel-tracker-api
-    depends_on: [postgres, keycloak]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
     networks: [private]
     ports:
       - "127.0.0.1:${NOVEL_API_HOST_PORT:-8792}:3000"
+    restart: unless-stopped
 
 volumes:
   postgres-data:
