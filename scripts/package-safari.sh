@@ -27,6 +27,21 @@ handler_path="$generated_app_dir/Shared (Extension)/SafariWebExtensionHandler.sw
 cp "$root_dir/safari-native/SafariWebExtensionHandler.swift" "$handler_path"
 echo "Installed Safari native OAuth bridge: $handler_path"
 
+node --input-type=module -e '
+  import { readFile, writeFile } from "node:fs/promises";
+  const projectPath = process.argv[1];
+  let project = await readFile(projectPath, "utf8");
+  const marker = /ENABLE_HARDENED_RUNTIME = YES;\n(\s+)ENABLE_USER_SELECTED_FILES = readonly;\n(\s+)GENERATE_INFOPLIST_FILE = YES;\n(\s+)INFOPLIST_FILE = "macOS \(Extension\)\/Info\.plist";/g;
+  let replacements = 0;
+  project = project.replace(marker, (_match, indent1, indent2, indent3) => {
+    replacements += 1;
+    return `ENABLE_HARDENED_RUNTIME = YES;\n${indent1}ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;\n${indent1}ENABLE_USER_SELECTED_FILES = readonly;\n${indent2}GENERATE_INFOPLIST_FILE = YES;\n${indent3}INFOPLIST_FILE = "macOS (Extension)/Info.plist";`;
+  });
+  if (replacements !== 2) throw new Error(`Expected two macOS extension configurations, found ${replacements}`);
+  await writeFile(projectPath, project);
+' "$generated_app_dir/Novel Tracker.xcodeproj/project.pbxproj"
+echo "Enabled outbound networking for the macOS Safari extension target"
+
 version="$(node --input-type=module -e '
   import { readFileSync } from "node:fs";
   import { join } from "node:path";

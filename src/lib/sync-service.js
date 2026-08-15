@@ -1,4 +1,5 @@
 import { getAccessToken, getAccountStatus, signOut } from "./auth.js";
+import { platformFetch } from "./platform-http.js";
 import { getStorageLocal } from "./extension-api.js";
 import { disconnectSyncAccount, getSyncState, prepareSyncForAccount, saveSyncState } from "./storage.js";
 import { SyncClient } from "./sync-client.js";
@@ -56,7 +57,7 @@ async function synchronize() {
   await writeMeta({ state: "syncing", lastError: "" });
   try {
     let state = await prepareSyncForAccount(account.subject);
-    const client = new SyncClient({ baseUrl: API_BASE_URL, getAccessToken });
+    const client = new SyncClient({ baseUrl: API_BASE_URL, getAccessToken, fetchImpl: platformFetch });
     state = (await client.pull(state)).state;
     await saveSyncState(state);
     state = (await client.push(state)).state;
@@ -79,7 +80,7 @@ export function syncNow() {
 export async function deleteCloudAccount() {
   const token = await getAccessToken();
   if (!token) throw new Error("Sign in is required to delete cloud data");
-  const response = await fetch(`${API_BASE_URL}/v1/account`, {
+  const response = await platformFetch(`${API_BASE_URL}/v1/account`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${token}` }
   });

@@ -1,5 +1,6 @@
 import { getStorageLocal } from "./extension-api.js";
 import { getAuthPlatform } from "./auth-platform.js";
+import { platformFetch } from "./platform-http.js";
 
 export const AUTH_STORAGE_KEY = "novel-tracker:auth";
 export const AUTH_CONFIG = Object.freeze({
@@ -80,10 +81,12 @@ export function oauthRedirectUri(generatedUrl) {
 }
 
 async function exchangeToken(parameters) {
-  const response = await fetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/token`, {
+  const url = `${AUTH_CONFIG.issuer}/protocol/openid-connect/token`;
+  const formBody = new URLSearchParams(parameters).toString();
+  const response = await platformFetch(url, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(parameters)
+    body: formBody
   });
   if (!response.ok) {
     const detail = await response.text();
@@ -211,7 +214,7 @@ export async function signOut() {
   auth.pending = null;
   await writeAuth(auth);
   if (refreshToken) {
-    fetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/logout`, {
+    platformFetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/logout`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: AUTH_CONFIG.clientId, refresh_token: refreshToken })

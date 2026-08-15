@@ -28,9 +28,9 @@ test("Safari adapter delegates only interactive authorization to native messagin
   let nativeCall;
   const platform = getAuthPlatform({
     runtime: {
-      async sendNativeMessage(applicationId, message) {
+      sendNativeMessage(applicationId, message) {
         nativeCall = { applicationId, message };
-        return { callbackUrl: `${SAFARI_OAUTH_REDIRECT_URI}?code=ok` };
+        return Promise.resolve({ callbackUrl: `${SAFARI_OAUTH_REDIRECT_URI}?code=ok` });
       }
     }
   });
@@ -39,4 +39,19 @@ test("Safari adapter delegates only interactive authorization to native messagin
   assert.equal(await platform.authorize("https://auth.test"), `${SAFARI_OAUTH_REDIRECT_URI}?code=ok`);
   assert.equal(nativeCall.applicationId, SAFARI_NATIVE_APP_ID);
   assert.equal(nativeCall.message.authorizationUrl, "https://auth.test");
+});
+
+test("Safari adapter supports callback-only native messaging", async () => {
+  const platform = getAuthPlatform({
+    runtime: {
+      sendNativeMessage(_applicationId, message, callback) {
+        callback({ callbackUrl: `${SAFARI_OAUTH_REDIRECT_URI}?code=callback` });
+      }
+    }
+  });
+
+  assert.equal(
+    await platform.authorize("https://auth.test"),
+    `${SAFARI_OAUTH_REDIRECT_URI}?code=callback`
+  );
 });

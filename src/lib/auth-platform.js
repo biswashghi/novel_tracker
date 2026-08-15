@@ -22,16 +22,40 @@ function safariNativePlatform(runtime) {
       return SAFARI_OAUTH_REDIRECT_URI;
     },
     async authorize(url) {
-      const response = await runtime.sendNativeMessage(SAFARI_NATIVE_APP_ID, {
+      const message = {
         type: "novel-tracker.oauth.authorize",
         authorizationUrl: url,
         callbackScheme: "noveltracker"
-      });
+      };
+      const response = await sendNative(runtime, message);
       if (response?.error) throw new Error(response.error);
       if (!response?.callbackUrl) throw new Error("Safari did not return an authorization callback");
       return response.callbackUrl;
     }
   };
+}
+
+function sendNative(runtime, message) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (value, error) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const callback = (value) => {
+      const runtimeError = runtime.lastError;
+      finish(value, runtimeError ? new Error(runtimeError.message || String(runtimeError)) : null);
+    };
+
+    try {
+      const result = runtime.sendNativeMessage(SAFARI_NATIVE_APP_ID, message, callback);
+      if (result?.then) result.then((value) => finish(value), (error) => finish(undefined, error));
+    } catch (error) {
+      finish(undefined, error);
+    }
+  });
 }
 
 export function getAuthPlatform(api = getExtensionApi()) {
