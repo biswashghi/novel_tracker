@@ -30,8 +30,8 @@ if ! command -v docker >/dev/null 2>&1; then
   sudo usermod -aG docker ${DEPLOY_USER}
 fi
 
-if [[ ! -f "${SERVER_ENV_FILE}" ]]; then
-  echo "Missing ${SERVER_ENV_FILE}. Create it on the VPS with POSTGRES_PASSWORD, KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD, AUTH_HOST, and OAuth credentials." >&2
+if ! sudo test -f "${SERVER_ENV_FILE}"; then
+  echo "Missing ${SERVER_ENV_FILE}. Create it on the VPS with POSTGRES_PASSWORD, KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD, and AUTH_HOST." >&2
   exit 1
 fi
 
