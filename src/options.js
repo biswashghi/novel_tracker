@@ -78,20 +78,6 @@ async function requestFirefoxSyncConsent() {
   if (!granted) throw new Error("Cloud sync remains off because data transmission permission was not granted.");
 }
 
-function escapeHtml(value) {
-  return String(value || "").replace(/[&<>"']/g, (char) => {
-    const map = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;"
-    };
-
-    return map[char];
-  });
-}
-
 function formatDate(value) {
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -133,10 +119,13 @@ function sortNovels(items) {
 
 function renderHeaderStats() {
   const activeCount = novels.filter((novel) => novel.status === "active").length;
-  headerStats.innerHTML = `
-    <span class="pill">${novels.length} tracked</span>
-    <span class="pill">${activeCount} active</span>
-  `;
+  const tracked = document.createElement("span");
+  tracked.className = "pill";
+  tracked.textContent = `${novels.length} tracked`;
+  const active = document.createElement("span");
+  active.className = "pill";
+  active.textContent = `${activeCount} active`;
+  headerStats.replaceChildren(tracked, active);
 }
 
 function getHistoryEntries(novel) {
@@ -160,96 +149,102 @@ function createCard(novel) {
     .join("")
     .toUpperCase();
   const historyEntries = getHistoryEntries(novel);
-  const historyMarkup = historyEntries.length
-    ? `
-      <details class="history">
-        <summary>History (${historyEntries.length})</summary>
-        <div class="history-list">
-          ${historyEntries
-            .map((entry) => {
-              const label = escapeHtml(entry.label || entry.url);
-              const url = escapeHtml(entry.url);
-              return `
-                <div class="history-item">
-                  <a href="${url}" target="_blank" rel="noopener noreferrer" title="${url}">${label}</a>
-                  <span class="history-time">${formatDate(entry.readAt)}</span>
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
-      </details>
-    `
-    : "";
 
-  article.innerHTML = `
-    <div class="cover">
-      ${
-        novel.coverImageUrl
-          ? `<img src="${escapeHtml(novel.coverImageUrl)}" alt="${escapeHtml(novel.title)} cover">`
-          : escapeHtml(fallbackCover)
-      }
-    </div>
-    <div class="content">
-      <div class="title-row">
-        <div>
-          <h2>${escapeHtml(novel.title)}</h2>
-          <div class="meta">
-            <span>${escapeHtml(novel.sourceSite)}</span>
-            <span>${escapeHtml(novel.status)}</span>
-            <span>Updated ${formatDate(novel.updatedAt)}</span>
-          </div>
-        </div>
-        <span class="pill">${escapeHtml(novel.lastReadChapterLabel || "Saved page")}</span>
-      </div>
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = String(text);
+    return node;
+  };
+  const button = (text, action, className = "") => {
+    const node = element("button", className, text);
+    node.type = "button";
+    node.dataset.action = action;
+    return node;
+  };
+  const field = (labelText, name, value) => {
+    const wrapper = element("div", "field");
+    const label = element("label", "", labelText);
+    const input = document.createElement("input");
+    input.name = name;
+    input.value = String(value || "");
+    wrapper.append(label, input);
+    return wrapper;
+  };
 
-      <div class="chapter-link" title="${escapeHtml(novel.lastReadChapterUrl)}">${escapeHtml(novel.lastReadChapterUrl)}</div>
+  const cover = element("div", "cover");
+  if (novel.coverImageUrl) {
+    const image = document.createElement("img");
+    image.src = novel.coverImageUrl;
+    image.alt = `${novel.title} cover`;
+    cover.append(image);
+  } else {
+    cover.textContent = fallbackCover;
+  }
 
-      <div class="actions">
-        <button type="button" data-action="open">Open chapter</button>
-        <button type="button" class="secondary" data-action="edit">Edit</button>
-        <button type="button" class="danger" data-action="delete">Delete</button>
-      </div>
+  const content = element("div", "content");
+  const titleRow = element("div", "title-row");
+  const titleBlock = document.createElement("div");
+  titleBlock.append(element("h2", "", novel.title));
+  const meta = element("div", "meta");
+  meta.append(
+    element("span", "", novel.sourceSite),
+    element("span", "", novel.status),
+    element("span", "", `Updated ${formatDate(novel.updatedAt)}`)
+  );
+  titleBlock.append(meta);
+  titleRow.append(titleBlock, element("span", "pill", novel.lastReadChapterLabel || "Saved page"));
 
-      ${historyMarkup}
+  const chapterLink = element("div", "chapter-link", novel.lastReadChapterUrl);
+  chapterLink.title = novel.lastReadChapterUrl;
+  const actions = element("div", "actions");
+  actions.append(button("Open chapter", "open"), button("Edit", "edit", "secondary"), button("Delete", "delete", "danger"));
+  content.append(titleRow, chapterLink, actions);
 
-      <form class="edit-grid" data-form="edit">
-        <div class="field">
-          <label>Title</label>
-          <input name="title" value="${escapeHtml(novel.title)}">
-        </div>
-        <div class="field">
-          <label>Chapter label</label>
-          <input name="lastReadChapterLabel" value="${escapeHtml(novel.lastReadChapterLabel || "")}">
-        </div>
-        <div class="field">
-          <label>Chapter URL</label>
-          <input name="lastReadChapterUrl" value="${escapeHtml(novel.lastReadChapterUrl || "")}">
-        </div>
-        <div class="field">
-          <label>Novel home URL</label>
-          <input name="novelHomeUrl" value="${escapeHtml(novel.novelHomeUrl || "")}">
-        </div>
-        <div class="field">
-          <label>Cover image URL</label>
-          <input name="coverImageUrl" value="${escapeHtml(novel.coverImageUrl || "")}">
-        </div>
-        <div class="field">
-          <label>Status</label>
-          <select name="status">
-            <option value="active" ${novel.status === "active" ? "selected" : ""}>Active</option>
-            <option value="paused" ${novel.status === "paused" ? "selected" : ""}>Paused</option>
-            <option value="completed" ${novel.status === "completed" ? "selected" : ""}>Completed</option>
-            <option value="dropped" ${novel.status === "dropped" ? "selected" : ""}>Dropped</option>
-          </select>
-        </div>
-        <div class="actions">
-          <button type="submit">Save changes</button>
-          <button type="button" class="ghost" data-action="cancel">Cancel</button>
-        </div>
-      </form>
-    </div>
-  `;
+  if (historyEntries.length) {
+    const details = element("details", "history");
+    details.append(element("summary", "", `History (${historyEntries.length})`));
+    const historyList = element("div", "history-list");
+    for (const entry of historyEntries) {
+      const item = element("div", "history-item");
+      const link = element("a", "", entry.label || entry.url);
+      link.href = entry.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.title = entry.url;
+      item.append(link, element("span", "history-time", formatDate(entry.readAt)));
+      historyList.append(item);
+    }
+    details.append(historyList);
+    content.append(details);
+  }
+
+  const form = element("form", "edit-grid");
+  form.dataset.form = "edit";
+  form.append(
+    field("Title", "title", novel.title),
+    field("Chapter label", "lastReadChapterLabel", novel.lastReadChapterLabel),
+    field("Chapter URL", "lastReadChapterUrl", novel.lastReadChapterUrl),
+    field("Novel home URL", "novelHomeUrl", novel.novelHomeUrl),
+    field("Cover image URL", "coverImageUrl", novel.coverImageUrl)
+  );
+  const statusField = element("div", "field");
+  const statusSelect = document.createElement("select");
+  statusSelect.name = "status";
+  for (const [value, label] of [["active", "Active"], ["paused", "Paused"], ["completed", "Completed"], ["dropped", "Dropped"]]) {
+    const option = element("option", "", label);
+    option.value = value;
+    option.selected = novel.status === value;
+    statusSelect.append(option);
+  }
+  statusField.append(element("label", "", "Status"), statusSelect);
+  const formActions = element("div", "actions");
+  const submit = element("button", "", "Save changes");
+  submit.type = "submit";
+  formActions.append(submit, button("Cancel", "cancel", "ghost"));
+  form.append(statusField, formActions);
+  content.append(form);
+  article.append(cover, content);
 
   return article;
 }
@@ -261,10 +256,11 @@ function render() {
   if (!filtered.length) {
     const empty = document.createElement("section");
     empty.className = "panel empty";
-    empty.innerHTML = `
-      <h2>No novels yet</h2>
-      <p>Open a chapter page, use the extension popup, and save your first reading checkpoint.</p>
-    `;
+    const heading = document.createElement("h2");
+    heading.textContent = "No novels yet";
+    const description = document.createElement("p");
+    description.textContent = "Open a chapter page, use the extension popup, and save your first reading checkpoint.";
+    empty.append(heading, description);
     library.append(empty);
     return;
   }

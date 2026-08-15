@@ -29,10 +29,17 @@ const {
   getNovels,
   getSyncState,
   importNovelsJson,
+  normalizeUrl,
   prepareSyncForAccount,
   saveSyncState,
   upsertNovel
 } = storageModule;
+
+test("normalizeUrl rejects executable and privileged URL schemes", () => {
+  assert.equal(normalizeUrl("javascript:alert(1)"), "");
+  assert.equal(normalizeUrl("data:text/html,unsafe"), "");
+  assert.equal(normalizeUrl("https://example.test/chapter#section"), "https://example.test/chapter");
+});
 
 test("upsertNovel updates an existing Patreon entry when saving the next chapter manually", async () => {
   globalThis.localStorage.clear();

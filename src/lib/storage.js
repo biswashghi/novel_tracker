@@ -397,6 +397,9 @@ export function normalizeUrl(url) {
 
   try {
     const parsed = new URL(url);
+    if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
+      return "";
+    }
     parsed.hash = "";
     return parsed.toString();
   } catch {
