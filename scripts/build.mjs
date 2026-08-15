@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { build as bundle } from "esbuild";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
@@ -48,6 +49,23 @@ if (target === "firefox") {
     },
     gecko_android: { strict_min_version: "142.0" }
   };
+}
+if (target === "safari") {
+  manifest.permissions = manifest.permissions.filter((permission) => permission !== "identity");
+  if (!manifest.permissions.includes("nativeMessaging")) manifest.permissions.push("nativeMessaging");
+  manifest.background = { service_worker: "background.js" };
+  manifest.browser_specific_settings = {
+    safari: { strict_min_version: "17.0" }
+  };
+  await bundle({
+    entryPoints: [path.join(srcDir, "background.js")],
+    outfile: path.join(distDir, "background.js"),
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "safari17",
+    legalComments: "none"
+  });
 }
 if (!new Set(["chrome", "firefox", "safari"]).has(target)) {
   throw new Error(`Unsupported build target: ${target}`);

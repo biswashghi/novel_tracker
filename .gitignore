@@ -2,6 +2,7 @@ dist/
 dist-firefox/
 dist-safari/
 release/
+safari-app/
 node_modules/
 *.log
 .DS_Store

@@ -34,12 +34,19 @@ Keycloak and test the signed AMO build on Android.
 
 ## Safari macOS / iOS / iPadOS
 
-Run `npm run package:safari`, select the Apple Developer team in the generated
-Xcode project, and test macOS plus a physical iPhone/iPad. Verify that Safari's
-WebExtension identity API completes the Keycloak callback. If it does not, the
-containing app needs an `ASWebAuthenticationSession` bridge before release.
+Run `npm run package:safari`, unzip
+`release/novel-tracker-safari-xcode-<version>.zip`, open the contained Xcode
+project, select the Apple Developer team, and test macOS plus a physical
+iPhone/iPad. Packaging does not overwrite an existing Xcode project or its
+signing settings. The Safari build
+removes the unsupported WebExtension identity permission, bundles its background
+worker as a classic script, and uses the Safari app extension's
+`ASWebAuthenticationSession` native-message bridge for Google sign-in.
 
 Google is the only identity provider in this release. Because cloud sync is
 optional and local-only use remains complete, document that behavior in App
 Review notes. Apple may still require an equivalent privacy-preserving login
 under guideline 4.8; Sign in with Apple is deferred by product decision.
+
+See `docs/platform-architecture.md` for the boundary between the shared domain
+and browser-specific adapters.

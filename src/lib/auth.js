@@ -1,4 +1,5 @@
-import { getExtensionApi, getStorageLocal } from "./extension-api.js";
+import { getStorageLocal } from "./extension-api.js";
+import { getAuthPlatform } from "./auth-platform.js";
 
 export const AUTH_STORAGE_KEY = "novel-tracker:auth";
 export const AUTH_CONFIG = Object.freeze({
@@ -66,14 +67,6 @@ function publicAccount(auth) {
   };
 }
 
-async function launchAuthFlow(url) {
-  const identity = getExtensionApi()?.identity;
-  if (!identity?.launchWebAuthFlow) {
-    throw new Error("This browser does not support extension sign-in");
-  }
-  return identity.launchWebAuthFlow({ url, interactive: true });
-}
-
 export function oauthRedirectUri(generatedUrl) {
   const redirect = new URL(generatedUrl);
   if (redirect.hostname.endsWith(".extensions.allizom.org")) {
@@ -118,9 +111,8 @@ export async function getAccountStatus() {
 }
 
 export async function signIn({ hasLocalData = false } = {}) {
-  const identity = getExtensionApi()?.identity;
-  if (!identity?.getRedirectURL) throw new Error("This browser does not support extension sign-in");
-  const redirectUri = oauthRedirectUri(identity.getRedirectURL("oauth2"));
+  const platform = getAuthPlatform();
+  const redirectUri = oauthRedirectUri(platform.redirectUri("oauth2"));
   const verifier = randomValue(64);
   const state = randomValue(24);
   const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
@@ -136,7 +128,7 @@ export async function signIn({ hasLocalData = false } = {}) {
     kc_idp_hint: "google"
   }).toString();
 
-  const callbackUrl = new URL(await launchAuthFlow(authorize.toString()));
+  const callbackUrl = new URL(await platform.authorize(authorize.toString()));
   if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");
   const providerError = callbackUrl.searchParams.get("error");
   if (providerError) throw new Error(callbackUrl.searchParams.get("error_description") || providerError);

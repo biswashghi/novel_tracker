@@ -1,6 +1,6 @@
 {
   "name": "novel-tracker-extension",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A browser extension to track web novel reading progress across sites.",
@@ -19,5 +19,8 @@
     "store:assets": "node scripts/generate-store-assets.mjs",
     "package:webstore": "node scripts/package-webstore.mjs",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

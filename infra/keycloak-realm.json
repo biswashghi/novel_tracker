@@ -22,6 +22,7 @@
       },
       "redirectUris": [
         "https://noveltracker.app/oauth/callback",
+        "noveltracker://oauth/callback",
         "http://127.0.0.1/mozoauth2/*",
         "https://*.extensions.allizom.org/*",
         "https://*.chromiumapp.org/*"

@@ -223,7 +223,8 @@ Before submitting a public Chrome Web Store release:
   consent at the sign-in gesture.
 - Safari is packaged as a Safari Web Extension for macOS/iOS/iPadOS. Sign in with
   Apple is intentionally deferred; Google is the only cloud identity provider.
-- See `docs/release.md` for browser-specific build and testing steps and
+- See `docs/platform-architecture.md` for the shared-domain boundary,
+  `docs/release.md` for browser-specific build and testing steps, and
   `docs/operations.md` for deployment, backup, and restore procedures.
 
 ## Limitations
