@@ -1,4 +1,7 @@
 import { getNovels, getHostname, normalizeUrl, upsertNovel } from "./lib/storage.js";
+import { getExtensionApi } from "./lib/extension-api.js";
+
+const extensionApi = getExtensionApi();
 
 const PARSER_FILES = [
   "lib/parser-core.js",
@@ -29,17 +32,17 @@ const fields = {
 };
 
 async function getActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await extensionApi.tabs.query({ active: true, currentWindow: true });
   return tab;
 }
 
 async function readPageMetadata(tabId) {
-  await chrome.scripting.executeScript({
+  await extensionApi.scripting.executeScript({
     target: { tabId },
     files: PARSER_FILES
   });
 
-  const [result] = await chrome.scripting.executeScript({
+  const [result] = await extensionApi.scripting.executeScript({
     target: { tabId },
     func: () => globalThis.NovelTrackerPageMetadata.extractPageMetadata()
   });
@@ -128,7 +131,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 openLibraryButton.addEventListener("click", () => {
-  chrome.runtime.openOptionsPage();
+  extensionApi.runtime.openOptionsPage();
 });
 
 loadCurrentPage();

@@ -1,0 +1,29 @@
+{
+  "realm": "novel-tracker",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "novel-tracker-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": false
+    },
+    {
+      "clientId": "novel-tracker-extension",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "https://noveltracker.app/oauth/callback",
+        "https://*.extensions.allizom.org/*",
+        "https://*.chromiumapp.org/*"
+      ],
+      "webOrigins": ["+"]
+    }
+  ],
+  "identityProviders": []
+}

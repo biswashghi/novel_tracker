@@ -1,4 +1,5 @@
 (function () {
+  const extensionApi = globalThis.browser || globalThis.chrome;
   let lastProcessedUrl = "";
   let debounceId = null;
   let extensionAvailable = true;
@@ -9,7 +10,7 @@
     }
 
     try {
-      return Boolean(globalThis.chrome?.runtime?.id);
+      return Boolean(extensionApi?.runtime?.id);
     } catch (error) {
       if (String(error?.message || error).includes("Extension context invalidated")) {
         extensionAvailable = false;
@@ -34,18 +35,14 @@
     const payload = globalThis.NovelTrackerPageMetadata.extractPageMetadata();
 
     try {
-      chrome.runtime.sendMessage(
-        {
-          type: "novel-tracker:auto-progress",
-          payload
-        },
-        () => {
-          const runtimeError = chrome.runtime.lastError;
-          if (runtimeError?.message?.includes("Extension context invalidated")) {
-            extensionAvailable = false;
-          }
+      Promise.resolve(extensionApi.runtime.sendMessage({
+        type: "novel-tracker:auto-progress",
+        payload
+      })).catch((error) => {
+        if (String(error?.message || error).includes("Extension context invalidated")) {
+          extensionAvailable = false;
         }
-      );
+      });
     } catch (error) {
       if (String(error?.message || error).includes("Extension context invalidated")) {
         extensionAvailable = false;

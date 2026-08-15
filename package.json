@@ -4,9 +4,18 @@
   "private": true,
   "type": "module",
   "description": "A browser extension to track web novel reading progress across sites.",
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "jose": "^5.10.0",
+    "pg": "^8.13.3"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:firefox": "node scripts/build.mjs --target=firefox",
+    "build:safari": "node scripts/build.mjs --target=safari",
+    "package:safari": "bash scripts/package-safari.sh",
     "icons": "node scripts/generate-icons.mjs",
+    "store:assets": "node scripts/generate-store-assets.mjs",
     "package:webstore": "node scripts/package-webstore.mjs",
     "test": "node --test"
   }

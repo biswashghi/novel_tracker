@@ -1,6 +1,9 @@
 import { autoUpdateNovelProgress } from "./lib/storage.js";
+import { getExtensionApi } from "./lib/extension-api.js";
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+const extensionApi = getExtensionApi();
+
+extensionApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "novel-tracker:auto-progress") {
     autoUpdateNovelProgress(message.payload)
       .then((result) => {

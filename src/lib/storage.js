@@ -1,22 +1,119 @@
+import {
+  applyMutation,
+  createSyncState,
+  enqueueLocalMutation,
+  materializeNovels,
+  purgeExpiredTombstones
+} from "./sync-core.js";
+import { getStorageLocal } from "./extension-api.js";
+
 const STORAGE_KEY = "novel-tracker:novels";
+const SYNC_STORAGE_KEY = "novel-tracker:sync-state";
 const IMPORT_VERSION = 1;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 function getStorageArea() {
-  if (globalThis.chrome?.storage?.local) {
-    return globalThis.chrome.storage.local;
+  const storage = getStorageLocal();
+  if (storage) {
+    return storage;
   }
 
   return {
     async get(key) {
-      const raw = globalThis.localStorage?.getItem(key);
-      return { [key]: raw ? JSON.parse(raw) : [] };
+      const keys = Array.isArray(key) ? key : [key];
+      return Object.fromEntries(keys.map((item) => {
+        const raw = globalThis.localStorage?.getItem(item);
+        return [item, raw ? JSON.parse(raw) : undefined];
+      }));
     },
     async set(value) {
       const [key] = Object.keys(value);
       globalThis.localStorage?.setItem(key, JSON.stringify(value[key]));
     }
   };
+}
+
+function legacyEventId(novelId, entry, index) {
+  return `legacy:${novelId}:${encodeURIComponent(normalizeUrl(entry.url))}:${entry.readAt || index}`;
+}
+
+function toEvent(entry, novelId, index, deviceId) {
+  const parsed = Date.parse(entry.readAt || "");
+  return {
+    id: entry.id || legacyEventId(novelId, entry, index),
+    url: normalizeUrl(entry.url),
+    label: String(entry.label || "").trim(),
+    source: entry.source || "manual",
+    readAt: { wallMs: Number.isFinite(parsed) ? parsed : index, logical: 0, actorId: deviceId }
+  };
+}
+
+async function getSyncState() {
+  const storage = getStorageArea();
+  const result = await storage.get([SYNC_STORAGE_KEY, STORAGE_KEY]);
+  if (result[SYNC_STORAGE_KEY]?.version) {
+    return purgeExpiredTombstones(result[SYNC_STORAGE_KEY]);
+  }
+
+  let state = createSyncState();
+  const legacyNovels = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+  for (const [index, legacy] of legacyNovels.entries()) {
+    const novelId = legacy.id || globalThis.crypto.randomUUID();
+    const history = normalizeChapterHistory(legacy.chapterHistory);
+    const event = toEvent(history[history.length - 1] || {
+      url: legacy.lastReadChapterUrl,
+      label: legacy.lastReadChapterLabel,
+      readAt: legacy.updatedAt
+    }, novelId, index, state.deviceId);
+    const mutation = {
+      mutationId: `migration:${novelId}`,
+      deviceId: state.deviceId,
+      novelId,
+      generation: 1,
+      clock: event.readAt,
+      type: "novel.create",
+      payload: { ...legacy, id: undefined, event }
+    };
+    state = applyMutation(state, mutation);
+    for (const [historyIndex, item] of history.entries()) {
+      const importedEvent = toEvent(item, novelId, historyIndex, state.deviceId);
+      state = applyMutation(state, {
+        ...mutation,
+        mutationId: `migration:${novelId}:${importedEvent.id}`,
+        clock: importedEvent.readAt,
+        type: "checkpoint.record",
+        payload: { event: importedEvent }
+      });
+    }
+  }
+  await saveSyncState(state);
+  return state;
+}
+
+async function saveSyncState(state) {
+  const storage = getStorageArea();
+  const activeNovels = materializeNovels(state);
+  await storage.set({ [SYNC_STORAGE_KEY]: state, [STORAGE_KEY]: activeNovels });
+}
+
+function novelFields(input, existing, now) {
+  return {
+    title: String(input.title || existing?.title || "Untitled Novel").trim(),
+    sourceSite: String(input.sourceSite || existing?.sourceSite || getHostname(input.lastReadChapterUrl) || "Unknown source").trim(),
+    novelHomeUrl: normalizeUrl(input.novelHomeUrl ?? existing?.novelHomeUrl),
+    coverImageUrl: normalizeUrl(input.coverImageUrl ?? existing?.coverImageUrl),
+    status: input.status || existing?.status || "active",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now
+  };
+}
+
+function rawNovel(state, id) {
+  return state.novels[id];
+}
+
+function enqueue(state, draft, now) {
+  return enqueueLocalMutation(state, draft, { now }).state;
 }
 
 function normalizeText(value) {
@@ -260,18 +357,45 @@ export function getHostname(url) {
 }
 
 export async function getNovels() {
-  const storage = getStorageArea();
-  const result = await storage.get(STORAGE_KEY);
-  const novels = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-  return novels.map((novel) => ({
-    ...novel,
-    chapterHistory: normalizeChapterHistory(novel.chapterHistory)
-  }));
+  return materializeNovels(await getSyncState());
 }
 
 async function saveNovels(novels) {
-  const storage = getStorageArea();
-  await storage.set({ [STORAGE_KEY]: novels });
+  // Compatibility bridge for callers that still provide the legacy array shape.
+  let state = createSyncState();
+  for (const novel of novels) {
+    const now = Date.parse(novel.updatedAt || "") || Date.now();
+    const novelId = novel.id || globalThis.crypto.randomUUID();
+    const history = normalizeChapterHistory(novel.chapterHistory);
+    const event = toEvent(history[history.length - 1] || {
+      url: novel.lastReadChapterUrl,
+      label: novel.lastReadChapterLabel,
+      readAt: novel.updatedAt
+    }, novelId, history.length - 1, state.deviceId);
+    state = applyMutation(state, {
+      mutationId: `compat:${novelId}`,
+      deviceId: state.deviceId,
+      novelId,
+      generation: 1,
+      clock: { ...event.readAt, wallMs: now },
+      type: "novel.create",
+      payload: { ...novel, event }
+    });
+    for (const [index, historyEntry] of history.entries()) {
+      const importedEvent = toEvent(historyEntry, novelId, index, state.deviceId);
+      if (importedEvent.id === event.id) continue;
+      state = applyMutation(state, {
+        mutationId: `compat:${novelId}:${importedEvent.id}`,
+        deviceId: state.deviceId,
+        novelId,
+        generation: 1,
+        clock: importedEvent.readAt,
+        type: "checkpoint.record",
+        payload: { event: importedEvent }
+      });
+    }
+  }
+  await saveSyncState(state);
 }
 
 function mergeChapterHistories(left, right) {
@@ -299,34 +423,35 @@ export function matchesNovel(existing, incoming) {
 }
 
 export async function upsertNovel(input) {
-  const novels = await getNovels();
+  let state = await getSyncState();
+  const novels = materializeNovels(state);
   const now = new Date().toISOString();
   const existing = findExistingNovelForSave(novels, input);
-
-  const novel = {
-    id: existing?.id || globalThis.crypto.randomUUID(),
-    title: String(input.title || "Untitled Novel").trim(),
-    sourceSite: String(input.sourceSite || getHostname(input.lastReadChapterUrl) || "Unknown source").trim(),
-    novelHomeUrl: normalizeUrl(input.novelHomeUrl),
-    lastReadChapterUrl: normalizeUrl(input.lastReadChapterUrl),
-    lastReadChapterLabel: String(input.lastReadChapterLabel || "").trim(),
-    coverImageUrl: normalizeUrl(input.coverImageUrl),
-    status: input.status || existing?.status || "active",
-    chapterHistory: appendChapterHistory(existing?.chapterHistory, input, now),
-    createdAt: existing?.createdAt || now,
-    updatedAt: now
-  };
-
-  const next = existing
-    ? novels.map((item) => (item.id === existing.id ? novel : item))
-    : [novel, ...novels];
-
-  await saveNovels(next);
-  return novel;
+  const novelId = existing?.id || globalThis.crypto.randomUUID();
+  const raw = rawNovel(state, novelId);
+  const fields = novelFields(input, existing, now);
+  const event = toEvent({
+    url: input.lastReadChapterUrl,
+    label: input.lastReadChapterLabel,
+    readAt: now,
+    source: "manual"
+  }, novelId, Date.now(), state.deviceId);
+  state = enqueue(state, {
+    novelId,
+    generation: raw?.generation || 1,
+    type: existing ? "novel.patch" : "novel.create",
+    payload: existing ? fields : { ...fields, event }
+  });
+  if (existing && normalizeUrl(existing.lastReadChapterUrl) !== event.url) {
+    state = enqueue(state, { novelId, generation: raw.generation, type: "checkpoint.record", payload: { event } });
+  }
+  await saveSyncState(state);
+  return materializeNovels(state).find((novel) => novel.id === novelId);
 }
 
 export async function autoUpdateNovelProgress(input) {
-  const novels = await getNovels();
+  let state = await getSyncState();
+  const novels = materializeNovels(state);
   const existing = findTrackedNovelForAutoUpdate(novels, input);
   if (!existing) {
     return { updated: false, reason: "not-tracked" };
@@ -349,51 +474,54 @@ export async function autoUpdateNovelProgress(input) {
   }
 
   const now = new Date().toISOString();
-  const updatedNovel = {
-    ...existing,
-    title: String(input.title || existing.title).trim() || existing.title,
-    sourceSite: String(input.sourceSite || existing.sourceSite).trim() || existing.sourceSite,
-    novelHomeUrl: nextHomeUrl || currentHomeUrl,
-    lastReadChapterUrl: nextChapterUrl || currentChapterUrl,
-    lastReadChapterLabel: String(input.lastReadChapterLabel || existing.lastReadChapterLabel).trim(),
-    coverImageUrl: normalizeUrl(input.coverImageUrl || existing.coverImageUrl),
-    chapterHistory: appendChapterHistory(existing.chapterHistory, input, now),
-    updatedAt: now
-  };
-
-  const next = novels.map((novel) => (novel.id === existing.id ? updatedNovel : novel));
-  await saveNovels(next);
+  const raw = rawNovel(state, existing.id);
+  state = enqueue(state, {
+    novelId: existing.id,
+    generation: raw.generation,
+    type: "novel.patch",
+    payload: novelFields({ ...input, novelHomeUrl: nextHomeUrl || currentHomeUrl }, existing, now)
+  });
+  const event = toEvent({
+    url: nextChapterUrl,
+    label: input.lastReadChapterLabel || existing.lastReadChapterLabel,
+    readAt: now,
+    source: "auto"
+  }, existing.id, Date.now(), state.deviceId);
+  state = enqueue(state, { novelId: existing.id, generation: raw.generation, type: "checkpoint.record", payload: { event } });
+  await saveSyncState(state);
+  const updatedNovel = materializeNovels(state).find((novel) => novel.id === existing.id);
   return { updated: true, reason: "progress-updated", novel: updatedNovel };
 }
 
 export async function updateNovel(id, patch) {
-  const novels = await getNovels();
+  let state = await getSyncState();
+  const novels = materializeNovels(state);
   const now = new Date().toISOString();
-  const next = novels.map((novel) => {
-    if (novel.id !== id) {
-      return novel;
-    }
-
-    return {
-      ...novel,
-      ...patch,
-      novelHomeUrl: normalizeUrl(patch.novelHomeUrl ?? novel.novelHomeUrl),
-      lastReadChapterUrl: normalizeUrl(patch.lastReadChapterUrl ?? novel.lastReadChapterUrl),
-      coverImageUrl: normalizeUrl(patch.coverImageUrl ?? novel.coverImageUrl),
-      chapterHistory: appendChapterHistory(novel.chapterHistory, {
-        lastReadChapterUrl: patch.lastReadChapterUrl ?? novel.lastReadChapterUrl,
-        lastReadChapterLabel: patch.lastReadChapterLabel ?? novel.lastReadChapterLabel
-      }, now),
-      updatedAt: now
-    };
-  });
-
-  await saveNovels(next);
+  const existing = novels.find((novel) => novel.id === id);
+  const raw = rawNovel(state, id);
+  if (!existing || !raw) return;
+  state = enqueue(state, { novelId: id, generation: raw.generation, type: "novel.patch", payload: novelFields(patch, existing, now) });
+  if (normalizeUrl(patch.lastReadChapterUrl) && normalizeUrl(patch.lastReadChapterUrl) !== normalizeUrl(existing.lastReadChapterUrl)) {
+    const event = toEvent({ url: patch.lastReadChapterUrl, label: patch.lastReadChapterLabel, readAt: now }, id, Date.now(), state.deviceId);
+    state = enqueue(state, { novelId: id, generation: raw.generation, type: "checkpoint.record", payload: { event } });
+  }
+  await saveSyncState(state);
 }
 
 export async function deleteNovel(id) {
-  const novels = await getNovels();
-  await saveNovels(novels.filter((novel) => novel.id !== id));
+  let state = await getSyncState();
+  const raw = rawNovel(state, id);
+  if (!raw || raw.lifecycle === "deleted") return;
+  state = enqueue(state, { novelId: id, generation: raw.generation, type: "novel.delete", payload: {} });
+  await saveSyncState(state);
+}
+
+export async function restoreNovel(id) {
+  let state = await getSyncState();
+  const raw = rawNovel(state, id);
+  if (!raw || raw.lifecycle !== "deleted") return;
+  state = enqueue(state, { novelId: id, generation: raw.generation, type: "novel.restore", payload: {} });
+  await saveSyncState(state);
 }
 
 export async function exportNovelsJson() {
