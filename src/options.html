@@ -1,393 +1,342 @@
 <!doctype html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Novel Tracker Library</title>
-    <link rel="stylesheet" href="styles.css">
-    <style>
-      .shell {
-        min-height: 100vh;
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 16px;
-        display: grid;
-        align-content: start;
-        gap: 12px;
-      }
+    <title>Novel Tracker</title>
+    <link rel="stylesheet" href="options.css">
+</head>
 
-      .header {
-        padding: 18px 20px;
-        display: flex;
-        align-items: start;
-        justify-content: space-between;
-        gap: 18px;
-        background:
-          radial-gradient(circle at top left, rgba(233, 212, 182, 0.55), transparent 34%),
-          linear-gradient(135deg, rgba(255, 250, 242, 0.96), rgba(250, 241, 228, 0.94));
-      }
+<body>
 
-      .header-copy {
-        display: grid;
-        gap: 10px;
-      }
+    <!-- =========================================================
+       INLINE SVG SPRITE
+       No external icon files needed.
+  ========================================================== -->
+    <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--accent-strong);
-        font-size: 0.82rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
+        <symbol id="i-bookmark" viewBox="0 0 24 28">
+            <path d="M5 2.5h14A1.5 1.5 0 0 1 20.5 4v21L12 19.6 3.5 25V4A1.5 1.5 0 0 1 5 2.5Z" fill="currentColor" />
+        </symbol>
 
-      .eyebrow::before {
-        content: "";
-        width: 32px;
-        height: 1px;
-        background: rgba(159, 93, 47, 0.45);
-      }
+        <symbol id="i-book" viewBox="0 0 24 24">
+            <path
+                d="M3.5 5.3c3-.5 5.7.1 8 1.9v11.2c-2.3-1.8-5-2.4-8-1.9V5.3Zm17 0c-3-.5-5.7.1-8 1.9v11.2c2.3-1.8 5-2.4 8-1.9V5.3Z"
+                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+            <path d="M12 7.2v11.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+        </symbol>
 
-      .header h1 {
-        margin: 0;
-        font-size: clamp(1.85rem, 3vw, 2.4rem);
-        line-height: 0.98;
-        letter-spacing: -0.03em;
-      }
+        <symbol id="i-library" viewBox="0 0 24 24">
+            <path d="M4.5 4.5h3v15h-3v-15Zm5.5 0h3v15h-3v-15Zm5.6-.5 2.8-.8 4 14.5-2.9.8L15.6 4Z" fill="none"
+                stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        </symbol>
 
-      .header p {
-        margin: 0;
-        color: var(--muted);
-        max-width: 680px;
-        line-height: 1.35;
-        font-size: 0.98rem;
-      }
+        <symbol id="i-search" viewBox="0 0 24 24">
+            <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <path d="m15 15 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </symbol>
 
-      .header-stats {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: end;
-        padding-top: 4px;
-      }
+        <symbol id="i-cloud" viewBox="0 0 24 24">
+            <path d="M7 18.2h-.5a4.1 4.1 0 0 1-.7-8.1A6 6 0 0 1 17.4 8.5a4.4 4.4 0 0 1-.3 8.8h-1.2" fill="none"
+                stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+        </symbol>
 
-      .header-tools {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: end;
-      }
+        <symbol id="i-cloud-check" viewBox="0 0 24 24">
+            <path d="M7 17.8h-.5a4 4 0 0 1-.7-7.9A6 6 0 0 1 17.4 8.3a4.3 4.3 0 0 1-.2 8.6h-1" fill="none"
+                stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="m9.4 15.7 2 2 3.6-3.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </symbol>
 
-      .toolbar {
-        padding: 10px 14px;
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
-        gap: 8px;
-        align-items: end;
-      }
+        <symbol id="i-sync" viewBox="0 0 24 24">
+            <path d="M18.2 8.2A7 7 0 0 0 6.7 6.7L4.5 9M4.5 5.3V9h3.8" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M5.8 15.8a7 7 0 0 0 11.5 1.5l2.2-2.3M19.5 18.7V15h-3.8" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .account-panel {
-        padding: 14px 18px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 16px;
-        align-items: center;
-      }
+        <symbol id="i-user" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M5.5 19c.8-3.2 3.1-5 6.5-5s5.7 1.8 6.5 5" fill="none" stroke="currentColor" stroke-width="1.7"
+                stroke-linecap="round" />
+        </symbol>
 
-      .account-copy {
-        display: grid;
-        gap: 4px;
-      }
+        <symbol id="i-import" viewBox="0 0 24 24">
+            <path d="M12 4v10m0 0-3.4-3.4M12 14l3.4-3.4M5 18v1.1A1.9 1.9 0 0 0 6.9 21h10.2a1.9 1.9 0 0 0 1.9-1.9V18"
+                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .account-copy h2,
-      .account-copy p {
-        margin: 0;
-      }
+        <symbol id="i-export" viewBox="0 0 24 24">
+            <path d="M12 14V4m0 0L8.6 7.4M12 4l3.4 3.4M5 18v1.1A1.9 1.9 0 0 0 6.9 21h10.2a1.9 1.9 0 0 0 1.9-1.9V18"
+                fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .account-copy h2 {
-        font-size: 1rem;
-      }
+        <symbol id="i-trash" viewBox="0 0 24 24">
+            <path d="M5 7h14M9 7V4.5h6V7m2 0-.8 12H7.8L7 7M10 10.5V16M14 10.5V16" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .account-copy p {
-        color: var(--muted);
-        font-size: 0.88rem;
-        line-height: 1.35;
-      }
+        <symbol id="i-exit" viewBox="0 0 24 24">
+            <path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" />
+            <path d="M13 8l4 4-4 4M17 12H9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </symbol>
 
-      .account-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: end;
-      }
+        <symbol id="i-filter" viewBox="0 0 24 24">
+            <path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="1.7"
+                stroke-linecap="round" />
+        </symbol>
 
-      .library {
-        display: grid;
-        gap: 12px;
-      }
+        <symbol id="i-sort" viewBox="0 0 24 24">
+            <path d="M8 5v14m0 0-3-3m3 3 3-3M16 19V5m0 0-3 3m3-3 3 3" fill="none" stroke="currentColor"
+                stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .empty {
-        padding: 22px;
-        text-align: center;
-        color: var(--muted);
-      }
+        <symbol id="i-spark" viewBox="0 0 24 24">
+            <path d="M12 3.5 13.6 8l4.5 1.6-4.5 1.6L12 15.7l-1.6-4.5-4.5-1.6L10.4 8 12 3.5Z" fill="none"
+                stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+            <path d="m18 15 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15Z" fill="currentColor" />
+        </symbol>
 
-      .card {
-        display: grid;
-        grid-template-columns: 84px minmax(0, 1fr);
-        gap: 14px;
-        padding: 14px;
-        align-items: start;
-        height: fit-content;
-      }
+        <symbol id="i-external" viewBox="0 0 24 24">
+            <path d="M14 5h5v5m0-5-8 8M17 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h5" fill="none"
+                stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .cover,
-      .cover img {
-        width: 84px;
-        height: 112px;
-        border-radius: 12px;
-      }
+        <symbol id="i-edit" viewBox="0 0 24 24">
+            <path d="m5 16-.8 3.8L8 19l9.8-9.8-3-3L5 16Zm8.8-8.8 3 3" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linejoin="round" />
+        </symbol>
 
-      .cover {
-        background: linear-gradient(180deg, #c79063 0%, #85502f 100%);
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fffaf4;
-        font-weight: 700;
-        text-align: center;
-        padding: 12px;
-      }
+        <symbol id="i-history" viewBox="0 0 24 24">
+            <path d="M5.2 7.2A7.5 7.5 0 1 1 4.5 14M5.5 3.9v4H9.6M12 8.2v4.3l2.7 1.7" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </symbol>
 
-      .content {
-        display: grid;
-        gap: 8px;
-        min-width: 0;
-      }
+        <symbol id="i-check" viewBox="0 0 24 24">
+            <path d="m5.5 12.5 4 4L18.5 7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"
+                stroke-linejoin="round" />
+        </symbol>
 
-      .title-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: start;
-      }
+    </svg>
 
-      .title-row h2 {
-        margin: 0;
-        font-size: 1.05rem;
-        line-height: 1.15;
-      }
+    <!-- =========================================================
+       TOP APPLICATION BAR
+  ========================================================== -->
+    <header class="topbar">
 
-      .meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 0.84rem;
-      }
+        <div class="topbar-inner">
 
-      .meta span:not(:last-child)::after {
-        content: "•";
-        margin-left: 6px;
-      }
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg>
+                        <use href="#i-bookmark"></use>
+                    </svg>
+                </span>
 
-      .chapter-link {
-        color: var(--muted);
-        font-size: 0.84rem;
-        line-height: 1.3;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
+                <span class="brand-name">
+                    Novel Tracker
+                </span>
+            </div>
 
-      .actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
+            <div class="topbar-account">
 
-      .history {
-        border-top: 1px solid rgba(217, 201, 168, 0.65);
-        padding-top: 8px;
-      }
+                <div class="account-summary">
 
-      .history summary {
-        cursor: pointer;
-        color: var(--muted);
-        font-size: 0.86rem;
-        font-weight: 700;
-        list-style: none;
-      }
+                    <span class="account-icon" aria-hidden="true">
+                        <svg>
+                            <use href="#i-cloud-check"></use>
+                        </svg>
+                    </span>
 
-      .history summary::-webkit-details-marker {
-        display: none;
-      }
+                    <div class="account-copy">
+                        <strong id="account-title">
+                            Stored locally
+                        </strong>
 
-      .history-list {
-        display: grid;
-        gap: 6px;
-        margin-top: 8px;
-      }
+                        <span id="sync-detail">
+                            No account required
+                        </span>
+                    </div>
 
-      .history-item {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 8px;
-        align-items: baseline;
-        font-size: 0.84rem;
-      }
+                    <span id="sync-indicator" class="sync-indicator" aria-hidden="true"></span>
 
-      .history-item a {
-        color: var(--text);
-        text-decoration: none;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
+                </div>
 
-      .history-item a:hover {
-        text-decoration: underline;
-      }
+                <div class="account-actions">
 
-      .history-time {
-        color: var(--muted);
-        white-space: nowrap;
-      }
+                    <button type="button" id="sign-in" class="top-action primary-action">
+                        <svg>
+                            <use href="#i-user"></use>
+                        </svg>
 
-      .toolbar .field {
-        gap: 4px;
-      }
+                        <span>Sign in</span>
+                    </button>
 
-      .toolbar .field label {
-        font-size: 0.82rem;
-      }
+                    <button type="button" id="sync-now" class="top-action" hidden>
+                        <svg>
+                            <use href="#i-sync"></use>
+                        </svg>
 
-      .toolbar .field input,
-      .toolbar .field select {
-        min-height: 40px;
-        padding: 8px 12px;
-      }
+                        <span>Sync</span>
+                    </button>
 
-      .edit-grid {
-        display: none;
-        gap: 10px;
-        padding-top: 6px;
-      }
+                    <button type="button" id="sign-out" class="icon-action subtle-action" aria-label="Sign out"
+                        title="Sign out" hidden>
+                        <svg>
+                            <use href="#i-exit"></use>
+                        </svg>
+                    </button>
 
-      .card.editing .edit-grid {
-        display: grid;
-      }
+                    <button type="button" id="delete-cloud" class="icon-action danger-action"
+                        aria-label="Delete cloud data" title="Delete cloud data" hidden>
+                        <svg>
+                            <use href="#i-trash"></use>
+                        </svg>
+                    </button>
 
-      .edit-grid .actions {
-        padding-top: 2px;
-      }
+                </div>
 
-      @media (max-width: 780px) {
-        .shell {
-          padding: 12px;
-        }
+            </div>
 
-        .header {
-          grid-template-columns: 1fr;
-          display: grid;
-        }
+            <div class="topbar-data">
 
-        .header-stats {
-          justify-content: start;
-        }
+                <button type="button" id="import-json" class="icon-action" aria-label="Import library"
+                    title="Import library">
+                    <svg>
+                        <use href="#i-import"></use>
+                    </svg>
+                </button>
 
-        .header-tools {
-          justify-content: start;
-        }
+                <button type="button" id="export-json" class="icon-action" aria-label="Export library"
+                    title="Export library">
+                    <svg>
+                        <use href="#i-export"></use>
+                    </svg>
+                </button>
 
-        .toolbar,
-        .card,
-        .account-panel {
-          grid-template-columns: 1fr;
-        }
+                <input type="file" id="import-file" accept="application/json,.json" hidden>
 
-        .account-actions {
-          justify-content: start;
-        }
+            </div>
 
-        .title-row {
-          grid-template-columns: 1fr;
-        }
-
-        .chapter-link {
-          white-space: normal;
-          word-break: break-all;
-        }
-
-        .history-item {
-          grid-template-columns: 1fr;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="shell">
-      <section class="panel header">
-        <div class="header-copy">
-          <span class="eyebrow">Reading archive</span>
-          <h1>Keep every chapter trail in one place.</h1>
-          <p>Track your active novels, reopen exactly where you left off, and keep a clean history whenever chapter URLs move forward.</p>
         </div>
-        <div>
-          <div class="header-tools">
-            <button type="button" class="secondary" id="export-json">Export JSON</button>
-            <button type="button" class="ghost" id="import-json">Import JSON</button>
-            <input type="file" id="import-file" accept="application/json,.json" hidden>
-          </div>
-          <div class="header-stats" id="header-stats"></div>
-        </div>
-      </section>
 
-      <section class="panel account-panel" aria-live="polite">
-        <div class="account-copy">
-          <h2 id="account-title">Stored locally on this device</h2>
-          <p id="account-detail">Sign in with Google only if you want encrypted-in-transit cloud synchronization across browsers.</p>
-          <p id="sync-detail"></p>
-        </div>
-        <div class="account-actions">
-          <button type="button" id="sign-in">Sign in with Google</button>
-          <button type="button" id="sync-now" class="secondary" hidden>Sync now</button>
-          <button type="button" id="sign-out" class="ghost" hidden>Sign out</button>
-          <button type="button" id="delete-cloud" class="danger" hidden>Delete cloud data</button>
-        </div>
-      </section>
+    </header>
 
-      <section class="panel toolbar">
-        <div class="field">
-          <label for="search">Search</label>
-          <input id="search" placeholder="Search by title or site">
-        </div>
-        <div class="field">
-          <label for="status-filter">Status</label>
-          <select id="status-filter">
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-            <option value="dropped">Dropped</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="sort">Sort</label>
-          <select id="sort">
-            <option value="updated">Recently updated</option>
-            <option value="title">Title</option>
-            <option value="source">Source site</option>
-          </select>
-        </div>
-      </section>
 
-      <section id="library" class="library"></section>
+    <!-- =========================================================
+       MAIN LIBRARY
+  ========================================================== -->
+    <main class="workspace">
+
+        <section class="hero">
+
+            <div class="hero-copy">
+
+                <div class="hero-kicker">
+                    <svg aria-hidden="true">
+                        <use href="#i-library"></use>
+                    </svg>
+
+                    Your library
+                </div>
+
+                <h1>
+                    Pick up where you left off.
+                </h1>
+
+                <div class="hero-rule"></div>
+
+            </div>
+
+            <div class="hero-art" aria-hidden="true">
+
+                <svg class="hero-book">
+                    <use href="#i-book"></use>
+                </svg>
+
+                <svg class="hero-spark hero-spark-one">
+                    <use href="#i-spark"></use>
+                </svg>
+
+                <svg class="hero-spark hero-spark-two">
+                    <use href="#i-spark"></use>
+                </svg>
+
+            </div>
+
+        </section>
+
+
+        <!-- =======================================================
+         FILTER BAR
+    ======================================================== -->
+        <section class="filter-bar">
+
+            <div class="search-wrap">
+
+                <svg aria-hidden="true">
+                    <use href="#i-search"></use>
+                </svg>
+
+                <input id="search" type="search" placeholder="Find a novel or source…">
+
+            </div>
+
+            <div class="filter-rule"></div>
+
+            <label class="compact-filter">
+
+                <span>
+                    <svg aria-hidden="true">
+                        <use href="#i-filter"></use>
+                    </svg>
+
+                    Status
+                </span>
+
+                <select id="status-filter">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                    <option value="dropped">Dropped</option>
+                </select>
+
+            </label>
+
+            <label class="compact-filter">
+
+                <span>
+                    <svg aria-hidden="true">
+                        <use href="#i-sort"></use>
+                    </svg>
+
+                    Sort
+                </span>
+
+                <select id="sort">
+                    <option value="updated">Recent</option>
+                    <option value="title">Title</option>
+                    <option value="source">Source</option>
+                </select>
+
+            </label>
+
+        </section>
+
+
+        <!-- =======================================================
+         JS RENDERS NOVELS HERE
+    ======================================================== -->
+        <section id="library" class="library"></section>
+
     </main>
 
     <script type="module" src="options.js"></script>
-  </body>
+
+</body>
+
 </html>

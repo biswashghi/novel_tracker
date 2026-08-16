@@ -1,105 +1,407 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Novel Tracker</title>
-    <link rel="stylesheet" href="styles.css">
-    <style>
-      body {
-        width: 380px;
-      }
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novel Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
 
-      .popup {
-        display: grid;
-        gap: 14px;
-      }
+<body>
 
-      .hero {
-        padding: 16px;
-      }
+  <!-- =========================================================
+       INLINE SVG SPRITE
+  ========================================================== -->
+  <svg class="svg-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 
-      .hero h1 {
-        margin: 0 0 6px;
-        font-size: 1.4rem;
-      }
+    <symbol id="i-bookmark" viewBox="0 0 24 28">
+      <path
+        d="M5 2.5h14A1.5 1.5 0 0 1 20.5 4v21L12 19.6 3.5 25V4A1.5 1.5 0 0 1 5 2.5Z"
+        fill="currentColor"
+      />
+    </symbol>
 
-      .hero p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.4;
-      }
+    <symbol id="i-book" viewBox="0 0 24 24">
+      <path
+        d="M3.5 5.3c3-.5 5.7.1 8 1.9v11.2c-2.3-1.8-5-2.4-8-1.9V5.3Zm17 0c-3-.5-5.7.1-8 1.9v11.2c2.3-1.8 5-2.4 8-1.9V5.3Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M12 7.2v11.2"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+      />
+    </symbol>
 
-      form {
-        display: grid;
-        gap: 12px;
-        padding: 16px;
-      }
+    <symbol id="i-page" viewBox="0 0 24 24">
+      <path
+        d="M6 3.5h8l4 4V20H6V3.5Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M14 3.5V8h4M9 12h6M9 15.5h5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-      .actions {
-        display: flex;
-        gap: 10px;
-      }
+    <symbol id="i-library" viewBox="0 0 24 24">
+      <path
+        d="M4.5 4.5h3v15h-3v-15Zm5.5 0h3v15h-3v-15Zm5.6-.5 2.8-.8 4 14.5-2.9.8L15.6 4Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-      .stack {
-        display: grid;
-        gap: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="page popup">
-      <section class="panel hero">
-        <span class="pill" id="site-pill">Waiting for page</span>
-        <h1>Track this novel</h1>
-        <p>Save the chapter you are on now, then jump back here later from your library.</p>
-      </section>
+    <symbol id="i-link" viewBox="0 0 24 24">
+      <path
+        d="M9.5 14.5 14.5 9M7.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+      />
+    </symbol>
 
-      <form class="panel" id="novel-form">
-        <div class="field">
-          <label for="title">Novel title</label>
-          <input id="title" name="title" required>
-        </div>
+    <symbol id="i-image" viewBox="0 0 24 24">
+      <rect
+        x="4"
+        y="5"
+        width="16"
+        height="14"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+      />
+      <circle
+        cx="9"
+        cy="10"
+        r="1.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+      <path
+        d="m6 17 4.2-4 3.1 2.7 2-1.8L19 17"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-        <div class="field">
-          <label for="chapter-label">Current chapter</label>
-          <input id="chapter-label" name="chapterLabel" placeholder="Chapter 142">
-        </div>
+    <symbol id="i-history" viewBox="0 0 24 24">
+      <path
+        d="M5.2 7.2A7.5 7.5 0 1 1 4.5 14M5.5 3.9v4H9.6M12 8.2v4.3l2.7 1.7"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-        <div class="field">
-          <label for="chapter-url">Current page URL</label>
-          <input id="chapter-url" name="chapterUrl" required>
-        </div>
+    <symbol id="i-chevron" viewBox="0 0 24 24">
+      <path
+        d="m8 10 4 4 4-4"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-        <div class="field">
-          <label for="home-url">Novel home URL</label>
-          <input id="home-url" name="homeUrl" placeholder="Optional">
-        </div>
+    <symbol id="i-spark" viewBox="0 0 24 24">
+      <path
+        d="M12 3.5 13.6 8l4.5 1.6-4.5 1.6L12 15.7l-1.6-4.5-4.5-1.6L10.4 8 12 3.5Z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-        <div class="field">
-          <label for="cover-url">Cover image URL</label>
-          <input id="cover-url" name="coverUrl" placeholder="Optional">
-        </div>
+    <symbol id="i-sync" viewBox="0 0 24 24">
+      <path
+        d="M18.2 8.2A7 7 0 0 0 6.7 6.7L4.5 9M4.5 5.3V9h3.8"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M5.8 15.8a7 7 0 0 0 11.5 1.5l2.2-2.3M19.5 18.7V15h-3.8"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
 
-        <div class="field">
-          <label for="status">Reading status</label>
-          <select id="status" name="status">
-            <option value="active">Active</option>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <path
+        d="m5.5 12.5 4 4L18.5 7"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.9"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </symbol>
+
+  </svg>
+
+
+  <main class="popup-shell">
+
+    <header class="popup-header">
+
+      <div class="popup-bookmark" aria-hidden="true">
+        <svg>
+          <use href="#i-bookmark"></use>
+        </svg>
+      </div>
+
+      <div class="popup-heading">
+        <span>Novel Tracker</span>
+        <h1>Save your place.</h1>
+      </div>
+
+      <button
+        type="button"
+        id="open-library"
+        class="library-button"
+        aria-label="Open reading archive"
+        title="Open reading archive"
+      >
+        <svg>
+          <use href="#i-library"></use>
+        </svg>
+      </button>
+
+    </header>
+
+
+    <section class="current-page-card">
+
+      <div class="current-page-icon" aria-hidden="true">
+        <svg>
+          <use href="#i-page"></use>
+        </svg>
+      </div>
+
+      <div class="current-page-copy">
+        <span>Current site</span>
+
+        <strong
+          id="site-pill"
+          class="site-pill loading"
+        >
+          Reading page…
+        </strong>
+      </div>
+
+      <div class="context-spark" aria-hidden="true">
+        <svg>
+          <use href="#i-spark"></use>
+        </svg>
+      </div>
+
+    </section>
+
+
+    <form
+      id="novel-form"
+      class="tracker-form"
+    >
+
+      <label class="field">
+        <span>Novel title</span>
+
+        <input
+          id="title"
+          type="text"
+          autocomplete="off"
+          placeholder="The novel you're reading"
+          required
+        >
+      </label>
+
+
+      <div class="field-row">
+
+        <label class="field">
+          <span>Chapter</span>
+
+          <input
+            id="chapter-label"
+            type="text"
+            autocomplete="off"
+            placeholder="Chapter 142"
+          >
+        </label>
+
+
+        <label class="field">
+          <span>Status</span>
+
+          <select id="status">
+            <option value="active">Reading</option>
             <option value="paused">Paused</option>
             <option value="completed">Completed</option>
             <option value="dropped">Dropped</option>
           </select>
+        </label>
+
+      </div>
+
+
+      <label class="field">
+        <span>Current page</span>
+
+        <div class="field-with-icon">
+          <svg aria-hidden="true">
+            <use href="#i-link"></use>
+          </svg>
+
+          <input
+            id="chapter-url"
+            type="url"
+            autocomplete="off"
+            placeholder="https://…"
+            required
+          >
+        </div>
+      </label>
+
+
+      <details class="more-details">
+
+        <summary>
+          <span class="summary-main">
+            <svg aria-hidden="true">
+              <use href="#i-book"></use>
+            </svg>
+
+            More details
+          </span>
+
+          <span class="summary-hint">
+            Optional
+          </span>
+
+          <svg class="summary-chevron" aria-hidden="true">
+            <use href="#i-chevron"></use>
+          </svg>
+        </summary>
+
+
+        <div class="optional-fields">
+
+          <label class="field">
+            <span>Novel home</span>
+
+            <div class="field-with-icon">
+              <svg aria-hidden="true">
+                <use href="#i-link"></use>
+              </svg>
+
+              <input
+                id="home-url"
+                type="url"
+                autocomplete="off"
+                placeholder="Main novel page"
+              >
+            </div>
+          </label>
+
+
+          <label class="field">
+            <span>Cover image</span>
+
+            <div class="field-with-icon">
+              <svg aria-hidden="true">
+                <use href="#i-image"></use>
+              </svg>
+
+              <input
+                id="cover-url"
+                type="url"
+                autocomplete="off"
+                placeholder="Image URL"
+              >
+            </div>
+          </label>
+
         </div>
 
-        <div class="status" id="status-message"></div>
+      </details>
 
-        <div class="actions">
-          <button type="submit" id="save-button">Save progress</button>
-          <button type="button" class="secondary" id="open-library">Open library</button>
-        </div>
-      </form>
-    </main>
 
-    <script type="module" src="popup.js"></script>
-  </body>
+      <div
+        id="status-message"
+        class="status"
+        aria-live="polite"
+      ></div>
+
+
+      <button
+        type="submit"
+        id="save-button"
+        class="save-button"
+      >
+        <svg aria-hidden="true">
+          <use href="#i-bookmark"></use>
+        </svg>
+
+        <span>Save bookmark</span>
+      </button>
+
+    </form>
+
+
+    <footer class="popup-footer">
+
+      <button
+        type="button"
+        id="open-library-footer"
+        tabindex="-1"
+        aria-hidden="true"
+      >
+        <svg aria-hidden="true">
+          <use href="#i-history"></use>
+        </svg>
+
+        <span>Reading archive</span>
+      </button>
+
+    </footer>
+
+  </main>
+
+
+  <script
+    type="module"
+    src="popup.js"
+  ></script>
+
+</body>
 </html>
