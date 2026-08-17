@@ -1,7 +1,8 @@
 dist/
 dist-firefox/
 dist-safari/
-release/
+release/**
+!docs/release/
 safari-app/
 node_modules/
 *.log
