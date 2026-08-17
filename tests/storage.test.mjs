@@ -29,9 +29,12 @@ const {
   getNovels,
   getSyncState,
   importNovelsJson,
+  normalizeRating,
+  normalizeTags,
   normalizeUrl,
   prepareSyncForAccount,
   saveSyncState,
+  updateNovel,
   upsertNovel
 } = storageModule;
 
@@ -39,6 +42,50 @@ test("normalizeUrl rejects executable and privileged URL schemes", () => {
   assert.equal(normalizeUrl("javascript:alert(1)"), "");
   assert.equal(normalizeUrl("data:text/html,unsafe"), "");
   assert.equal(normalizeUrl("https://example.test/chapter#section"), "https://example.test/chapter");
+});
+
+test("normalizeTags trims, dedupes case-insensitively, and caps the list", () => {
+  assert.deepEqual(normalizeTags("Fantasy, fantasy , Slow Burn,  , Isekai"), ["Fantasy", "Slow Burn", "Isekai"]);
+  assert.deepEqual(normalizeTags(["a", "b", "a"]), ["a", "b"]);
+  assert.deepEqual(normalizeTags(null), []);
+  assert.equal(normalizeTags(Array.from({ length: 30 }, (_, index) => `tag-${index}`)).length, 20);
+});
+
+test("normalizeRating clamps to an integer between 0 and 5", () => {
+  assert.equal(normalizeRating(3), 3);
+  assert.equal(normalizeRating(4.6), 5);
+  assert.equal(normalizeRating(-2), 0);
+  assert.equal(normalizeRating(9), 5);
+  assert.equal(normalizeRating("not a number"), 0);
+});
+
+test("upsertNovel and updateNovel persist tags, notes, and rating", async () => {
+  globalThis.localStorage.clear();
+
+  await upsertNovel({
+    title: "The Long Road",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/1/the-long-road",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/1/the-long-road/chapter/1/one",
+    lastReadChapterLabel: "Chapter 1",
+    status: "active",
+    tags: ["Fantasy", "Slow Burn"],
+    notes: "Great worldbuilding.",
+    rating: 4
+  });
+
+  let [novel] = await getNovels();
+  assert.deepEqual(novel.tags, ["Fantasy", "Slow Burn"]);
+  assert.equal(novel.notes, "Great worldbuilding.");
+  assert.equal(novel.rating, 4);
+
+  await updateNovel(novel.id, { rating: 5, tags: "Fantasy, Adventure" });
+
+  [novel] = await getNovels();
+  assert.deepEqual(novel.tags, ["Fantasy", "Adventure"]);
+  assert.equal(novel.rating, 5);
+  // Notes were not part of the patch, so the previous value is retained.
+  assert.equal(novel.notes, "Great worldbuilding.");
 });
 
 test("upsertNovel updates an existing Patreon entry when saving the next chapter manually", async () => {
@@ -350,6 +397,36 @@ test("importNovelsJson merges a backup into the existing library", async () => {
   const exported = JSON.parse(await exportNovelsJson());
   assert.equal(exported.version, 1);
   assert.equal(exported.novels.length, 1);
+});
+
+test("importNovelsJson round-trips tags, notes, and rating", async () => {
+  globalThis.localStorage.clear();
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [
+      {
+        title: "Elydes",
+        sourceSite: "royalroad.com",
+        novelHomeUrl: "https://www.royalroad.com/fiction/67742/elydes",
+        lastReadChapterUrl: "https://www.royalroad.com/fiction/67742/elydes/chapter/1/one",
+        lastReadChapterLabel: "Chapter 1",
+        status: "active",
+        tags: ["Fantasy", "fantasy"],
+        notes: "Recommended by a friend.",
+        rating: 4
+      }
+    ]
+  }));
+
+  const [novel] = await getNovels();
+  assert.deepEqual(novel.tags, ["Fantasy"]);
+  assert.equal(novel.notes, "Recommended by a friend.");
+  assert.equal(novel.rating, 4);
+
+  const exported = JSON.parse(await exportNovelsJson());
+  assert.deepEqual(exported.novels[0].tags, ["Fantasy"]);
+  assert.equal(exported.novels[0].rating, 4);
 });
 
 test("importNovelsJson skips blank novel entries", async () => {

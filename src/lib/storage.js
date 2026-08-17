@@ -159,6 +159,9 @@ function novelFields(input, existing, now) {
     novelHomeUrl: normalizeUrl(input.novelHomeUrl ?? existing?.novelHomeUrl),
     coverImageUrl: normalizeUrl(input.coverImageUrl ?? existing?.coverImageUrl),
     status: input.status || existing?.status || "active",
+    tags: normalizeTags(input.tags ?? existing?.tags),
+    notes: normalizeNotes(input.notes ?? existing?.notes),
+    rating: normalizeRating(input.rating ?? existing?.rating),
     createdAt: existing?.createdAt || now,
     updatedAt: now
   };
@@ -415,6 +418,42 @@ export function getHostname(url) {
   }
 }
 
+const MAX_TAG_LENGTH = 40;
+const MAX_TAGS = 20;
+const MAX_NOTES_LENGTH = 4000;
+
+export function normalizeTags(value) {
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+
+  const seen = new Set();
+  const tags = [];
+
+  for (const raw of list) {
+    const tag = String(raw || "").trim().replace(/\s+/g, " ").slice(0, MAX_TAG_LENGTH);
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+    if (tags.length >= MAX_TAGS) break;
+  }
+
+  return tags;
+}
+
+export function normalizeNotes(value) {
+  return String(value || "").trim().slice(0, MAX_NOTES_LENGTH);
+}
+
+export function normalizeRating(value) {
+  const rating = Math.round(Number(value));
+  if (!Number.isFinite(rating) || rating < 0) return 0;
+  return Math.min(rating, 5);
+}
+
 export async function getNovels() {
   return materializeNovels(await getSyncState());
 }
@@ -614,7 +653,10 @@ export async function importNovelsJson(text) {
       lastReadChapterUrl: item.lastReadChapterUrl || "",
       lastReadChapterLabel: item.lastReadChapterLabel || "",
       coverImageUrl: item.coverImageUrl || "",
-      status: item.status || "active"
+      status: item.status || "active",
+      tags: normalizeTags(item.tags),
+      notes: normalizeNotes(item.notes),
+      rating: normalizeRating(item.rating)
     };
 
     if (!hasRequiredNovelIdentity(input)) {
@@ -633,6 +675,9 @@ export async function importNovelsJson(text) {
           lastReadChapterLabel: String(input.lastReadChapterLabel || "").trim(),
           coverImageUrl: normalizeUrl(input.coverImageUrl),
           status: input.status,
+          tags: input.tags,
+          notes: input.notes,
+          rating: input.rating,
           chapterHistory: normalizeChapterHistory(item.chapterHistory),
           createdAt: item.createdAt || new Date().toISOString(),
           updatedAt: item.updatedAt || new Date().toISOString()
@@ -656,6 +701,9 @@ export async function importNovelsJson(text) {
         lastReadChapterLabel: String(input.lastReadChapterLabel || novel.lastReadChapterLabel).trim(),
         coverImageUrl: normalizeUrl(input.coverImageUrl || novel.coverImageUrl),
         status: input.status || novel.status,
+        tags: item.tags != null ? input.tags : novel.tags,
+        notes: item.notes != null ? input.notes : novel.notes,
+        rating: item.rating != null ? input.rating : novel.rating,
         chapterHistory: mergeChapterHistories(novel.chapterHistory, item.chapterHistory),
         updatedAt: item.updatedAt || novel.updatedAt
       };

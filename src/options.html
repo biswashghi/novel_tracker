@@ -120,6 +120,22 @@
                 stroke-linejoin="round" />
         </symbol>
 
+        <symbol id="i-star" viewBox="0 0 24 24">
+            <path d="m12 3.5 2.5 5.4 5.9.7-4.4 4 1.2 5.9-5.2-3-5.2 3 1.2-5.9-4.4-4 5.9-.7L12 3.5Z" fill="currentColor" />
+        </symbol>
+
+        <symbol id="i-tag" viewBox="0 0 24 24">
+            <path d="M12.4 4h5.6a2 2 0 0 1 2 2v5.6a2 2 0 0 1-.6 1.4l-8 8a2 2 0 0 1-2.8 0l-5.6-5.6a2 2 0 0 1 0-2.8l8-8a2 2 0 0 1 1.4-.6Z"
+                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+            <circle cx="15.5" cy="8.5" r="1.4" fill="currentColor" />
+        </symbol>
+
+        <symbol id="i-flame" viewBox="0 0 24 24">
+            <path
+                d="M12 3s4 3.6 4 7.6a4 4 0 0 1-8 0c0-1 .4-1.8 1-2.6-.2 1.2.2 2 1 2.4-.3-2 .6-3.6 2-4.6-.2 1.4.4 2.4 1.4 3 .5.3.8.8.8 1.4a2.2 2.2 0 0 1-4.4 0"
+                fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+        </symbol>
+
     </svg>
 
     <!-- =========================================================
@@ -271,6 +287,62 @@
 
 
         <!-- =======================================================
+         READING STATS
+    ======================================================== -->
+        <section class="stats-bar" id="stats-bar">
+
+            <div class="stat-card">
+                <span class="stat-icon" aria-hidden="true">
+                    <svg>
+                        <use href="#i-flame"></use>
+                    </svg>
+                </span>
+                <div class="stat-copy">
+                    <strong id="stat-streak">0</strong>
+                    <span>Day streak</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <span class="stat-icon" aria-hidden="true">
+                    <svg>
+                        <use href="#i-bookmark"></use>
+                    </svg>
+                </span>
+                <div class="stat-copy">
+                    <strong id="stat-week">0</strong>
+                    <span>Chapters this week</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <span class="stat-icon" aria-hidden="true">
+                    <svg>
+                        <use href="#i-history"></use>
+                    </svg>
+                </span>
+                <div class="stat-copy">
+                    <strong id="stat-month">0</strong>
+                    <span>Chapters this month</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <span class="stat-icon" aria-hidden="true">
+                    <svg>
+                        <use href="#i-library"></use>
+                    </svg>
+                </span>
+                <div class="stat-copy">
+                    <strong id="stat-completed">0</strong>
+                    <span>Completed of <span id="stat-total">0</span></span>
+                </div>
+            </div>
+
+        </section>
+
+
+        <!-- =======================================================
          FILTER BAR
     ======================================================== -->
         <section class="filter-bar">
@@ -281,7 +353,7 @@
                     <use href="#i-search"></use>
                 </svg>
 
-                <input id="search" type="search" placeholder="Find a novel or source…">
+                <input id="search" type="search" placeholder="Find a novel, source, tag, or note…">
 
             </div>
 
@@ -311,6 +383,22 @@
 
                 <span>
                     <svg aria-hidden="true">
+                        <use href="#i-tag"></use>
+                    </svg>
+
+                    Tag
+                </span>
+
+                <select id="tag-filter">
+                    <option value="all">All</option>
+                </select>
+
+            </label>
+
+            <label class="compact-filter">
+
+                <span>
+                    <svg aria-hidden="true">
                         <use href="#i-sort"></use>
                     </svg>
 
@@ -321,6 +409,7 @@
                     <option value="updated">Recent</option>
                     <option value="title">Title</option>
                     <option value="source">Source</option>
+                    <option value="rating">Rating</option>
                 </select>
 
             </label>

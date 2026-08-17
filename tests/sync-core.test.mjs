@@ -92,6 +92,30 @@ test("field-level LWW registers preserve unrelated concurrent edits", () => {
   assert.equal(novel.status, "paused");
 });
 
+test("tags, notes, and rating are field-level LWW registers like any other field", () => {
+  let state = createSyncState({ deviceId: deviceA, now: 0 });
+  state = applyMutation(state, mutation({ payload: { title: "Novel", status: "active" } }));
+  state = applyMutation(state, mutation({
+    mutationId: "organize",
+    type: "novel.patch",
+    clock: baseClock(200, deviceA),
+    payload: { tags: ["fantasy"], notes: "Reread later", rating: 4 }
+  }));
+  const novel = materializeNovel(state.novels["novel-1"]);
+  assert.deepEqual(novel.tags, ["fantasy"]);
+  assert.equal(novel.notes, "Reread later");
+  assert.equal(novel.rating, 4);
+});
+
+test("novels created before tags/notes/rating existed still materialize with safe defaults", () => {
+  let state = createSyncState({ deviceId: deviceA, now: 0 });
+  state = applyMutation(state, mutation({ payload: { title: "Legacy Novel", status: "active" } }));
+  const novel = materializeNovel(state.novels["novel-1"]);
+  assert.deepEqual(novel.tags, []);
+  assert.equal(novel.notes, "");
+  assert.equal(novel.rating, 0);
+});
+
 test("expired tombstones are purged after the retention window", () => {
   let state = createSyncState({ deviceId: deviceA, now: 0 });
   state = applyMutation(state, mutation());

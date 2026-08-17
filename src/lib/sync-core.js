@@ -10,7 +10,10 @@ const FIELD_NAMES = [
   "createdAt",
   "updatedAt",
   "lastReadChapterUrl",
-  "lastReadChapterLabel"
+  "lastReadChapterLabel",
+  "tags",
+  "notes",
+  "rating"
 ];
 
 function randomId() {
@@ -230,6 +233,9 @@ export function materializeNovel(novel) {
   const head = novel.chapterHistory[novel.headCheckpointId];
   return {
     id: novel.id,
+    tags: [],
+    notes: "",
+    rating: 0,
     ...fields,
     lastReadChapterUrl: head?.url || fields.lastReadChapterUrl || "",
     lastReadChapterLabel: head?.label || fields.lastReadChapterLabel || "",

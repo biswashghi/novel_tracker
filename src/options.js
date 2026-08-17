@@ -3,8 +3,11 @@ import {
   exportNovelsJson,
   getNovels,
   importNovelsJson,
+  normalizeTags,
   updateNovel
 } from "./lib/storage.js";
+
+import { computeReadingStats } from "./lib/reading-stats.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
 
@@ -12,7 +15,14 @@ const library = document.querySelector("#library");
 
 const searchInput = document.querySelector("#search");
 const statusFilter = document.querySelector("#status-filter");
+const tagFilter = document.querySelector("#tag-filter");
 const sortSelect = document.querySelector("#sort");
+
+const statStreak = document.querySelector("#stat-streak");
+const statWeek = document.querySelector("#stat-week");
+const statMonth = document.querySelector("#stat-month");
+const statCompleted = document.querySelector("#stat-completed");
+const statTotal = document.querySelector("#stat-total");
 
 const exportJsonButton = document.querySelector("#export-json");
 const importJsonButton = document.querySelector("#import-json");
@@ -175,14 +185,19 @@ function formatRelativeDate(value) {
 function matchesFilters(novel) {
   const query = searchInput.value.trim().toLowerCase();
   const status = statusFilter.value;
+  const tag = tagFilter.value;
+  const tags = novel.tags || [];
 
   const searchMatch = !query ||
     novel.title.toLowerCase().includes(query) ||
-    novel.sourceSite.toLowerCase().includes(query);
+    novel.sourceSite.toLowerCase().includes(query) ||
+    tags.some((item) => item.toLowerCase().includes(query)) ||
+    (novel.notes || "").toLowerCase().includes(query);
 
   const statusMatch = status === "all" || novel.status === status;
+  const tagMatch = tag === "all" || tags.includes(tag);
 
-  return searchMatch && statusMatch;
+  return searchMatch && statusMatch && tagMatch;
 }
 
 function sortNovels(items) {
@@ -193,11 +208,53 @@ function sortNovels(items) {
     next.sort((a, b) => a.title.localeCompare(b.title));
   } else if (mode === "source") {
     next.sort((a, b) => a.sourceSite.localeCompare(b.sourceSite));
+  } else if (mode === "rating") {
+    next.sort((a, b) => (b.rating || 0) - (a.rating || 0) || new Date(b.updatedAt) - new Date(a.updatedAt));
   } else {
     next.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   }
 
   return next;
+}
+
+/* =========================================================
+   TAG FILTER OPTIONS
+========================================================= */
+
+function populateTagFilter(items) {
+  const tags = new Set();
+  for (const novel of items) {
+    for (const tag of novel.tags || []) tags.add(tag);
+  }
+
+  const sorted = [...tags].sort((a, b) => a.localeCompare(b));
+  const previous = tagFilter.value;
+
+  tagFilter.replaceChildren();
+  const allOption = element("option", "", "All");
+  allOption.value = "all";
+  tagFilter.append(allOption);
+
+  for (const tag of sorted) {
+    const option = element("option", "", tag);
+    option.value = tag;
+    tagFilter.append(option);
+  }
+
+  tagFilter.value = sorted.includes(previous) ? previous : "all";
+}
+
+/* =========================================================
+   READING STATS
+========================================================= */
+
+function renderStats(items) {
+  const stats = computeReadingStats(items);
+  statStreak.textContent = String(stats.streakDays);
+  statWeek.textContent = String(stats.chaptersThisWeek);
+  statMonth.textContent = String(stats.chaptersThisMonth);
+  statCompleted.textContent = String(stats.completedCount);
+  statTotal.textContent = String(stats.totalNovels);
 }
 
 /* =========================================================
@@ -243,6 +300,65 @@ function field(labelText, name, value) {
   return wrapper;
 }
 
+function tagsField(tags) {
+  const wrapper = element("div", "field");
+  const label = element("label", "", "Tags");
+  const input = document.createElement("input");
+  input.name = "tags";
+  input.placeholder = "comma, separated, tags";
+  input.value = (Array.isArray(tags) ? tags : []).join(", ");
+  wrapper.append(label, input);
+  return wrapper;
+}
+
+function notesField(value) {
+  const wrapper = element("div", "field field-wide");
+  const label = element("label", "", "Notes");
+  const textarea = document.createElement("textarea");
+  textarea.name = "notes";
+  textarea.rows = 3;
+  textarea.placeholder = "Personal notes about this novel…";
+  textarea.value = String(value || "");
+  wrapper.append(label, textarea);
+  return wrapper;
+}
+
+function ratingField(value) {
+  const wrapper = element("div", "field");
+  const label = element("label", "", "Rating");
+  const picker = element("div", "rating-input");
+
+  const hidden = document.createElement("input");
+  hidden.type = "hidden";
+  hidden.name = "rating";
+  hidden.value = String(value || 0);
+
+  function paint() {
+    const current = Number(hidden.value) || 0;
+    for (const button of picker.querySelectorAll("button")) {
+      button.classList.toggle("is-filled", Number(button.dataset.value) <= current);
+    }
+  }
+
+  for (let starValue = 1; starValue <= 5; starValue += 1) {
+    const button = element("button", "rating-star");
+    button.type = "button";
+    button.dataset.value = String(starValue);
+    button.setAttribute("aria-label", `Rate ${starValue} star${starValue === 1 ? "" : "s"}`);
+    button.append(icon("star"));
+    button.addEventListener("click", () => {
+      const current = Number(hidden.value) || 0;
+      hidden.value = String(current === starValue ? 0 : starValue);
+      paint();
+    });
+    picker.append(button);
+  }
+
+  paint();
+  wrapper.append(label, picker, hidden);
+  return wrapper;
+}
+
 /* =========================================================
    CARD
 ========================================================= */
@@ -283,7 +399,25 @@ function createCard(novel) {
     element("span", "", novel.status),
     element("span", "", `Updated ${formatDate(novel.updatedAt)}`)
   );
+
+  if (novel.rating > 0) {
+    const ratingDisplay = element("span", "rating-display");
+    ratingDisplay.append(icon("star"), document.createTextNode(` ${novel.rating}/5`));
+    meta.append(ratingDisplay);
+  }
+
   titleBlock.append(meta);
+
+  // Tag chips
+  if (novel.tags?.length) {
+    const tagRow = element("div", "tag-chips");
+    for (const tag of novel.tags) {
+      const chip = element("span", "tag-chip");
+      chip.append(icon("tag"), document.createTextNode(tag));
+      tagRow.append(chip);
+    }
+    titleBlock.append(tagRow);
+  }
 
   // Chapter badge
   const chapterPill = element("span", "chapter-pill");
@@ -294,6 +428,14 @@ function createCard(novel) {
   const chapterLink = element("div", "chapter-link", novel.lastReadChapterUrl);
   chapterLink.title = novel.lastReadChapterUrl;
 
+  content.append(titleRow, chapterLink);
+
+  // Notes preview
+  if (novel.notes) {
+    const preview = novel.notes.length > 160 ? `${novel.notes.slice(0, 160)}…` : novel.notes;
+    content.append(element("div", "notes-preview", preview));
+  }
+
   // Actions
   const actions = element("div", "actions");
   actions.append(
@@ -302,7 +444,7 @@ function createCard(novel) {
     actionButton("Delete", "delete", "trash", "danger")
   );
 
-  content.append(titleRow, chapterLink, actions);
+  content.append(actions);
 
   // Chapter history
   if (historyEntries.length) {
@@ -335,7 +477,10 @@ function createCard(novel) {
     field("Chapter", "lastReadChapterLabel", novel.lastReadChapterLabel),
     field("Current page", "lastReadChapterUrl", novel.lastReadChapterUrl),
     field("Novel home", "novelHomeUrl", novel.novelHomeUrl),
-    field("Cover image", "coverImageUrl", novel.coverImageUrl)
+    field("Cover image", "coverImageUrl", novel.coverImageUrl),
+    tagsField(novel.tags),
+    ratingField(novel.rating),
+    notesField(novel.notes)
   );
 
   const statusField = element("div", "field");
@@ -406,6 +551,8 @@ function render() {
 
 async function refresh() {
   novels = await getNovels();
+  populateTagFilter(novels);
+  renderStats(novels);
   render();
 }
 
@@ -479,7 +626,10 @@ library.addEventListener("submit", async (event) => {
     lastReadChapterUrl: String(data.get("lastReadChapterUrl") || "").trim(),
     novelHomeUrl: String(data.get("novelHomeUrl") || "").trim(),
     coverImageUrl: String(data.get("coverImageUrl") || "").trim(),
-    status: String(data.get("status") || "active").trim()
+    status: String(data.get("status") || "active").trim(),
+    tags: normalizeTags(String(data.get("tags") || "")),
+    notes: String(data.get("notes") || "").trim(),
+    rating: Number(data.get("rating") || 0)
   });
 
   await refresh();
@@ -491,6 +641,7 @@ library.addEventListener("submit", async (event) => {
 
 searchInput.addEventListener("input", render);
 statusFilter.addEventListener("change", render);
+tagFilter.addEventListener("change", render);
 sortSelect.addEventListener("change", render);
 
 /* =========================================================
