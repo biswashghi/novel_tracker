@@ -82,6 +82,10 @@
     );
   }
 
+  function pickCoverImage(root, ogImage, selector) {
+    return ogImage || root.querySelector(selector)?.src || "";
+  }
+
   function registerSiteParser(parser) {
     if (!parser?.id || typeof parser.parse !== "function") {
       throw new Error("Site parser must include an id and parse function");
@@ -100,6 +104,7 @@
     getSiteParsers,
     metaContent,
     normalizePathUrl,
+    pickCoverImage,
     registerSiteParser,
     splitNovelAndChapterTitle,
     stripChapterSuffix,

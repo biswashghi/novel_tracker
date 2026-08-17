@@ -38,10 +38,7 @@
           core.usefulText(chapterHeading, "chikari.moe") ||
           (chapterFromPage ? `Chapter ${chapterFromPage}` : "") ||
           `Chapter ${chapterId}`,
-        coverImageUrl:
-          ogImage ||
-          root.querySelector("img[alt*='cover' i], img[alt*='Omniscient Reader' i]")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, "img[alt*='cover' i], img[alt*='Omniscient Reader' i]")
       };
     }
   });

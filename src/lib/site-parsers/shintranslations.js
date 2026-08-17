@@ -16,10 +16,7 @@
         lastReadChapterLabel:
           core.usefulText(core.firstText(root, ["h1", ".entry-title", ".post-title"]), hostname) ||
           fullTitle,
-        coverImageUrl:
-          ogImage ||
-          root.querySelector(".post-thumbnail img, article img, img[alt*='cover' i]")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, ".post-thumbnail img, article img, img[alt*='cover' i]")
       };
     }
   });

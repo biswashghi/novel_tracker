@@ -1,28 +1,5 @@
 import { getExtensionApi } from "./extension-api.js";
-
-const SAFARI_NATIVE_APP_ID = "app.noveltracker.extension";
-
-function sendNative(runtime, message) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = (value, error) => {
-      if (settled) return;
-      settled = true;
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const callback = (value) => {
-      const runtimeError = runtime.lastError;
-      finish(value, runtimeError ? new Error(runtimeError.message || String(runtimeError)) : null);
-    };
-    try {
-      const result = runtime.sendNativeMessage(message);
-      if (result?.then) result.then((value) => finish(value), (error) => finish(undefined, error));
-    } catch (error) {
-      finish(undefined, error);
-    }
-  });
-}
+import { sendNativeMessage } from "./safari-native-messaging.js";
 
 function nativeResponse(result) {
   if (result?.error) throw new Error(result.error);
@@ -41,7 +18,7 @@ export async function platformFetch(url, options = {}) {
   const api = getExtensionApi();
   if (!api?.identity && api?.runtime?.sendNativeMessage) {
     const headers = Object.fromEntries(new Headers(options.headers || {}).entries());
-    return nativeResponse(await sendNative(api.runtime, {
+    return nativeResponse(await sendNativeMessage(api.runtime, {
       type: "novel-tracker.http.request",
       url: String(url),
       method: String(options.method || "GET").toUpperCase(),

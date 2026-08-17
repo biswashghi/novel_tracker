@@ -1,29 +1,7 @@
 import { getExtensionApi } from "./extension-api.js";
+import { sendNativeMessage } from "./safari-native-messaging.js";
 
-export const SAFARI_NATIVE_APP_ID = "app.noveltracker.extension";
 export const SAFARI_OAUTH_REDIRECT_URI = "noveltracker://oauth/callback";
-
-function sendNative(runtime, message) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = (value, error) => {
-      if (settled) return;
-      settled = true;
-      if (error) reject(error);
-      else resolve(value);
-    };
-    const callback = (value) => {
-      const runtimeError = runtime.lastError;
-      finish(value, runtimeError ? new Error(runtimeError.message || String(runtimeError)) : null);
-    };
-    try {
-      const result = runtime.sendNativeMessage(message);
-      if (result?.then) result.then((value) => finish(value), (error) => finish(undefined, error));
-    } catch (error) {
-      finish(undefined, error);
-    }
-  });
-}
 
 function webExtensionIdentityPlatform(identity) {
   return {
@@ -39,7 +17,7 @@ function webExtensionIdentityPlatform(identity) {
 
 function safariNativePlatform(runtime) {
   async function request(message) {
-    const response = await sendNative(runtime, message);
+    const response = await sendNativeMessage(runtime, message);
     if (response?.error) throw new Error(response.error);
     return response;
   }

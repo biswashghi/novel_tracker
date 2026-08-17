@@ -14,10 +14,7 @@
         lastReadChapterLabel:
           core.firstText(root, ["[data-tag='post-title']", "h1"]) ||
           ogTitle,
-        coverImageUrl:
-          ogImage ||
-          root.querySelector("img")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, "img")
       };
     }
   });

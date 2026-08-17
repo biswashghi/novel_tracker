@@ -21,10 +21,7 @@
           core.titleCaseFromSlug(novelSlug),
         novelHomeUrl: core.normalizePathUrl(url.toString(), `/novel/${novelSlug}/`),
         lastReadChapterLabel: chapterLabel || core.titleCaseFromSlug(chapterSlug),
-        coverImageUrl:
-          ogImage ||
-          root.querySelector(".book-cover img, .novel-cover img, img[alt*='cover' i]")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, ".book-cover img, .novel-cover img, img[alt*='cover' i]")
       };
     }
   });

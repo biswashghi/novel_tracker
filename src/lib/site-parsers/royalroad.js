@@ -20,10 +20,7 @@
         lastReadChapterLabel:
           core.firstText(root, [".chapter-title", ".fic-header h1", "h1"]) ||
           core.titleCaseFromSlug(chapterSlug),
-        coverImageUrl:
-          ogImage ||
-          root.querySelector(".fiction-cover img, .thumbnail img")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, ".fiction-cover img, .thumbnail img")
       };
     }
   });

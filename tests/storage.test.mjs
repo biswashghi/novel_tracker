@@ -404,3 +404,42 @@ test("switching accounts queues a fresh snapshot of the retained local library",
   assert.equal(switched.syncAccountSubject, "new-account");
   assert.ok(switched.pendingMutations.some((item) => item.type === "novel.create"));
 });
+
+test("importing a backup keeps the device linked to its synced account", async () => {
+  globalThis.localStorage.clear();
+  await upsertNovel({
+    title: "Chapter 383 - Exhausted",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/67742/elydes",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/67742/elydes/chapter/3210843/chapter-383-exhausted",
+    lastReadChapterLabel: "Chapter 383 - Exhausted",
+    coverImageUrl: "",
+    status: "active"
+  });
+
+  const linked = await getSyncState();
+  linked.pendingMutations = [];
+  linked.cursor = "42";
+  linked.syncAccountSubject = "reader@example.test";
+  await saveSyncState(linked);
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [
+      {
+        title: "Chapter 384 - The Line",
+        sourceSite: "royalroad.com",
+        novelHomeUrl: "https://www.royalroad.com/fiction/67742/elydes",
+        lastReadChapterUrl: "https://www.royalroad.com/fiction/67742/elydes/chapter/3227191/chapter-384-the-line",
+        lastReadChapterLabel: "Chapter 384 - The Line",
+        coverImageUrl: "",
+        status: "active"
+      }
+    ]
+  }));
+
+  const afterImport = await getSyncState();
+  assert.equal(afterImport.deviceId, linked.deviceId);
+  assert.equal(afterImport.syncAccountSubject, "reader@example.test");
+  assert.equal(afterImport.cursor, "42");
+});

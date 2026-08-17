@@ -39,10 +39,7 @@
           ? core.normalizePathUrl(url.toString(), `/series/${seriesId}/${seriesSlug}/`)
           : core.normalizePathUrl(url.toString(), `/read/${seriesSlug}/`),
         lastReadChapterLabel: chapterLabel || `Chapter ${chapterId}`,
-        coverImageUrl:
-          ogImage ||
-          root.querySelector(".fic_image img, .series-cover img, img[alt*='cover' i]")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, ".fic_image img, .series-cover img, img[alt*='cover' i]")
       };
     }
   });

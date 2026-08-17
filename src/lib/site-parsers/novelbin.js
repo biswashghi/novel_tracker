@@ -17,10 +17,7 @@
         lastReadChapterLabel:
           core.firstText(root, [".chr-title", ".chapter-title", "h1", "h2"]) ||
           ogTitle,
-        coverImageUrl:
-          ogImage ||
-          root.querySelector(".book img, .info img")?.src ||
-          ""
+        coverImageUrl: core.pickCoverImage(root, ogImage, ".book img, .info img")
       };
     }
   });

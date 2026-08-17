@@ -420,8 +420,13 @@ export async function getNovels() {
 }
 
 async function saveNovels(novels) {
-  // Compatibility bridge for callers that still provide the legacy array shape.
-  let state = createSyncState();
+  // Compatibility bridge for callers that still provide the legacy array shape
+  // (currently only importNovelsJson). Rebuilds the novel set from scratch but
+  // keeps this state's identity - device id, clock, sync account, cursor - so
+  // importing a backup does not disconnect the device from its linked sync
+  // account or force every already-synced novel through a full resync.
+  const previous = await getSyncState();
+  let state = { ...previous, novels: {}, pendingMutations: [], appliedMutations: {} };
   for (const novel of novels) {
     const now = Date.parse(novel.updatedAt || "") || Date.now();
     const novelId = novel.id || globalThis.crypto.randomUUID();
