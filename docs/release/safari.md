@@ -14,45 +14,60 @@ npm run package:safari
 
 Steps:
 
-1. Run `npm run package:safari` to produce the Xcode packaging ZIP in `release/`.
-2. Unzip `release/novel-tracker-safari-xcode-<version>.zip` and open the
-   contained Xcode project.
-3. Select your Apple Developer team and verify signing settings.
+1. Run `npm run package:safari` to produce the Xcode packaging ZIP in `release/`
+   (this also refreshes `build/safari-xcode/Novel Tracker/`, the persistent
+   project directory Xcode/Fastlane use directly).
+2. Open `build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj`.
+3. Select the Apple Developer team and verify signing settings.
 4. Test on macOS and a physical iPhone/iPad before archiving and submitting.
 
-## App Store Assets
+### Automated archive + upload (CI)
 
-Use the original JPGs in `store-assets/original/` and run the generator to create the final release assets for each platform:
+`.github/workflows/release.yml`'s `publish-safari` job (macos-latest, needs
+`build-safari` + `check-secrets`) runs `scripts/publish-safari.mjs`, which
+shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
+`APP_STORE_CONNECT_*` secrets — one lane per platform:
 
-```bash
-node scripts/generate-appstore-screenshots.mjs
-```
+- **macOS** (`fastlane mac release`) archives, exports, and uploads to App
+  Store Connect as a new unreleased draft version. Does **not** submit for
+  review — that stays a manual step. Verified locally: archive/export/sign
+  all succeed; the actual upload only goes through once App Store Connect's
+  current macOS version isn't sitting on unresolved review feedback (push it
+  back to "Waiting for Review" there first if it is — the API can't do that
+  part for you).
+- **iOS** (`fastlane ios release`) archives and uploads to TestFlight
+  (internal testers only by default), matching how this app has been
+  distributed on iOS so far. Verified working end-to-end for real.
 
-The script writes one final export per platform, using the exact high-resolution sizes required by Apple:
+Both run by default; set `NOVEL_TRACKER_SAFARI_PLATFORMS=mac` or `=ios` (env
+var for `publish-safari.mjs` locally, or the workflow's `safari_platforms`
+`workflow_dispatch` input in CI) to publish just one — useful when the other
+platform's App Store Connect listing is in a blocking state.
 
-### macOS App Store
-
-- Final export size: 2880×1800 px
-- Output files: `macos-screenshot-2880x1800-1.jpg`, `-2.jpg`, `-3.jpg`
-- Format: JPEG for screenshots
-
-### iPadOS App Store
-
-- Final export size: 2064×2752 px
-- Output files: `ipad-screenshot-2064x2752-1.jpg`, `-2.jpg`, `-3.jpg`
-- Format: JPEG for screenshots
-
-### iOS App Store
-
-- Final export size: 1284×2778 px
-- Output files: `ios-screenshot-1284x2778-1.jpg`, `-2.jpg`, `-3.jpg`
-- Format: JPEG for screenshots
-
-Do not keep the lower-resolution duplicates; only the exact single highest-resolution export for each platform belongs in the final App Store asset set.
+To run a lane locally: `cd safari-app && fastlane mac release` (or `fastlane
+ios release`) with `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+and `APP_STORE_CONNECT_P8` exported in your shell — needs `fastlane`
+installed (`gem install fastlane`; if your system Ruby is too old, install a
+newer one via Homebrew (`brew install ruby`) and prepend
+`/opt/homebrew/opt/ruby/bin` and `/opt/homebrew/lib/ruby/gems/<version>/bin`
+to `PATH` first). The same signing setup from steps 2–3 above has to already
+be in place in the persistent Xcode project for this to work
+non-interactively — `npm run package:safari` handles that automatically (see
+the scheme-sharing and app-version notes below).
 
 Notes:
 
 - Packaging does not overwrite an existing Xcode project or its signing settings.
+- `xcrun safari-web-extension-converter` doesn't persist any `.xcscheme`
+  files — only an implicit, non-shared scheme Xcode synthesizes on the fly,
+  which `xcodebuild -list`/interactive Xcode can see but Fastlane's
+  `build_app` can't ("Couldn't find specified scheme ... make sure the
+  scheme is shared"). `npm run package:safari` generates real, shared scheme
+  files for the macOS and iOS app targets to fix this.
+- `xcrun safari-web-extension-converter` also hardcodes `MARKETING_VERSION`
+  to `1.0` on every regeneration. `npm run package:safari` overwrites it with
+  `package.json`'s version — otherwise every App Store Connect upload
+  collides with whatever version was previously uploaded.
 - The Safari build removes the unsupported WebExtension identity permission,
   bundles its background worker as a classic script, and configures a shared
   Keychain group for the app and extension.

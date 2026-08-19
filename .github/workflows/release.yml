@@ -7,6 +7,10 @@ on:
         description: Publish to Chrome, Firefox, and Safari after successful packaging
         type: boolean
         default: false
+      safari_platforms:
+        description: 'Safari platform(s) to publish (scripts/publish-safari.mjs): "mac", "ios", or "mac,ios"'
+        type: string
+        default: 'mac,ios'
   push:
     tags:
       - 'v*'
@@ -90,21 +94,59 @@ jobs:
           path: release/*.zip
           if-no-files-found: error
 
+  build-safari:
+    name: Safari package
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Safari package
+        run: |
+          npm run build:safari
+          npm run package:safari
+
+      - name: Upload Safari artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-package
+          path: release/*.zip
+          if-no-files-found: error
+
+      # publish-safari (below) needs the actual generated Xcode project, not
+      # just the zip of it — Fastlane builds/archives/signs from the
+      # xcodeproj directly (safari-app/fastlane/Fastfile), and that has to
+      # run on a macOS runner, unlike the shared `publish` job below which
+      # runs on ubuntu-latest for the Chrome/Firefox legs.
+      - name: Upload Safari Xcode project artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-xcode-project
+          path: build/safari-xcode
+          if-no-files-found: error
+
   # `secrets` cannot be referenced inside any `if:` conditional — job-level
   # or step-level (actionlint flags this; GitHub's context-availability
   # table excludes `secrets` from both). This job resolves presence into
   # plain job outputs once, which downstream jobs/steps *can* read via
   # `needs.check-secrets.outputs.*` inside their own `if:`.
-  #
-  # Safari/App Store Connect publishing (build-safari, publish-safari, and
-  # this job's `safari` output) is intentionally not wired up yet — it's
-  # being finished separately. Chrome and Firefox don't depend on it.
   check-secrets:
     name: Check publish secrets
     runs-on: ubuntu-latest
     outputs:
       chrome: ${{ steps.check.outputs.chrome }}
       firefox: ${{ steps.check.outputs.firefox }}
+      safari: ${{ steps.check.outputs.safari }}
     steps:
       - name: Check which store secrets are configured
         id: check
@@ -115,6 +157,9 @@ jobs:
           CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
           AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
         run: |
           chrome=false
           if [[ -n "$CHROME_WEB_STORE_EXTENSION_ID" && -n "$CHROME_WEB_STORE_CLIENT_ID" && -n "$CHROME_WEB_STORE_CLIENT_SECRET" && -n "$CHROME_WEB_STORE_REFRESH_TOKEN" ]]; then
@@ -126,9 +171,15 @@ jobs:
             firefox=true
           fi
 
+          safari=false
+          if [[ -n "$APP_STORE_CONNECT_KEY_ID" && -n "$APP_STORE_CONNECT_ISSUER_ID" && -n "$APP_STORE_CONNECT_P8" ]]; then
+            safari=true
+          fi
+
           {
             echo "chrome=$chrome"
             echo "firefox=$firefox"
+            echo "safari=$safari"
           } >> "$GITHUB_OUTPUT"
 
   publish:
@@ -136,6 +187,7 @@ jobs:
     needs:
       - build-chrome
       - build-firefox
+      - build-safari
       - check-secrets
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
@@ -156,16 +208,19 @@ jobs:
 
           CHROME_ZIP=$(find release-artifacts/chrome-package -name '*.zip' -print -quit)
           FIREFOX_ZIP=$(find release-artifacts/firefox-package -name '*.zip' -print -quit)
+          SAFARI_ZIP=$(find release-artifacts/safari-package -name '*.zip' -print -quit)
 
           [[ -n "$CHROME_ZIP" ]] || { echo 'Chrome ZIP not found'; exit 1; }
           [[ -n "$FIREFOX_ZIP" ]] || { echo 'Firefox ZIP not found'; exit 1; }
+          [[ -n "$SAFARI_ZIP" ]] || { echo 'Safari ZIP not found'; exit 1; }
 
           {
             echo "chrome_zip=$CHROME_ZIP"
             echo "firefox_zip=$FIREFOX_ZIP"
+            echo "safari_zip=$SAFARI_ZIP"
           } >> "$GITHUB_OUTPUT"
 
-          ls -l "$CHROME_ZIP" "$FIREFOX_ZIP"
+          ls -l "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
 
       - name: Publish to Chrome Web Store
         if: ${{ needs.check-secrets.outputs.chrome == 'true' }}
@@ -183,6 +238,11 @@ jobs:
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
         run: node scripts/publish-firefox.mjs "${{ steps.release.outputs.firefox_zip }}"
 
+      # Safari's own upload runs in publish-safari below, on a macOS runner —
+      # Fastlane's build_app step needs real Xcode, which ubuntu-latest (this
+      # job) doesn't have. This job still downloads and attaches the Safari
+      # zip to the GitHub Release above/below, just doesn't publish it.
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -190,3 +250,60 @@ jobs:
           files: |
             ${{ steps.release.outputs.chrome_zip }}
             ${{ steps.release.outputs.firefox_zip }}
+            ${{ steps.release.outputs.safari_zip }}
+
+  publish-safari:
+    name: Publish to App Store Connect
+    needs: [build-safari, check-secrets]
+    # Same trigger gate as `publish`, plus (at the job level, not just the
+    # step) all three Apple secrets present — macOS runners are the most
+    # expensive GitHub-hosted minute, not worth spinning one up just to have
+    # the script immediately no-op on missing secrets.
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/')) && needs.check-secrets.outputs.safari == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Fastlane
+        run: gem install fastlane --no-document
+
+      - name: Download Safari package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safari-package
+          path: release
+
+      # Restores it to the same path scripts/package-safari.sh writes to
+      # locally (build/safari-xcode/), which is also
+      # safari-app/fastlane/Fastfile's default PROJECT location.
+      - name: Download Safari Xcode project artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: safari-xcode-project
+          path: build/safari-xcode
+
+      - name: Resolve Safari ZIP path
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          SAFARI_ZIP=$(find release -name '*.zip' -print -quit)
+          [[ -n "$SAFARI_ZIP" ]] || { echo 'Safari ZIP not found'; exit 1; }
+          echo "safari_zip=$SAFARI_ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Safari archive to App Store Connect
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
+          # Empty on a tag-push trigger (no workflow_dispatch inputs exist
+          # there) — publish-safari.mjs already defaults an unset/empty
+          # value to "mac,ios", so that's fine.
+          NOVEL_TRACKER_SAFARI_PLATFORMS: ${{ github.event_name == 'workflow_dispatch' && inputs.safari_platforms || '' }}
+        run: node scripts/publish-safari.mjs "${{ steps.release.outputs.safari_zip }}"

@@ -12,3 +12,5 @@ build/
 test-results/
 playwright-report/
 notes.txt
+safari-app/fastlane/README.md
+safari-app/fastlane/report.xml

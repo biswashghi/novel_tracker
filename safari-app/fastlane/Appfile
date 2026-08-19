@@ -1,0 +1,13 @@
+# See docs/release/safari.md and scripts/publish-safari.mjs.
+#
+# scripts/package-safari.sh passes `--bundle-identifier app.noveltracker.extension`
+# to `xcrun safari-web-extension-converter`, which is the containing app's own
+# bundle id (the extension sub-target gets a derived id, e.g. with a
+# ".Extension" suffix). Override via NOVEL_TRACKER_APP_IDENTIFIER if that
+# differs in your generated project — check
+# build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj in Xcode to confirm.
+app_identifier(ENV["NOVEL_TRACKER_APP_IDENTIFIER"] || "app.noveltracker.extension")
+
+# Matches the hardcoded `apple_team_id` in scripts/package-safari.sh.
+team_id("3LQK7JJTX2")
+itc_team_id(ENV["NOVEL_TRACKER_ITC_TEAM_ID"]) if ENV["NOVEL_TRACKER_ITC_TEAM_ID"]

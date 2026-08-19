@@ -1,0 +1,90 @@
+# Archives and uploads the Safari containing apps produced by
+# `npm run package:safari` (scripts/package-safari.sh) to App Store Connect —
+# macOS to the App Store (unreleased draft, not submitted for review), iOS to
+# TestFlight — using the same APP_STORE_CONNECT_* secrets already wired into
+# .github/workflows/release.yml's build-safari job.
+#
+# This closes the gap scripts/publish-safari.mjs used to leave open (it only
+# checked the packaged zip existed and printed a reminder that an Xcode
+# archive/export/upload step was still needed). It cannot close the *entire*
+# gap: Apple's one-time account setup (Developer Program agreement, the
+# initial App Store Connect listing, tax/banking) has to happen once by hand
+# before this lane's upload has anywhere to land. From then on, this lane is
+# what a release build runs.
+#
+# Verified locally against a real signed Xcode project and real App Store
+# Connect credentials (macOS lane): `build_app` initially failed with
+# "Couldn't find specified scheme ... make sure the scheme is shared" —
+# `xcrun safari-web-extension-converter` doesn't persist any .xcscheme files,
+# only an implicit one Xcode synthesizes on the fly that non-interactive
+# builds can't see. scripts/package-safari.sh now generates real, shared
+# scheme files for both app targets to fix this. The iOS lane below hasn't
+# been run for real yet (no test device/TestFlight group to point it at) —
+# same scheme-generation fix applies, but confirm IOS_SCHEME still matches
+# your project (`xcodebuild -list -project ...`) before relying on it.
+
+default_platform(:mac)
+
+PROJECT = ENV["NOVEL_TRACKER_XCODE_PROJECT"] ||
+  File.expand_path("../../build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj", __dir__)
+
+# `xcrun safari-web-extension-converter` names each platform's app target
+# scheme after the --app-name passed in scripts/package-safari.sh
+# ("Novel Tracker"), suffixed with the platform. Override if your generated
+# project uses different scheme names.
+MAC_SCHEME = ENV["NOVEL_TRACKER_XCODE_SCHEME"] || "Novel Tracker (macOS)"
+IOS_SCHEME = ENV["NOVEL_TRACKER_IOS_XCODE_SCHEME"] || "Novel Tracker (iOS)"
+
+def connect_api_key
+  app_store_connect_api_key(
+    key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+    issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+    key_content: ENV.fetch("APP_STORE_CONNECT_P8"),
+    is_key_content_base64: false
+  )
+end
+
+platform :mac do
+  desc "Archive and upload the macOS Safari extension app to App Store Connect"
+  lane :release do
+    connect_api_key
+
+    build_app(
+      project: PROJECT,
+      scheme: MAC_SCHEME,
+      export_method: "app-store",
+      output_directory: File.expand_path("../../../release", __dir__)
+    )
+
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: true,
+      submit_for_review: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end
+
+platform :ios do
+  desc "Archive and upload the iOS Safari extension app to TestFlight"
+  lane :release do
+    connect_api_key
+
+    build_app(
+      project: PROJECT,
+      scheme: IOS_SCHEME,
+      export_method: "app-store",
+      output_directory: File.expand_path("../../../release", __dir__)
+    )
+
+    # TestFlight, not a direct App Store submission — matches how this app
+    # has been distributed on iOS so far (manually, through Xcode/TestFlight).
+    # Internal testers only by default; widen with distribute_external: true
+    # once there's an external testing group set up in App Store Connect.
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      distribute_external: false
+    )
+  end
+end
