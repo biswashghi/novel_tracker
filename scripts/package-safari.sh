@@ -241,6 +241,7 @@ node --input-type=module -e '
   const projectPath = process.argv[1];
   const teamID = process.argv[2];
   const marketingVersion = process.argv[3];
+  const buildNumber = process.argv[4];
 
   let project = await readFile(projectPath, "utf8");
 
@@ -374,6 +375,36 @@ node --input-type=module -e '
     );
   }
 
+  // -----------------------------------------------------------------------
+  // Build number (docs/release.md — Versioning)
+  // -----------------------------------------------------------------------
+  //
+  // MARKETING_VERSION alone is not enough: App Store Connect requires
+  // uniqueness on the *pair* (MARKETING_VERSION, CURRENT_PROJECT_VERSION),
+  // and TestFlight specifically expects you to upload several builds under
+  // one still-unreleased marketing version while iterating on beta
+  // feedback — reusing the marketing version across those uploads is the
+  // intended workflow, not a bug to work around. `git rev-list --count
+  // HEAD` gives a deterministic, always-increasing build number
+  // independent of the marketing version, so repeat uploads keep working
+  // without a package.json bump each time.
+
+  let buildNumberReplacements = 0;
+
+  project = project.replace(
+    /CURRENT_PROJECT_VERSION = [^;]+;/g,
+    () => {
+      buildNumberReplacements += 1;
+      return `CURRENT_PROJECT_VERSION = ${buildNumber};`;
+    }
+  );
+
+  if (buildNumberReplacements === 0) {
+    throw new Error(
+      "Could not find any CURRENT_PROJECT_VERSION entries to update"
+    );
+  }
+
   console.log(
     `Set ${deploymentTargetReplacements} macOS deployment target entries to macOS 11.0`
   );
@@ -440,11 +471,18 @@ node --input-type=module -e '
     );
   }
 
+  if (!project.includes(`CURRENT_PROJECT_VERSION = ${buildNumber};`)) {
+    throw new Error(
+      `Build number ${buildNumber} was not written to the Xcode project`
+    );
+  }
+
   await writeFile(projectPath, project);
 ' \
   "$xcode_project" \
   "$apple_team_id" \
-  "$(node -p "require('$root_dir/package.json').version")"
+  "$(node -p "require('$root_dir/package.json').version")" \
+  "$(cd "$root_dir" && git rev-list --count HEAD)"
 
 echo "Configured Xcode project:"
 echo "  Apple team:        $apple_team_id"
@@ -452,6 +490,7 @@ echo "  Signing:           Automatic"
 echo "  macOS minimum:     11.0"
 echo "  macOS networking:  Enabled"
 echo "  App version:       $(node -p "require('$root_dir/package.json').version")"
+echo "  Build number:      $(cd "$root_dir" && git rev-list --count HEAD)"
 
 # ---------------------------------------------------------------------------
 # Show resulting configuration

@@ -91,6 +91,16 @@ Development, build, packaging, and platform-specific testing instructions (inclu
 5. Select the generated `dist/` folder.
 6. After code or manifest changes, click `Reload` on the unpacked extension.
 
+## Versioning
+
+`package.json`'s `version` is the single release identity across all four
+stores (Chrome, Firefox, Safari macOS, Safari iOS) — bump it with `npm
+version patch|minor|major`, never by hand. Apple additionally needs a
+separate, always-increasing build number, which is derived automatically
+and never touched by hand either. See [AGENTS.md](AGENTS.md) and
+[docs/release.md](docs/release.md) for the full convention and release
+process.
+
 ## Manual Release Test Checklist
 
 Before submitting a public Chrome Web Store release:

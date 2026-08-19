@@ -1,0 +1,48 @@
+# Agent notes
+
+## Versioning
+
+This extension ships to four stores (Chrome Web Store, Firefox AMO, Safari
+macOS App Store, Safari iOS TestFlight/App Store) from one version number,
+plus a separate build number Apple's ecosystem specifically needs. Don't
+hand-edit version fields in any of the generated Chrome/Firefox manifests or
+the Safari Xcode project — they're all derived automatically from the two
+sources below.
+
+**`package.json`'s `version`** (semver `MAJOR.MINOR.PATCH`) is the single
+release identity across all four stores:
+
+- `scripts/build.mjs` writes it into `manifest.json` for Chrome and Firefox.
+- `scripts/package-safari.sh` writes it into `MARKETING_VERSION`
+  (`CFBundleShortVersionString`) for both the macOS and iOS Safari targets.
+
+Bump it with `npm version patch|minor|major`, never by hand — that command
+also creates the matching `vX.Y.Z` git tag, and pushing that tag
+(`git push --follow-tags`) is what triggers `.github/workflows/release.yml`.
+See [docs/release.md](docs/release.md) for the full release runbook.
+
+**Apple's build number** (`CURRENT_PROJECT_VERSION`) is `git rev-list
+--count HEAD` — the commit count on the current branch, patched in by
+`scripts/package-safari.sh` on every `npm run package:safari`. This exists
+because Chrome and Firefox each only care about their single version string
+being new and strictly increasing (which a `package.json` bump already
+guarantees), but App Store Connect requires uniqueness on the *pair*
+(`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`) — and TestFlight is
+specifically designed to let you upload several builds under one
+still-unreleased marketing version while iterating on beta feedback, only
+bumping the build number each time. The marketing version only changes for a
+new release cycle (a fresh `npm version` bump); reusing it across TestFlight
+iterations of the same release is the intended Apple workflow, not something
+to work around.
+
+**Why `git rev-list --count HEAD` specifically**: deterministic (the same
+commit always produces the same build number, so a TestFlight build can be
+traced back to exact source) and monotonically increasing as long as history
+on the branch stays linear, which holds for how this repo is worked.
+
+**TestFlight vs. "live"**: a given release's marketing version is identical
+across every distribution channel — the TestFlight build a beta tester
+installs and the eventual App Store / Chrome Web Store / AMO submission for
+that same release carry the same `package.json` version. Only Apple's build
+number iterates in between; there's no separate "beta" version scheme to
+maintain.

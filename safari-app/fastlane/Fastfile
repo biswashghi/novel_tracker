@@ -12,16 +12,26 @@
 # before this lane's upload has anywhere to land. From then on, this lane is
 # what a release build runs.
 #
-# Verified locally against a real signed Xcode project and real App Store
-# Connect credentials (macOS lane): `build_app` initially failed with
-# "Couldn't find specified scheme ... make sure the scheme is shared" —
-# `xcrun safari-web-extension-converter` doesn't persist any .xcscheme files,
-# only an implicit one Xcode synthesizes on the fly that non-interactive
-# builds can't see. scripts/package-safari.sh now generates real, shared
-# scheme files for both app targets to fix this. The iOS lane below hasn't
-# been run for real yet (no test device/TestFlight group to point it at) —
-# same scheme-generation fix applies, but confirm IOS_SCHEME still matches
-# your project (`xcodebuild -list -project ...`) before relying on it.
+# Verified against real signed Xcode projects and real App Store Connect
+# credentials, both locally and in CI (macos-latest):
+# - `build_app` initially failed with "Couldn't find specified scheme ...
+#   make sure the scheme is shared" — `xcrun safari-web-extension-converter`
+#   doesn't persist any .xcscheme files, only an implicit one Xcode
+#   synthesizes on the fly that non-interactive builds can't see.
+#   scripts/package-safari.sh now generates real, shared scheme files for
+#   both app targets to fix this.
+# - CI-only failure (a personal dev machine already has a cached signing
+#   identity from ordinary Xcode use; a fresh CI runner has none): "No
+#   profiles ... Automatic signing is disabled and unable to generate a
+#   profile. To enable automatic signing, pass -allowProvisioningUpdates to
+#   xcodebuild." `-allowProvisioningUpdates` below lets xcodebuild use the
+#   App Store Connect API key already passed to provision on demand instead
+#   of requiring a pre-existing local certificate.
+# - iOS lane confirmed working end-to-end for real (a real TestFlight
+#   upload). macOS lane confirmed through archive/export/signing; the
+#   upload itself can still be blocked independently by App Store Connect
+#   account state (e.g. an existing version sitting on unresolved review
+#   feedback) — that's Apple's process, not something this lane can bypass.
 
 default_platform(:mac)
 
@@ -53,7 +63,8 @@ platform :mac do
       project: PROJECT,
       scheme: MAC_SCHEME,
       export_method: "app-store",
-      output_directory: File.expand_path("../../../release", __dir__)
+      output_directory: File.expand_path("../../../release", __dir__),
+      xcargs: "-allowProvisioningUpdates"
     )
 
     upload_to_app_store(
@@ -75,7 +86,8 @@ platform :ios do
       project: PROJECT,
       scheme: IOS_SCHEME,
       export_method: "app-store",
-      output_directory: File.expand_path("../../../release", __dir__)
+      output_directory: File.expand_path("../../../release", __dir__),
+      xcargs: "-allowProvisioningUpdates"
     )
 
     # TestFlight, not a direct App Store submission — matches how this app

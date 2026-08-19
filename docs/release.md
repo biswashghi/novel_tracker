@@ -1,5 +1,29 @@
 # Release runbook
 
+## Versioning
+
+One version number, `package.json`'s `version` (semver), is the release
+identity across all four stores — Chrome and Firefox each get it as their
+`manifest.json` version, and both Safari targets (macOS, iOS) get it as
+`MARKETING_VERSION`. All of that is derived automatically by `build.mjs`
+and `package-safari.sh`; never hand-edit a version field in a generated
+manifest or Xcode project directly.
+
+Apple additionally needs a *build number* (`CURRENT_PROJECT_VERSION`),
+which `package-safari.sh` sets to `git rev-list --count HEAD` — independent
+of the marketing version, and always increasing. Chrome and Firefox don't
+have an equivalent concept: each only requires its single version string to
+be new and strictly increasing, which a `package.json` bump already
+guarantees on its own. Apple's App Store Connect instead requires
+uniqueness on the *pair* (marketing version, build number) — and TestFlight
+specifically expects you to upload multiple builds under one
+still-unreleased marketing version while iterating on beta feedback, only
+the build number changing between those uploads. That same marketing
+version then carries through unchanged to the eventual App Store
+submission — there's no separate beta-version scheme, just the ordinary
+`package.json` version plus a build number that happens to change more
+often. See [AGENTS.md](../AGENTS.md) for the fuller rationale.
+
 ## Cutting a release
 
 Every build/package script reads its version from `package.json`, and
