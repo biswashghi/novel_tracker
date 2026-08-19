@@ -1,0 +1,192 @@
+name: Release automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_to_stores:
+        description: Publish to Chrome, Firefox, and Safari after successful packaging
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+      - '*.*.*'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+  build-chrome:
+    name: Chrome package
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Chrome package
+        run: |
+          npm run build
+          npm run package:webstore
+
+      - name: Upload Chrome artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-package
+          path: release/*.zip
+          if-no-files-found: error
+
+  build-firefox:
+    name: Firefox package
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Firefox package
+        run: |
+          npm run build:firefox
+          npm run package:firefox
+
+      - name: Upload Firefox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-package
+          path: release/*.zip
+          if-no-files-found: error
+
+  # `secrets` cannot be referenced inside any `if:` conditional — job-level
+  # or step-level (actionlint flags this; GitHub's context-availability
+  # table excludes `secrets` from both). This job resolves presence into
+  # plain job outputs once, which downstream jobs/steps *can* read via
+  # `needs.check-secrets.outputs.*` inside their own `if:`.
+  #
+  # Safari/App Store Connect publishing (build-safari, publish-safari, and
+  # this job's `safari` output) is intentionally not wired up yet — it's
+  # being finished separately. Chrome and Firefox don't depend on it.
+  check-secrets:
+    name: Check publish secrets
+    runs-on: ubuntu-latest
+    outputs:
+      chrome: ${{ steps.check.outputs.chrome }}
+      firefox: ${{ steps.check.outputs.firefox }}
+    steps:
+      - name: Check which store secrets are configured
+        id: check
+        env:
+          CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
+          CHROME_WEB_STORE_CLIENT_ID: ${{ secrets.CHROME_WEB_STORE_CLIENT_ID }}
+          CHROME_WEB_STORE_CLIENT_SECRET: ${{ secrets.CHROME_WEB_STORE_CLIENT_SECRET }}
+          CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          chrome=false
+          if [[ -n "$CHROME_WEB_STORE_EXTENSION_ID" && -n "$CHROME_WEB_STORE_CLIENT_ID" && -n "$CHROME_WEB_STORE_CLIENT_SECRET" && -n "$CHROME_WEB_STORE_REFRESH_TOKEN" ]]; then
+            chrome=true
+          fi
+
+          firefox=false
+          if [[ -n "$AMO_API_KEY" && -n "$AMO_API_SECRET" ]]; then
+            firefox=true
+          fi
+
+          {
+            echo "chrome=$chrome"
+            echo "firefox=$firefox"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish to stores
+    needs:
+      - build-chrome
+      - build-firefox
+      - check-secrets
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Resolve release ZIP paths
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHROME_ZIP=$(find release-artifacts/chrome-package -name '*.zip' -print -quit)
+          FIREFOX_ZIP=$(find release-artifacts/firefox-package -name '*.zip' -print -quit)
+
+          [[ -n "$CHROME_ZIP" ]] || { echo 'Chrome ZIP not found'; exit 1; }
+          [[ -n "$FIREFOX_ZIP" ]] || { echo 'Firefox ZIP not found'; exit 1; }
+
+          {
+            echo "chrome_zip=$CHROME_ZIP"
+            echo "firefox_zip=$FIREFOX_ZIP"
+          } >> "$GITHUB_OUTPUT"
+
+          ls -l "$CHROME_ZIP" "$FIREFOX_ZIP"
+
+      - name: Publish to Chrome Web Store
+        if: ${{ needs.check-secrets.outputs.chrome == 'true' }}
+        env:
+          CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
+          CHROME_WEB_STORE_CLIENT_ID: ${{ secrets.CHROME_WEB_STORE_CLIENT_ID }}
+          CHROME_WEB_STORE_CLIENT_SECRET: ${{ secrets.CHROME_WEB_STORE_CLIENT_SECRET }}
+          CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
+        run: node scripts/publish-chrome.mjs "${{ steps.release.outputs.chrome_zip }}"
+
+      - name: Publish to Firefox AMO
+        if: ${{ needs.check-secrets.outputs.firefox == 'true' }}
+        env:
+          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: node scripts/publish-firefox.mjs "${{ steps.release.outputs.firefox_zip }}"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.release.outputs.chrome_zip }}
+            ${{ steps.release.outputs.firefox_zip }}

@@ -1,10 +1,11 @@
 import { getStorageLocal } from "./extension-api.js";
 import { getAuthPlatform } from "./auth-platform.js";
 import { platformFetch } from "./platform-http.js";
+import { AUTH_IDP_HINT, AUTH_ISSUER } from "./config.js";
 
 export const AUTH_STORAGE_KEY = "novel-tracker:auth";
 export const AUTH_CONFIG = Object.freeze({
-  issuer: "https://auth.novel.bghimire.com/realms/novel-tracker",
+  issuer: AUTH_ISSUER,
   clientId: "novel-tracker-extension",
   scopes: "openid profile email offline_access"
 });
@@ -149,7 +150,7 @@ export async function signIn({ hasLocalData = false } = {}) {
     const verifier = randomValue(64);
     const state = randomValue(24);
     const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
-    authorize.search = new URLSearchParams({
+    const authorizeParams = {
       client_id: AUTH_CONFIG.clientId,
       redirect_uri: redirectUri,
       response_type: "code",
@@ -157,9 +158,10 @@ export async function signIn({ hasLocalData = false } = {}) {
       state,
       nonce: randomValue(24),
       code_challenge: await sha256(verifier),
-      code_challenge_method: "S256",
-      kc_idp_hint: "google"
-    }).toString();
+      code_challenge_method: "S256"
+    };
+    if (AUTH_IDP_HINT) authorizeParams.kc_idp_hint = AUTH_IDP_HINT;
+    authorize.search = new URLSearchParams(authorizeParams).toString();
 
     const callbackUrl = new URL(await platform.authorize(authorize.toString()));
     if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");

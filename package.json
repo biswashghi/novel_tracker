@@ -14,14 +14,20 @@
     "build": "node scripts/build.mjs",
     "build:firefox": "node scripts/build.mjs --target=firefox",
     "build:safari": "node scripts/build.mjs --target=safari",
+    "build:e2e": "node scripts/build.mjs --env=local",
     "package:safari": "bash scripts/package-safari.sh",
     "package:firefox": "node scripts/package-firefox.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "store:assets": "node scripts/generate-store-assets.mjs",
     "package:webstore": "node scripts/package-webstore.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "e2e:stack:up": "node scripts/e2e-stack.mjs up",
+    "e2e:stack:down": "node scripts/e2e-stack.mjs down"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.1",
     "esbuild": "^0.28.2"
   }
 }

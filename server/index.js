@@ -14,7 +14,16 @@ const { Pool } = pg;
 const database = new Pool({ connectionString: process.env.DATABASE_URL });
 const issuer = process.env.KEYCLOAK_ISSUER;
 const audience = process.env.KEYCLOAK_AUDIENCE;
-const jwks = issuer ? createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`)) : null;
+// KEYCLOAK_JWKS_URL lets the signing-key fetch target a different address
+// than `issuer` (which must equal tokens' exact `iss` claim). Needed for the
+// local e2e stack: Keycloak's issuer has to be the host-reachable
+// http://localhost:8793 the browser used to sign in, but that address is
+// meaningless from inside the API container's own network namespace — it
+// has to reach Keycloak via the compose network's http://keycloak:8080
+// instead. Production only sets KEYCLOAK_ISSUER, so this defaults to the
+// prior behavior there.
+const jwksUrl = process.env.KEYCLOAK_JWKS_URL || (issuer ? `${issuer}/protocol/openid-connect/certs` : null);
+const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const app = Fastify({ logger: true, bodyLimit: 1024 * 1024 });
 const MAX_MUTATIONS_PER_BATCH = 500;
 const SYNC_PAGE_SIZE = 1000;

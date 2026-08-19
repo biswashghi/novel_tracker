@@ -3,8 +3,12 @@ dist-firefox/
 dist-safari/
 release/**
 !docs/release/
-safari-app/
 node_modules/
 *.log
 .DS_Store
 build/
+.env
+.env.*
+test-results/
+playwright-report/
+notes.txt

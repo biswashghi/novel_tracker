@@ -1,0 +1,67 @@
+{
+  "realm": "novel-tracker",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "novel-tracker-api",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": false
+    },
+    {
+      "clientId": "novel-tracker-extension",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "https://noveltracker.app/oauth/callback",
+        "noveltracker://oauth/callback",
+        "http://127.0.0.1/mozoauth2/*",
+        "https://*.extensions.allizom.org/*",
+        "https://*.chromiumapp.org/*",
+        "*"
+      ],
+      "webOrigins": ["+"],
+      "protocolMappers": [
+        {
+          "name": "novel-tracker-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "novel-tracker-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [],
+  "users": [
+    {
+      "username": "e2e-tester",
+      "email": "e2e-tester@example.com",
+      "firstName": "E2E",
+      "lastName": "Tester",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "realmRoles": ["offline_access", "default-roles-novel-tracker"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "novel-tracker-e2e-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

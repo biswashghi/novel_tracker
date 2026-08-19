@@ -11,6 +11,9 @@ Run the unit tests:
 npm test
 ```
 
+Run the e2e suite (loads the real packaged extension in Chromium): see
+[testing-locally.md](testing-locally.md) for the full local-stack runbook.
+
 ### Build
 
 Build the unpacked extension for all supported platforms:
@@ -46,7 +49,10 @@ The upload package is written to `release/novel-tracker-extension-<version>.zip`
 ### Testing in Safari (macOS)
 
 1. Run `npm run build:safari` to generate the Safari build artifacts in `dist-safari/`.
-2. Open the Xcode project at `safari-app/Novel Tracker/Novel Tracker.xcodeproj`.
+2. Open the Xcode project at `build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj`
+   (generated fresh by `npm run package:safari`/`scripts/package-safari.sh`, which
+   reuses this same directory across runs so your Developer Team and signing
+   settings aren't lost).
 3. In Xcode select the containing app scheme (the macOS app that bundles the
    Safari Web Extension) and run on your Mac.
 4. In Safari, enable the extension in `Safari > Settings > Extensions` (or
@@ -60,7 +66,7 @@ Notes:
 ### Testing on iOS (iPhone/iPad)
 
 1. Connect a physical iPhone or iPad to your Mac.
-2. Open `safari-app/Novel Tracker/Novel Tracker.xcodeproj` in Xcode.
+2. Open `build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj` in Xcode.
 3. Select a device target (your connected iPhone/iPad) and run the containing
    app. This installs the app and the embedded Safari Web Extension on the
    device.

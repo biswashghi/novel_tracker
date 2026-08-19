@@ -3,9 +3,9 @@ import { platformFetch } from "./platform-http.js";
 import { getStorageLocal } from "./extension-api.js";
 import { disconnectSyncAccount, getSyncState, prepareSyncForAccount, saveSyncState } from "./storage.js";
 import { SyncClient } from "./sync-client.js";
+import { API_BASE_URL } from "./config.js";
 
 export const SYNC_META_KEY = "novel-tracker:sync-meta";
-const API_BASE_URL = "https://api.novel.bghimire.com";
 
 export function createQueuedTask(task) {
   let activeTask = null;

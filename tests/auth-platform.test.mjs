@@ -20,24 +20,54 @@ test("web extension identity adapter is preferred when available", async () => {
   assert.deepEqual(calls, [{ url: "https://auth.test", interactive: true }]);
 });
 
-test("Safari adapter uses native OAuth and shared session messages", async () => {
+test("Chrome and Firefox platform adapters reject unsupported browsers", () => {
+  assert.throws(() => getAuthPlatform({}), /This browser does not provide an interactive authentication adapter/);
+  assert.throws(() => getAuthPlatform({ identity: { getRedirectURL: () => "https://example.test/oauth2" } }), /This browser does not provide an interactive authentication adapter/);
+});
+
+test("Safari native adapter uses the correct native app ID and callback contract", async () => {
   const messages = [];
   const platform = getAuthPlatform({
     runtime: {
-      sendNativeMessage(_app, message, callback) {
-        messages.push(message);
-        callback(message.type === "novel-tracker.oauth.authorize"
-          ? { callbackUrl: "noveltracker://oauth/callback?code=ok" }
-          : message.type === "novel-tracker.auth.get" ? { session: { accessToken: "token" } } : {});
+      sendNativeMessage(applicationId, message, callback) {
+        messages.push({ applicationId, message });
+        if (typeof callback === "function") {
+          callback(message.type === "novel-tracker.oauth.authorize"
+            ? { callbackUrl: "noveltracker://oauth/callback?code=ok" }
+            : message.type === "novel-tracker.auth.get" ? { session: { accessToken: "token" } } : {});
+        }
+        return Promise.resolve(message.type === "novel-tracker.auth.get"
+          ? { session: { accessToken: "token" } }
+          : {});
       }
     }
   });
+
   assert.equal(platform.kind, "safari-native");
+  assert.equal(messages.length, 0);
   assert.equal(await platform.authorize("https://auth.test"), "noveltracker://oauth/callback?code=ok");
   assert.deepEqual(await platform.sharedSession(), { accessToken: "token" });
   await platform.storeSharedSession({ accessToken: "next" });
   await platform.clearSharedSession();
-  assert.deepEqual(messages.map(({ type }) => type), [
-    "novel-tracker.oauth.authorize", "novel-tracker.auth.get", "novel-tracker.auth.store", "novel-tracker.auth.clear"
+
+  assert.deepEqual(messages.map(({ applicationId, message }) => ({ applicationId, type: message.type })), [
+    { applicationId: "app.noveltracker.extension", type: "novel-tracker.oauth.authorize" },
+    { applicationId: "app.noveltracker.extension", type: "novel-tracker.auth.get" },
+    { applicationId: "app.noveltracker.extension", type: "novel-tracker.auth.store" },
+    { applicationId: "app.noveltracker.extension", type: "novel-tracker.auth.clear" }
   ]);
+});
+
+test("Safari native adapter propagates native errors and rejects missing callback values", async () => {
+  const platform = getAuthPlatform({
+    runtime: {
+      sendNativeMessage(_applicationId, message, callback) {
+        if (typeof callback === "function") callback({ error: "bad auth" });
+        return Promise.resolve({ error: "bad auth" });
+      }
+    }
+  });
+
+  await assert.rejects(() => platform.authorize("https://auth.test"), /bad auth/);
+  await assert.rejects(() => platform.sharedSession(), /bad auth/);
 });
