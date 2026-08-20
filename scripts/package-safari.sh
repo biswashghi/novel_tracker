@@ -239,6 +239,37 @@ fi
 echo "Configured macOS App Store category"
 
 # ---------------------------------------------------------------------------
+# Export compliance
+# ---------------------------------------------------------------------------
+#
+# Every App Store Connect build needs an encryption-usage declaration
+# before testers/reviewers can access it — confirmed the hard way: an
+# uploaded build sat on "Missing Compliance" until this was answered
+# manually in the web UI, which isn't viable for an automated pipeline. The
+# app only uses standard HTTPS (`fetch`) for its own network calls, no
+# proprietary/non-standard cryptography, so it qualifies for the standard
+# U.S. export exemption. Declaring that directly in each app's Info.plist
+# (Apple's own documented way to skip the manual question) answers it for
+# every future upload instead of just this one.
+
+for app_info in "$ios_app_info" "$macos_app_info"; do
+  if /usr/libexec/PlistBuddy \
+      -c 'Print :ITSAppUsesNonExemptEncryption' \
+      "$app_info" >/dev/null 2>&1
+  then
+    /usr/libexec/PlistBuddy \
+      -c 'Set :ITSAppUsesNonExemptEncryption false' \
+      "$app_info"
+  else
+    /usr/libexec/PlistBuddy \
+      -c 'Add :ITSAppUsesNonExemptEncryption bool false' \
+      "$app_info"
+  fi
+done
+
+echo "Declared standard-encryption-only export compliance"
+
+# ---------------------------------------------------------------------------
 # Patch generated Xcode project
 #
 # - attach entitlement files

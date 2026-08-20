@@ -68,6 +68,15 @@ Notes:
   to `1.0` on every regeneration. `npm run package:safari` overwrites it with
   `package.json`'s version — otherwise every App Store Connect upload
   collides with whatever version was previously uploaded.
+- Every App Store Connect build needs an export-compliance (encryption
+  usage) declaration before testers/reviewers can access it — confirmed the
+  hard way: an uploaded build sat on "Missing Compliance" until answered
+  manually in the web UI, which doesn't work for an automated pipeline. The
+  app only uses standard HTTPS (`fetch`), no proprietary cryptography, so
+  it qualifies for the standard export exemption. `npm run package:safari`
+  sets `ITSAppUsesNonExemptEncryption = false` in both the iOS and macOS
+  app Info.plist files to declare that upfront and skip the manual prompt
+  on every future upload.
 - The Safari build removes the unsupported WebExtension identity permission,
   bundles its background worker as a classic script, and configures a shared
   Keychain group for the app and extension.
