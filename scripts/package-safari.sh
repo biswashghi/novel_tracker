@@ -5,8 +5,21 @@ apple_team_id="3LQK7JJTX2"
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
+# .github/workflows/pr.yml sets this to keep PR validation builds clearly
+# distinct from a real release's version (see AGENTS.md — Versioning).
+# Empty/unset in the normal release path, where package.json's own version
+# is used as-is.
+marketing_version="${NOVEL_TRACKER_VERSION_OVERRIDE:-$(node -p "require('$root_dir/package.json').version")}"
+
 echo "Building Safari extension..."
-npm --prefix "$root_dir" run build:safari
+# Not `build_args=(); ...; "${build_args[@]}"` — expanding an empty array
+# under `set -u` throws "unbound variable" on bash < 4.4, which is what
+# macOS ships by default (3.2, frozen there for licensing reasons).
+if [[ -n "${NOVEL_TRACKER_VERSION_OVERRIDE:-}" ]]; then
+  npm --prefix "$root_dir" run build:safari -- "--version-override=$NOVEL_TRACKER_VERSION_OVERRIDE"
+else
+  npm --prefix "$root_dir" run build:safari
+fi
 
 # Safari extension staging can remain temporary.
 stage_dir="$(mktemp -d /tmp/novel-tracker-safari-extension.XXXXXX)"
@@ -481,7 +494,7 @@ node --input-type=module -e '
 ' \
   "$xcode_project" \
   "$apple_team_id" \
-  "$(node -p "require('$root_dir/package.json').version")" \
+  "$marketing_version" \
   "$(cd "$root_dir" && git rev-list --count HEAD)"
 
 echo "Configured Xcode project:"
@@ -489,7 +502,7 @@ echo "  Apple team:        $apple_team_id"
 echo "  Signing:           Automatic"
 echo "  macOS minimum:     11.0"
 echo "  macOS networking:  Enabled"
-echo "  App version:       $(node -p "require('$root_dir/package.json').version")"
+echo "  App version:       $marketing_version"
 echo "  Build number:      $(cd "$root_dir" && git rev-list --count HEAD)"
 
 # ---------------------------------------------------------------------------

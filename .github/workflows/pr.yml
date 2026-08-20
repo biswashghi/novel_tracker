@@ -1,0 +1,143 @@
+name: PR validation
+
+# Validates that every platform still builds and tests pass — never
+# publishes anywhere, so it doesn't need any store credentials. Runs with a
+# version distinct from package.json's real version (see AGENTS.md —
+# Versioning and the `version` job below) so a PR build can never be
+# confused with, or collide with, a real release.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+  version:
+    name: Compute PR build version
+    runs-on: ubuntu-latest
+    outputs:
+      version_override: ${{ steps.compute.outputs.version_override }}
+      version_name: ${{ steps.compute.outputs.version_name }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compute version
+        id: compute
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_version="$(node -p "require('./package.json').version")"
+          # Chrome/Firefox manifest.version must stay dot-separated integers
+          # only (no letters/hyphens) — the run number as a 4th component
+          # keeps every run on this PR distinct without breaking that
+          # format. version_name is Chrome's separate free-text field.
+          {
+            echo "version_override=${base_version}.${{ github.run_number }}"
+            echo "version_name=${base_version}-pr${{ github.event.pull_request.number }}"
+          } >> "$GITHUB_OUTPUT"
+
+  build-chrome:
+    name: Chrome package
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Chrome package
+        run: node scripts/package-webstore.mjs --version-override="${{ needs.version.outputs.version_override }}" --version-name="${{ needs.version.outputs.version_name }}"
+
+      - name: Upload Chrome artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-package-pr${{ github.event.pull_request.number }}
+          path: release/*.zip
+          if-no-files-found: error
+
+  build-firefox:
+    name: Firefox package
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Firefox package
+        run: node scripts/package-firefox.mjs --version-override="${{ needs.version.outputs.version_override }}"
+
+      - name: Upload Firefox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefox-package-pr${{ github.event.pull_request.number }}
+          path: release/*.zip
+          if-no-files-found: error
+
+  build-safari:
+    name: Safari package
+    needs: [test, version]
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Safari package
+        env:
+          NOVEL_TRACKER_VERSION_OVERRIDE: ${{ needs.version.outputs.version_override }}
+        run: npm run package:safari
+
+      - name: Upload Safari artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safari-package-pr${{ github.event.pull_request.number }}
+          path: release/*.zip
+          if-no-files-found: error

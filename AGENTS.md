@@ -46,3 +46,28 @@ installs and the eventual App Store / Chrome Web Store / AMO submission for
 that same release carry the same `package.json` version. Only Apple's build
 number iterates in between; there's no separate "beta" version scheme to
 maintain.
+
+### PR builds
+
+`.github/workflows/pr.yml` builds and validates all four platforms on every
+PR (never publishes — no store credentials involved) with a version that's
+deliberately never `package.json`'s real value, so a PR build can't be
+confused with, or collide with, an actual release:
+
+- `manifest.version` (Chrome/Firefox): `<package.json version>.<CI run
+  number>`, e.g. `0.3.4.147` — has to stay in that dot-separated-integers
+  form (Chrome/Firefox both reject letters or hyphens there), and the run
+  number keeps every rebuild of the same PR distinct too.
+- Chrome's separate free-text `version_name` field carries the
+  human-readable form instead: `0.3.4-pr42`.
+- Safari's `MARKETING_VERSION` gets the same `<version>.<run number>` value
+  as Chrome/Firefox, for consistency.
+
+Implemented via `--version-override`/`--version-name` flags on
+`scripts/build.mjs`, threaded through `scripts/package-webstore.mjs` and
+`scripts/package-firefox.mjs` (both also re-run `build.mjs` internally, so
+without forwarding the override there too it would silently get discarded),
+and `NOVEL_TRACKER_VERSION_OVERRIDE` for `scripts/package-safari.sh`.
+Omitting all of these (the normal release path) falls back to
+`package.json`'s real version exactly as before — nothing about a normal
+`npm run build`/`package:safari` changed.

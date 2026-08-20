@@ -18,16 +18,27 @@ function run(command, args, cwd = root) {
   });
 }
 
-await run(process.execPath, [path.join(root, "scripts", "build.mjs"), "--target=firefox"]);
+// .github/workflows/pr.yml passes --version-override through to keep PR
+// validation builds distinct from a real release's version (see AGENTS.md
+// — Versioning); production packaging gets neither and uses pkg.version as
+// before. Forwarded to build.mjs, which does the actual substitution —
+// without it, this script's own internal build.mjs call below would
+// silently redo the build with the production version.
+const versionOverride = process.argv.find((argument) => argument.startsWith("--version-override="))?.split("=")[1];
+const effectiveVersion = versionOverride || pkg.version;
+
+const buildArgs = [path.join(root, "scripts", "build.mjs"), "--target=firefox"];
+if (versionOverride) buildArgs.push(`--version-override=${versionOverride}`);
+await run(process.execPath, buildArgs);
 
 const manifest = JSON.parse(await readFile(path.join(distDir, "manifest.json"), "utf8"));
 const gecko = manifest.browser_specific_settings?.gecko;
-if (manifest.version !== pkg.version) throw new Error("Firefox manifest version does not match package version");
+if (manifest.version !== effectiveVersion) throw new Error(`Firefox manifest version ${manifest.version} does not match expected version ${effectiveVersion}`);
 if (gecko?.id !== "novel-tracker@bghimire.com") throw new Error("Firefox package is missing its stable add-on ID");
 if (!manifest.browser_specific_settings?.gecko_android) throw new Error("Firefox Android compatibility is not declared");
 
 await mkdir(releaseDir, { recursive: true });
-const zipPath = path.join(releaseDir, `${pkg.name}-firefox-${pkg.version}.zip`);
+const zipPath = path.join(releaseDir, `${pkg.name}-firefox-${effectiveVersion}.zip`);
 await rm(zipPath, { force: true });
 await run("zip", ["-r", zipPath, ".", "-x", "*.DS_Store", "__MACOSX/*"], distDir);
 

@@ -8,6 +8,14 @@ const root = path.resolve(__dirname, "..");
 const srcDir = path.join(root, "src");
 const target = process.argv.find((argument) => argument.startsWith("--target="))?.split("=")[1] || "chrome";
 const env = process.argv.find((argument) => argument.startsWith("--env="))?.split("=")[1] || "production";
+// PR builds (.github/workflows/pr.yml) use these to keep validation builds
+// clearly distinct from a real release's version — see AGENTS.md
+// (Versioning). --version-override replaces manifest.version outright
+// (must stay Chrome/Firefox-manifest-valid: up to four dot-separated
+// integers, no letters/hyphens); --version-name sets Chrome's separate
+// human-readable version_name field, which has no such format restriction.
+const versionOverride = process.argv.find((argument) => argument.startsWith("--version-override="))?.split("=")[1];
+const versionName = process.argv.find((argument) => argument.startsWith("--version-name="))?.split("=")[1];
 const distDir = path.join(root, target === "chrome" ? "dist" : `dist-${target}`);
 
 if (!new Set(["chrome", "firefox", "safari"]).has(target)) {
@@ -55,7 +63,10 @@ export const AUTH_IDP_HINT = "";
 
 const manifestPath = path.join(distDir, "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-manifest.version = pkg.version;
+manifest.version = versionOverride || pkg.version;
+if (versionName && target === "chrome") {
+  manifest.version_name = versionName;
+}
 if (env === "local") {
   manifest.host_permissions = [
     ...(manifest.host_permissions || []),
