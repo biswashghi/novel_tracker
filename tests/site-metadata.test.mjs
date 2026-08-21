@@ -243,3 +243,18 @@ test("extractPageMetadataFromRoot maps Chikari chapters to their canonical serie
   assert.equal(metadata.lastReadChapterLabel, "Chapter 8");
   assert.equal(metadata.coverImageUrl, "https://cdn.chikari.moe/omniscient-reader.webp");
 });
+
+test("extractPageMetadataFromRoot supports Chikari novels reader routes", () => {
+  const root = createRoot({
+    title: "Chapter 1 · Three Days of Happiness"
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://chikari.moe/novels/three-days-of-happiness/1"
+  );
+
+  assert.equal(metadata.title, "Three Days of Happiness");
+  assert.equal(metadata.novelHomeUrl, "https://chikari.moe/novels/three-days-of-happiness");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1");
+});

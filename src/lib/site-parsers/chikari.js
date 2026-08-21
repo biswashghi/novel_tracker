@@ -3,7 +3,8 @@
     id: "chikari",
     hostnames: ["chikari.moe"],
     parse({ core, root, segments, url, ogImage, ogTitle }) {
-      if (segments[0] !== "series" || segments.length < 3) {
+      const collection = segments[0];
+      if ((collection !== "series" && collection !== "novels") || segments.length < 3) {
         return null;
       }
 
@@ -33,7 +34,7 @@
           core.usefulText(core.firstText(root, ["[data-series-title]", ".series-title"]), "chikari.moe") ||
           core.usefulText(titleFromPage, "chikari.moe") ||
           core.titleCaseFromSlug(seriesSlug),
-        novelHomeUrl: core.normalizePathUrl(url.toString(), `/series/${seriesSlug}`),
+        novelHomeUrl: core.normalizePathUrl(url.toString(), `/${collection}/${seriesSlug}`),
         lastReadChapterLabel:
           core.usefulText(chapterHeading, "chikari.moe") ||
           (chapterFromPage ? `Chapter ${chapterFromPage}` : "") ||

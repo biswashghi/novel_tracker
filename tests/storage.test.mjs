@@ -160,6 +160,36 @@ test("autoUpdateNovelProgress skips a Patreon home page but accepts the next Pat
   assert.equal(novel.chapterHistory.length, 2);
 });
 
+test("autoUpdateNovelProgress advances Chikari novels reader routes", async () => {
+  globalThis.localStorage.clear();
+
+  await upsertNovel({
+    title: "Three Days of Happiness",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/three-days-of-happiness",
+    lastReadChapterUrl: "https://chikari.moe/novels/three-days-of-happiness/1",
+    lastReadChapterLabel: "Chapter 1",
+    coverImageUrl: "",
+    status: "active"
+  });
+
+  const result = await autoUpdateNovelProgress({
+    title: "Three Days of Happiness",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/three-days-of-happiness",
+    lastReadChapterUrl: "https://chikari.moe/novels/three-days-of-happiness/2",
+    lastReadChapterLabel: "Chapter 2",
+    coverImageUrl: ""
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.reason, "progress-updated");
+
+  const [novel] = await getNovels();
+  assert.equal(novel.lastReadChapterUrl, "https://chikari.moe/novels/three-days-of-happiness/2");
+  assert.equal(novel.chapterHistory.length, 2);
+});
+
 test("upsertNovel keeps Royal Road chapter history on one novel", async () => {
   globalThis.localStorage.clear();
 
@@ -242,6 +272,15 @@ test("upsertNovel updates existing entries for supported smaller chapter sites",
       firstLabel: "Chapter 8 Protagonist (Part 2)",
       nextUrl: "https://chikari.moe/series/omniscient-reader/9",
       nextLabel: "Chapter 9 Protagonist (Part 3)"
+    },
+    {
+      title: "Three Days of Happiness",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/novels/three-days-of-happiness",
+      firstUrl: "https://chikari.moe/novels/three-days-of-happiness/1",
+      firstLabel: "Chapter 1",
+      nextUrl: "https://chikari.moe/novels/three-days-of-happiness/2",
+      nextLabel: "Chapter 2"
     }
   ];
 
@@ -321,6 +360,15 @@ test("autoUpdateNovelProgress ignores non-chapter pages on supported smaller cha
       chapterLabel: "Chapter 8 Protagonist (Part 2)",
       nonChapterUrl: "https://chikari.moe/series/omniscient-reader",
       nonChapterLabel: "Omniscient Reader"
+    },
+    {
+      title: "Three Days of Happiness",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/novels/three-days-of-happiness",
+      chapterUrl: "https://chikari.moe/novels/three-days-of-happiness/1",
+      chapterLabel: "Chapter 1",
+      nonChapterUrl: "https://chikari.moe/novels/three-days-of-happiness",
+      nonChapterLabel: "Three Days of Happiness"
     }
   ];
 
