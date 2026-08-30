@@ -26,7 +26,11 @@ Steps:
 `.github/workflows/release.yml`'s `publish-safari` job (macos-latest, needs
 `build-safari` + `check-secrets`) runs `scripts/publish-safari.mjs`, which
 shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
-`APP_STORE_CONNECT_*` secrets — one lane per platform:
+`APP_STORE_CONNECT_*` secrets — one lane per platform. The job imports the
+Apple Distribution identity from `APPSTORE_CERTIFICATES_FILE_BASE64` and
+`APPSTORE_CERTIFICATES_PASSWORD`, then downloads the matching iOS and macOS
+App Store provisioning profiles for the containing app and extension before
+Fastlane archives them:
 
 - **macOS** (`fastlane mac release`) archives, exports, and uploads to App
   Store Connect as a new unreleased draft version. Does **not** submit for
