@@ -11,6 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
 // infra/docker-compose.yml.
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: ['**/live/**'],
   timeout: 90_000,
   expect: {
     timeout: 15_000,
@@ -29,7 +30,14 @@ export default defineConfig({
   retries: 0,
   reporter: [['list']],
   use: {
-    headless: false,
+    // Headless is fine for extension specs on Chrome's *new* headless mode
+    // (112+), which is the real browser rather than the old headless shell —
+    // --load-extension works there. It only had to be headed under the old
+    // shell, which could not load extensions at all. Verified: all nine specs
+    // pass headless, including the ones that drive Keycloak's real login tab
+    // via chrome.identity.launchWebAuthFlow. Use `npm run test:e2e:headed` to
+    // watch a run.
+    headless: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

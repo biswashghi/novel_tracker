@@ -34,8 +34,10 @@ export function logConsole(target, label) {
 export const test = base.extend({
   context: async ({}, use) => {
     const userDataDir = await mkdtemp(path.join(tmpdir(), 'novel-tracker-e2e-'));
+    // Chrome's new headless mode loads extensions; see playwright.config.js.
+    // --headed is still available via `npm run test:e2e:headed`.
     const context = await chromium.launchPersistentContext(userDataDir, {
-      headless: false,
+      headless: true,
       args: [
         `--disable-extensions-except=${DIST_DIR}`,
         `--load-extension=${DIST_DIR}`,

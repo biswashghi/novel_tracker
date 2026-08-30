@@ -48,6 +48,17 @@ If you only want the local-only specs (no sign-in/sync), `npm run build`
   require the local stack from step 1; they drive Keycloak's own login form
   for the seeded test user (`chrome.identity.launchWebAuthFlow` opens it as a
   real browser tab, which Playwright can interact with).
+- `tests/server-sync-api.test.mjs` — a plain `npm test` suite (no Playwright)
+  that exercises `server/index.js` over HTTP: acknowledgements, per-item
+  rejections, batch limits, and the shape of the canonical state blob. It
+  **skips itself** when the stack isn't running, so `npm test` stays green
+  without Docker; bring the stack up (step 1) to actually run it.
+
+  It authenticates headlessly with the OAuth password grant, which is why
+  `infra/keycloak-realm.e2e.json` sets `directAccessGrantsEnabled: true`.
+  That is the **local throwaway realm only** — `infra/keycloak-realm.json`
+  (production) keeps the grant disabled, and the extension itself never uses
+  it, only authorization-code PKCE.
 
 ## Why the real extension still stubs one thing
 

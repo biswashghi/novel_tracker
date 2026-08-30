@@ -12,6 +12,9 @@ returns:
 ```json
 {
   "acknowledgedMutationIds": ["uuid"],
+  "rejectedMutations": [
+    { "index": 0, "mutationId": "uuid", "reason": "invalid-mutation" }
+  ],
   "novelIdMappings": [
     { "localNovelId": "uuid", "canonicalNovelId": "uuid" }
   ],
@@ -20,6 +23,45 @@ returns:
   "cursor": "opaque-cursor"
 }
 ```
+
+### Limits
+
+At most 500 mutations per batch (`413` beyond that) and 8 KB of JSON per
+mutation. The body limit is derived from the two so a worst-case *legal* batch
+can never be refused by an opaque body-size error before per-item validation
+runs.
+
+### Rejections
+
+A structurally invalid or oversized mutation is reported in
+`rejectedMutations`, never silently skipped. This matters because a client
+drops a pending mutation only when it hears back about it: a silently skipped
+mutation would sit in the pending queue and be re-sent on every future sync,
+wedging that account permanently.
+
+`index` is the mutation's position in the submitted array and is the field
+clients should match on — the one mutation an id cannot identify is the one
+rejected for having no usable id. Current reasons are `invalid-mutation` and
+`payload-too-large`.
+
+### `state` and `appliedMutations`
+
+`state` is the full canonical blob and is **omitted** when a batch applied no
+changes (a duplicate replay or an all-rejected batch), so steady-state polling
+stays small. Clients must still adopt `novelIdMappings` from a response that
+carries no `state`.
+
+The blob never contains `appliedMutations`. `sync_mutation_receipts` is the
+server's durable dedup record, so keeping the map in the JSONB state only made
+`sync_states` grow without bound and get rewritten on every batch. Clients keep
+their own bounded replay map (`MAX_APPLIED_MUTATIONS`) and must restore it when
+adopting a canonical blob.
+
+Replaying an already-applied mutation is safe without that map: checkpoint
+events dedupe by event id, field patches lose LWW to newer clocks, and
+delete/restore are generation-guarded. Chapter history is deliberately *not*
+capped — the event-id map is what makes replay idempotent, so capping it would
+need a replicated per-novel history floor first.
 
 ## `GET /v1/sync?cursor=opaque-cursor`
 

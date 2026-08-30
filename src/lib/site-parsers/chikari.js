@@ -14,15 +14,20 @@
         return null;
       }
 
+      const readerNovelTitle = collection === "novels"
+        ? core.firstText(root, ['main header a[href^="/novels/"]'])
+        : "";
       const chapterHeading = core.firstText(root, [
         "[data-chapter-title]",
         ".chapter-title",
         ".reader-title",
-        "main h2"
+        ...(collection === "novels" ? ['main header a[href^="/novels/"] + p'] : [])
       ]);
-      const pageTitle = core.stripSiteSuffix(ogTitle || root.title, "chikari.moe");
+      const pageTitle = core.cleanTitle(root.title || ogTitle)
+        .replace(/\s*[·|–—-]\s*chikari\.moe$/i, "")
+        .trim();
       const chapterFirstTitle = pageTitle.match(
-        /^chapter\s+([^·|–—]+?)\s*[·|–—]\s*(.+)$/i
+        /^chapter\s+(.+?)\s+(?:·|\||–|—|-)\s+(.+)$/i
       );
       const titleFromPage = chapterFirstTitle?.[2]?.trim() || pageTitle
         .replace(/\s*[-–—|:]\s*chapter\s+\d+(?:\.\d+)?(?:\s+.*)?$/i, "")
@@ -30,7 +35,11 @@
       const chapterFromPage = chapterFirstTitle?.[1]?.trim();
 
       return {
+        autoProgressReady: collection === "novels"
+          ? Boolean(readerNovelTitle && chapterHeading)
+          : Boolean(chapterFirstTitle),
         title:
+          core.usefulText(readerNovelTitle, "chikari.moe") ||
           core.usefulText(core.firstText(root, ["[data-series-title]", ".series-title"]), "chikari.moe") ||
           core.usefulText(titleFromPage, "chikari.moe") ||
           core.titleCaseFromSlug(seriesSlug),

@@ -77,3 +77,52 @@ test("a different account is held pending until the customer confirms the merge"
   assert.equal(confirmed.signedIn, true);
   assert.equal(confirmed.subject, "google-user-2");
 });
+
+test("concurrent expired-token calls share a single refresh exchange", async () => {
+  store.clear();
+  nextSubject = "google-user-3";
+  await auth.signIn({ hasLocalData: false });
+
+  let exchangeCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const body = String(options?.body || "");
+    if (body.includes("grant_type=refresh_token")) {
+      exchangeCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return originalFetch(url, options);
+  };
+
+  try {
+    // Force the recorded token to look expired so getAccessToken refreshes.
+    const stored = store.get("novel-tracker:auth");
+    stored.active.expiresAt = Date.now() - 1000;
+    store.set("novel-tracker:auth", stored);
+
+    const [first, second, third] = await Promise.all([
+      auth.getAccessToken(),
+      auth.getAccessToken(),
+      auth.getAccessToken()
+    ]);
+
+    assert.equal(exchangeCount, 1);
+    assert.equal(first, second);
+    assert.equal(second, third);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("an unrefreshable expired session is cleared instead of handed out", async () => {
+  store.clear();
+  nextSubject = "google-user-4";
+  await auth.signIn({ hasLocalData: false });
+  const stored = store.get("novel-tracker:auth");
+  stored.active.expiresAt = Date.now() - 1000;
+  delete stored.active.refreshToken;
+  store.set("novel-tracker:auth", stored);
+
+  assert.equal(await auth.getAccessToken(), "");
+  assert.equal(store.get("novel-tracker:auth").active, null);
+});

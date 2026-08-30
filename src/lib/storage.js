@@ -28,8 +28,9 @@ function getStorageArea() {
       }));
     },
     async set(value) {
-      const [key] = Object.keys(value);
-      globalThis.localStorage?.setItem(key, JSON.stringify(value[key]));
+      for (const [key, val] of Object.entries(value)) {
+        globalThis.localStorage?.setItem(key, JSON.stringify(val));
+      }
     }
   };
 }
@@ -303,19 +304,34 @@ function countSharedPrefix(left, right) {
   return index;
 }
 
-function hasChapterSignal(url, label) {
+function isNumericChildOfHome(url, novelHomeUrl) {
+  const chapter = getUrlParts(url);
+  const home = getUrlParts(novelHomeUrl);
+  const chapterId = chapter.segments[chapter.segments.length - 1] || "";
+
+  return (
+    Boolean(chapter.hostname) &&
+    chapter.hostname === home.hostname &&
+    chapter.segments.length === home.segments.length + 1 &&
+    pathStartsWith(chapter.segments, home.segments) &&
+    /^\d+(?:\.\d+)?$/.test(chapterId)
+  );
+}
+
+function hasChapterSignal(url, label, novelHomeUrl = "") {
   const normalizedLabel = normalizeText(label);
   const { segments } = getUrlParts(url);
 
   return (
     /(^|[^a-z])(chapter|chap|ch|episode|ep|prologue|epilogue|volume|vol|book|part)([^a-z]|$)/i.test(normalizedLabel) ||
     segments.some((segment) => looksChapterSlug(segment)) ||
-    segments.some((segment) => /\d/.test(segment) && segment.includes("-"))
+    segments.some((segment) => /\d/.test(segment) && segment.includes("-")) ||
+    isNumericChildOfHome(url, novelHomeUrl)
   );
 }
 
 export function isLikelyChapterPage(input) {
-  return hasChapterSignal(input?.lastReadChapterUrl, input?.lastReadChapterLabel);
+  return hasChapterSignal(input?.lastReadChapterUrl, input?.lastReadChapterLabel, input?.novelHomeUrl);
 }
 
 function matchesSavedChapterPattern(savedNovel, incoming) {
@@ -327,11 +343,15 @@ function matchesSavedChapterPattern(savedNovel, incoming) {
     return false;
   }
 
-  if (!hasChapterSignal(savedNovel.lastReadChapterUrl, savedNovel.lastReadChapterLabel)) {
+  if (!hasChapterSignal(savedNovel.lastReadChapterUrl, savedNovel.lastReadChapterLabel, savedNovel.novelHomeUrl)) {
     return false;
   }
 
-  if (!hasChapterSignal(incoming.lastReadChapterUrl, incoming.lastReadChapterLabel)) {
+  if (!hasChapterSignal(
+    incoming.lastReadChapterUrl,
+    incoming.lastReadChapterLabel,
+    incoming.novelHomeUrl || savedNovel.novelHomeUrl
+  )) {
     return false;
   }
 
@@ -375,7 +395,15 @@ function findTrackedNovelForAutoUpdate(novels, incoming) {
   });
 }
 
-function findExistingNovelForSave(novels, incoming) {
+/**
+ * The canonical "is this page already tracked?" answer: exact identity match,
+ * then a chapter-pattern match gated on the page looking like a chapter.
+ *
+ * Exported because the popup preview has to ask the identity question exactly
+ * the way saving answers it — a looser preview matcher used to announce "New
+ * novel detected" right before the save merged into an existing entry.
+ */
+export function findExistingNovelForSave(novels, incoming) {
   const directMatch = novels.find((novel) => matchesNovel(novel, incoming));
   if (directMatch) {
     return directMatch;
@@ -503,6 +531,8 @@ function mergeChapterHistories(left, right) {
 export function matchesNovel(existing, incoming) {
   return matchesNovelIdentity(existing, incoming);
 }
+
+
 
 export async function upsertNovel(input) {
   let state = await getSyncState();

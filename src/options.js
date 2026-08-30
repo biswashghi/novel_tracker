@@ -1,10 +1,9 @@
+// Reads only. Every mutation goes through the background service worker so
+// there is exactly one writer for the sync blob (see background.js).
 import {
-  deleteNovel,
   exportNovelsJson,
   getNovels,
-  importNovelsJson,
-  normalizeTags,
-  updateNovel
+  normalizeTags
 } from "./lib/storage.js";
 
 import { computeReadingStats } from "./lib/reading-stats.js";
@@ -58,8 +57,8 @@ function icon(name, className = "") {
    EXTENSION MESSAGING
 ========================================================= */
 
-async function sendMessage(type) {
-  const result = await getExtensionApi().runtime.sendMessage({ type });
+async function sendMessage(type, payload) {
+  const result = await getExtensionApi().runtime.sendMessage({ type, payload });
   if (result?.error) throw new Error(result.error);
   return result;
 }
@@ -101,6 +100,10 @@ function renderAccount(snapshot) {
     syncIndicator?.classList.add("syncing");
   } else if (sync.state === "error") {
     syncDetail.textContent = sync.lastError ? `Sync paused · ${sync.lastError}` : "Sync paused";
+    syncIndicator?.classList.add("error");
+  } else if (sync.lastError) {
+    // Synced, but the server refused some changes (e.g. schema drift).
+    syncDetail.textContent = `Synced ${formatRelativeDate(sync.lastSyncedAt)} · ${sync.lastError}`;
     syncIndicator?.classList.add("error");
   } else if (sync.lastSyncedAt) {
     syncDetail.textContent = `Synced ${formatRelativeDate(sync.lastSyncedAt)}`;
@@ -263,11 +266,10 @@ function renderStats(items) {
 
 function getHistoryEntries(novel) {
   const history = Array.isArray(novel.chapterHistory) ? novel.chapterHistory : [];
-  return [...history].sort((left, right) => {
-    const leftKey = (left.label || left.url || "").toLowerCase();
-    const rightKey = (right.label || right.url || "").toLowerCase();
-    return rightKey.localeCompare(leftKey);
-  });
+  // materializeNovel already orders history ascending by read clock; newest
+  // first is just the reverse. Sorting by chapter label here was the bug
+  // ("Chapter 10" sorted before "Chapter 9").
+  return [...history].reverse();
 }
 
 /* =========================================================
@@ -604,7 +606,7 @@ library.addEventListener("click", async (event) => {
   if (action === "delete") {
     const confirmed = window.confirm(`Delete "${novel.title}" from your tracker?`);
     if (!confirmed) return;
-    await deleteNovel(id);
+    await sendMessage("novel-tracker:library-delete", { id });
     await refresh();
   }
 });
@@ -620,7 +622,7 @@ library.addEventListener("submit", async (event) => {
 
   const data = new FormData(form);
 
-  await updateNovel(id, {
+  const patch = {
     title: String(data.get("title") || "").trim(),
     lastReadChapterLabel: String(data.get("lastReadChapterLabel") || "").trim(),
     lastReadChapterUrl: String(data.get("lastReadChapterUrl") || "").trim(),
@@ -630,7 +632,9 @@ library.addEventListener("submit", async (event) => {
     tags: normalizeTags(String(data.get("tags") || "")),
     notes: String(data.get("notes") || "").trim(),
     rating: Number(data.get("rating") || 0)
-  });
+  };
+
+  await sendMessage("novel-tracker:library-update", { id, patch });
 
   await refresh();
 });
@@ -674,7 +678,7 @@ importFileInput.addEventListener("change", async (event) => {
 
   try {
     const text = await file.text();
-    await importNovelsJson(text);
+    await sendMessage("novel-tracker:library-import", { text });
     await refresh();
   } catch (error) {
     console.error(error);

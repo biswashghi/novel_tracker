@@ -41,7 +41,15 @@ test('popup loads a chapter and saves the novel bookmark', async () => {
   // list, so a plain file:// load throws a CORS error before popup.js ever
   // runs. --allow-file-access-from-files lifts that restriction for
   // file:// pages only; it doesn't relax any http(s) origin's CORS policy.
-  const browser = await chromium.launch({ args: ['--allow-file-access-from-files'] });
+  // This spec launches its own browser rather than using the `chromium`
+  // project fixture, so playwright.config.js's `use.headless` does not reach
+  // it automatically. Read the resolved project config so this spec follows
+  // the same setting — including `--headed` (npm run test:e2e:headed), which
+  // Playwright applies by overriding `use.headless`.
+  const browser = await chromium.launch({
+    headless: test.info().project.use.headless ?? true,
+    args: ['--allow-file-access-from-files']
+  });
   const page = await browser.newPage();
 
   await page.addInitScript(() => {
@@ -81,7 +89,16 @@ test('popup loads a chapter and saves the novel bookmark', async () => {
         }
       },
       runtime: {
-        openOptionsPage: async () => {}
+        openOptionsPage: async () => {},
+        // Stands in for the background service worker. The popup is a thin
+        // client now — saving crosses a message boundary — so this routes the
+        // message into the same storage module the background would call,
+        // keeping the real write path under test.
+        async sendMessage(message) {
+          if (message?.type !== 'novel-tracker:library-upsert') return undefined;
+          const { upsertNovel } = await import('./lib/storage.js');
+          return upsertNovel(message.payload);
+        }
       }
     };
 

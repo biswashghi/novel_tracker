@@ -1,13 +1,18 @@
 import {
+  findExistingNovelForSave,
   getNovels,
-  getHostname,
-  normalizeUrl,
-  upsertNovel
+  getHostname
 } from "./lib/storage.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
 
 const extensionApi = getExtensionApi();
+
+async function sendMessage(type, payload) {
+  const result = await extensionApi.runtime.sendMessage({ type, payload });
+  if (result?.error) throw new Error(result.error);
+  return result;
+}
 
 const PARSER_FILES = [
   "lib/parser-core.js",
@@ -167,23 +172,22 @@ function populateForm(data) {
    EXISTING NOVEL
 ========================================================= */
 
-function findExistingNovel(novels, metadata) {
-  const currentUrl = normalizeUrl(metadata.lastReadChapterUrl);
-  const hostname = getHostname(metadata.lastReadChapterUrl);
-  const normalizedTitle = metadata.title?.trim().toLowerCase();
+/**
+ * The record a save would produce, so the preview lookup asks the identity
+ * question with exactly the values the save will use.
+ */
+function saveCandidate(source) {
+  const chapterUrl = String(source.lastReadChapterUrl || "").trim();
 
-  return (
-    novels.find((novel) => {
-      const sameChapter =
-        normalizeUrl(novel.lastReadChapterUrl) === currentUrl;
-
-      const sameNovel =
-        novel.title?.trim().toLowerCase() === normalizedTitle &&
-        novel.sourceSite === hostname;
-
-      return sameChapter || sameNovel;
-    }) || null
-  );
+  return {
+    title: String(source.title || "").trim(),
+    sourceSite: getHostname(chapterUrl),
+    novelHomeUrl: String(source.novelHomeUrl || "").trim() || chapterUrl,
+    lastReadChapterUrl: chapterUrl,
+    lastReadChapterLabel: String(source.lastReadChapterLabel || "").trim(),
+    coverImageUrl: String(source.coverImageUrl || "").trim(),
+    status: source.status || "active"
+  };
 }
 
 /* =========================================================
@@ -237,7 +241,7 @@ async function loadCurrentPage() {
 
     const novels = await getNovels();
 
-    existingNovel = findExistingNovel(novels, metadata);
+    existingNovel = findExistingNovelForSave(novels, saveCandidate(metadata)) || null;
 
     if (existingNovel) {
       fields.status.value =
@@ -321,41 +325,19 @@ form.addEventListener("submit", async (event) => {
       throw new Error("Current page URL is required.");
     }
 
-    await upsertNovel({
-      title: fields.title.value.trim(),
-
-      sourceSite: getHostname(chapterUrl),
-
-      novelHomeUrl:
-        fields.homeUrl.value.trim() ||
-        chapterUrl,
-
+    // The background service worker is the only writer; see background.js.
+    const saved = await sendMessage("novel-tracker:library-upsert", saveCandidate({
+      title: fields.title.value,
+      novelHomeUrl: fields.homeUrl.value,
       lastReadChapterUrl: chapterUrl,
-
-      lastReadChapterLabel:
-        fields.chapterLabel.value.trim(),
-
-      coverImageUrl:
-        fields.coverUrl.value.trim(),
-
-      status:
-        fields.status.value
-    });
-
-    existingNovel = {
-      ...(existingNovel || {}),
-      title: fields.title.value.trim(),
-      sourceSite: getHostname(chapterUrl),
-      novelHomeUrl:
-        fields.homeUrl.value.trim() ||
-        chapterUrl,
-      lastReadChapterUrl: chapterUrl,
-      lastReadChapterLabel:
-        fields.chapterLabel.value.trim(),
-      coverImageUrl:
-        fields.coverUrl.value.trim(),
+      lastReadChapterLabel: fields.chapterLabel.value,
+      coverImageUrl: fields.coverUrl.value,
       status: fields.status.value
-    };
+    }));
+
+    // Adopt what was actually stored rather than re-deriving it: the save may
+    // have merged into an entry that already existed under a different URL.
+    existingNovel = saved?.id ? saved : existingNovel;
 
     setStatus(
       wasExisting

@@ -190,6 +190,37 @@ test("autoUpdateNovelProgress advances Chikari novels reader routes", async () =
   assert.equal(novel.chapterHistory.length, 2);
 });
 
+test("autoUpdateNovelProgress repairs a Chikari record saved with a comments heading", async () => {
+  globalThis.localStorage.clear();
+
+  await upsertNovel({
+    title: "The Academy’s Weapon Replicator",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator",
+    lastReadChapterUrl: "https://chikari.moe/novels/the-academys-weapon-replicator/1",
+    lastReadChapterLabel: "Comments (4)",
+    coverImageUrl: "",
+    status: "active"
+  });
+
+  const result = await autoUpdateNovelProgress({
+    title: "The Academy’s Weapon Replicator",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator",
+    lastReadChapterUrl: "https://chikari.moe/novels/the-academys-weapon-replicator/2",
+    lastReadChapterLabel: "Chapter 1 (1) - The Academy's Weapon Replicator",
+    coverImageUrl: ""
+  });
+
+  assert.equal(result.updated, true);
+  assert.equal(result.reason, "progress-updated");
+
+  const [novel] = await getNovels();
+  assert.equal(novel.lastReadChapterUrl, "https://chikari.moe/novels/the-academys-weapon-replicator/2");
+  assert.equal(novel.lastReadChapterLabel, "Chapter 1 (1) - The Academy's Weapon Replicator");
+  assert.equal(novel.chapterHistory.length, 2);
+});
+
 test("upsertNovel keeps Royal Road chapter history on one novel", async () => {
   globalThis.localStorage.clear();
 
@@ -567,4 +598,92 @@ test("importing a backup keeps the device linked to its synced account", async (
   assert.equal(afterImport.deviceId, linked.deviceId);
   assert.equal(afterImport.syncAccountSubject, "reader@example.test");
   assert.equal(afterImport.cursor, "42");
+});
+
+test("localStorage fallback persists every key, not just the first", async () => {
+  globalThis.localStorage.clear();
+
+  await upsertNovel({
+    title: "Fallback Novel",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/9/fallback",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/9/fallback/chapter/1/one",
+    lastReadChapterLabel: "Chapter 1"
+  });
+
+  const syncRaw = globalThis.localStorage.getItem("novel-tracker:sync-state");
+  const novelsRaw = globalThis.localStorage.getItem("novel-tracker:novels");
+  assert.ok(syncRaw, "sync-state key should be persisted by the fallback");
+  assert.ok(novelsRaw, "novels key should be persisted by the fallback");
+
+  const parsedSync = JSON.parse(syncRaw);
+  assert.equal(parsedSync.version, 1);
+  const parsedNovels = JSON.parse(novelsRaw);
+  assert.equal(parsedNovels.length, 1);
+  assert.equal(parsedNovels[0].title, "Fallback Novel");
+});
+
+const { createSerialQueue } = await import("../src/lib/sync-service.js");
+
+test("concurrent library writers drop mutations unless they are serialized", async () => {
+  // Every mutation is a read-modify-write of the whole sync blob, so two
+  // writers that read before either writes will clobber each other's
+  // pendingMutations — the queued sync operation of the loser vanishes. This
+  // is the race the background service worker's single-writer queue exists to
+  // prevent; see src/background.js.
+  const writes = () => [
+    () => upsertNovel({
+      title: "Racer One",
+      sourceSite: "royalroad.com",
+      novelHomeUrl: "https://www.royalroad.com/fiction/101/one",
+      lastReadChapterUrl: "https://www.royalroad.com/fiction/101/one/chapter/1/a",
+      lastReadChapterLabel: "Chapter 1"
+    }),
+    () => upsertNovel({
+      title: "Racer Two",
+      sourceSite: "scribblehub.com",
+      novelHomeUrl: "https://www.scribblehub.com/series/202/two",
+      lastReadChapterUrl: "https://www.scribblehub.com/read/202-two/chapter/1",
+      lastReadChapterLabel: "Chapter 1"
+    })
+  ];
+
+  globalThis.localStorage.clear();
+  await Promise.all(writes().map((run) => run()));
+  const raced = await getNovels();
+  const racedPending = (await getSyncState()).pendingMutations.length;
+
+  globalThis.localStorage.clear();
+  const queue = createSerialQueue();
+  await Promise.all(writes().map((run) => queue(run)));
+  const serialized = await getNovels();
+  const serializedPending = (await getSyncState()).pendingMutations.length;
+
+  assert.equal(serialized.length, 2, "serialized writers both land");
+  assert.deepEqual(
+    serialized.map((novel) => novel.title).sort(),
+    ["Racer One", "Racer Two"]
+  );
+  assert.ok(serializedPending >= 2, "each serialized write leaves its mutation queued for sync");
+  assert.ok(
+    raced.length < serialized.length || racedPending < serializedPending,
+    `unserialized writers must lose work (novels ${raced.length}/${serialized.length}, pending ${racedPending}/${serializedPending})`
+  );
+});
+
+test("the serial queue keeps running after a task rejects", async () => {
+  const order = [];
+  const queue = createSerialQueue();
+  const failing = queue(async () => {
+    order.push("first");
+    throw new Error("boom");
+  });
+  const following = queue(async () => {
+    order.push("second");
+    return "ok";
+  });
+
+  await assert.rejects(failing, /boom/);
+  assert.equal(await following, "ok");
+  assert.deepEqual(order, ["first", "second"]);
 });

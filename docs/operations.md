@@ -47,6 +47,36 @@ docker rm novel-restore-test
 Configure an external uptime monitor for both endpoints. The deployment smoke
 test is not a substitute for continuous monitoring.
 
+## Scaling limits
+
+These hold for the current single-container deployment and are the first things
+to revisit before scaling out.
+
+**Rate limiting is per process.** `requestWindows` in `server/index.js` is an
+in-memory `Map` keyed by subject (120 requests/minute). Running more than one
+API container multiplies the effective limit by the container count; horizontal
+scaling needs a shared store or a gateway-level limiter instead.
+
+**Schema.** `sync_mutations` carries `idx_sync_mutations_subject_sequence`,
+which serves the pull query (`WHERE subject = $1 AND sequence > $2 ORDER BY
+sequence`). It is created by the bootstrap DDL, so a redeploy is enough to add
+it to an existing database. There is deliberately no index on
+`mutation->>'novelId'`: the only query that filters on it is the daily tombstone
+purge, which is not worth taxing the hot insert path for.
+
+**Request limits.** At most 500 mutations per batch and 8 KB of JSON per
+mutation; the Fastify `bodyLimit` is derived from those two so a worst-case
+legal batch is never refused before per-item validation. Raising either
+constant raises the body limit automatically.
+
+**Tombstone purge.** The daily job walks subjects in keyset-paginated chunks of
+100, taking the same per-subject advisory lock the mutation path uses. It no
+longer holds one transaction across every user.
+
+**Shutdown.** SIGTERM/SIGINT drain in-flight requests via `app.close()` and then
+close the pool, with a 10-second backstop that force-exits rather than waiting
+for the container runtime's SIGKILL.
+
 ## Retention and deletion
 
 Delete tombstones are synchronized for 30 days. The API cleanup job then purges

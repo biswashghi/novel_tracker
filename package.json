@@ -22,6 +22,7 @@
     "package:webstore": "node scripts/package-webstore.mjs",
     "test": "node --test",
     "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --config=playwright.live.config.js",
     "test:e2e:headed": "playwright test --headed",
     "e2e:stack:up": "node scripts/e2e-stack.mjs up",
     "e2e:stack:down": "node scripts/e2e-stack.mjs down"

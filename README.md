@@ -50,33 +50,43 @@ High-level architecture, diagrams, and design rationale are in the docs: see [do
 
 ```text
 src/
-  manifest.json
-  popup.html / popup.js
-  options.html / options.js
-  background.js
-  content-script.js
+  manifest.json               Chrome/Firefox base manifest; build.mjs rewrites per target
+  popup.html / popup.js       Save the active chapter (a thin client of background.js)
+  options.html / options.js   Library page: search, edit, stats, import/export, account
+  background.js               Service worker: the only writer of library state
+  content-script.js           Reports chapter progress from supported sites
   lib/
-    parser-core.js
-    page-metadata.js
-    storage.js
-    site-parsers/
-      royalroad.js
-      patreon.js
-      wuxiaworld.js
-      novelbin.js
-      scribblehub.js
-      creativenovels.js
-      lightnovelstranslations.js
-      shintranslations.js
+    extension-api.js          chrome/browser namespace shim
+    parser-core.js            Shared parsing helpers for the site profiles
+    page-metadata.js          Extracts title/chapter/home URL from a page
+    site-parsers/             One profile per supported site (royalroad, chikari, …)
+    storage.js                Library reads and mutations over the sync blob
+    reading-stats.js          Streaks and chapter counts for the stats row
+    sync-core.js              CRDT: HLC clocks, field-level LWW, tombstones
+    sync-client.js            Transport-neutral client for /v1/sync
+    sync-service.js           Sync orchestration, queues, sync status meta
+    sync-policy.js            Server-side clock clamping rules
+    auth.js                   OAuth PKCE sign-in, token refresh, account state
+    auth-platform.js          Per-browser identity/redirect adapters
+    platform-http.js          fetch, routed through native messaging on Safari
+    safari-native-messaging.js
+    config.js                 API/issuer endpoints, swapped for local builds
+server/
+  index.js                    Fastify sync API (see docs/sync-api.md)
+  Dockerfile
+safari-native/                Swift host app + web extension handler
+infra/                        Compose stacks, Keycloak realms, backup units
 scripts/
-  build.mjs
-  generate-icons.mjs
-  package-webstore.mjs
-tests/
-  site-metadata.test.mjs
-  storage.test.mjs
+  build.mjs                   Builds dist/, dist-firefox/, dist-safari/
+  package-*.mjs|.sh           Store packaging per target
+  publish-*.mjs               Automated store uploads (used by CI)
+  e2e-stack.mjs               Brings the local API + Keycloak stack up/down
+  generate-icons.mjs, generate-store-assets.mjs, generate-appstore-screenshots.mjs
+  deploy-vps.sh, backup-vps.sh, configure-keycloak.sh
+tests/                        node:test unit suites (npm test)
+  e2e/                        Playwright specs against the real extension
+docs/                         Architecture, sync API, release, operations
 ```
-
 
 ## Development and Local Testing
 
@@ -115,6 +125,11 @@ Before submitting a public Chrome Web Store release:
 - Library page can search, sort, edit, delete, open chapters, and show history.
 - Export JSON downloads a backup.
 - Import JSON merges a backup and skips blank entries.
+- Sign in succeeds and the account row shows the signed-in email.
+- A novel saved while signed in appears after a sign-out/sign-in round trip.
+- Signing in on a second profile converges both libraries on the same state.
+- **Delete cloud data** clears the server copy and leaves the local library intact.
+- Sign out returns the account row to its signed-out state.
 - Privacy disclosure in this README matches actual behavior.
 
 ## Chrome Web Store Submission

@@ -31,3 +31,12 @@ test("manifest grants only the account capabilities used by optional sync", () =
   assert.ok(manifest.permissions.includes("identity"));
   assert.ok(manifest.permissions.includes("alarms"));
 });
+
+test("manifest does not request the broad tabs permission", () => {
+  // The popup's only tabs-API call is tabs.query({ active: true }), which
+  // activeTab already covers once the toolbar action is clicked. Requesting
+  // "tabs" adds a "Read your browsing activity" warning to every store
+  // listing and buys nothing.
+  assert.ok(!manifest.permissions.includes("tabs"));
+  assert.ok(manifest.permissions.includes("activeTab"));
+});

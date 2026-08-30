@@ -1,5 +1,12 @@
 export const SYNC_STATE_VERSION = 1;
 export const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// Replay-dedup memory for applyMutation. Bounded because replay stays
+// structurally idempotent without it (checkpoint events dedupe by event id,
+// patches lose LWW to newer clocks, delete/restore are generation-guarded).
+// Do NOT add chapter-history capping on top of this until a replicated
+// per-novel history floor exists — the history map is what keeps replays
+// idempotent today. See docs/sync-api.md.
+export const MAX_APPLIED_MUTATIONS = 5000;
 
 const FIELD_NAMES = [
   "title",
@@ -115,12 +122,23 @@ function applyFields(novel, payload, mutation) {
   }
 }
 
-function chooseHead(novel) {
-  let winner;
-  for (const event of Object.values(novel.chapterHistory)) {
-    if (!winner || compareClocks(event.readAt, winner.readAt) > 0 ||
-      (compareClocks(event.readAt, winner.readAt) === 0 && String(event.id) > String(winner.id))) {
-      winner = event;
+function beatsHead(candidate, current) {
+  if (!current) return Boolean(candidate);
+  const comparison = compareClocks(candidate.readAt, current.readAt);
+  return comparison > 0 || (comparison === 0 && String(candidate.id) > String(current.id));
+}
+
+// Recorded events are immutable, so the head is a running maximum: a freshly
+// recorded checkpoint only has to beat the incumbent. Callers with no
+// candidate (restore) fall back to the full scan.
+function chooseHead(novel, candidate) {
+  let winner = novel.chapterHistory[novel.headCheckpointId];
+  if (candidate) {
+    if (beatsHead(candidate, winner)) winner = candidate;
+  } else {
+    winner = undefined;
+    for (const event of Object.values(novel.chapterHistory)) {
+      if (beatsHead(event, winner)) winner = event;
     }
   }
   novel.headCheckpointId = winner?.id || "";
@@ -147,11 +165,23 @@ function applyCheckpoint(novel, payload, mutation) {
     // logical increment that distinguishes rapid successive reads.
     readAt: clone(mutation.clock)
   };
-  chooseHead(novel);
+  chooseHead(novel, novel.chapterHistory[event.id]);
 }
 
-export function applyMutation(inputState, mutation, { now = Date.now() } = {}) {
+export function applyMutation(inputState, mutation, options) {
   const state = clone(inputState);
+  applyMutationTo(state, mutation, options);
+  pruneAppliedMutations(state);
+  return state;
+}
+
+// Mutates `state` in place. Callers own the copy; `applyMutation` clones per
+// call, `applyMutationBatch` clones once for the whole batch (cloning per
+// mutation made a batch quadratic in its own size).
+function applyMutationTo(state, mutation, { now = Date.now() } = {}) {
+  // States that arrive from the server have no `appliedMutations` — receipts
+  // are the durable dedup there, so the field is stripped before persisting.
+  state.appliedMutations ||= {};
   if (!mutation?.mutationId || state.appliedMutations[mutation.mutationId]) return state;
   state.clock = observeClock(state.clock, mutation.clock, state.deviceId, now);
   const novel = ensureNovel(state, mutation);
@@ -182,6 +212,15 @@ export function applyMutation(inputState, mutation, { now = Date.now() } = {}) {
   return state;
 }
 
+function pruneAppliedMutations(state) {
+  if (!state.appliedMutations) return;
+  const ids = Object.keys(state.appliedMutations);
+  if (ids.length <= MAX_APPLIED_MUTATIONS) return;
+  for (const id of ids.slice(0, ids.length - MAX_APPLIED_MUTATIONS)) {
+    delete state.appliedMutations[id];
+  }
+}
+
 export function createLocalMutation(state, { novelId, generation, type, payload, now = Date.now() }) {
   const clock = tickClock(state.clock, state.deviceId, now);
   return {
@@ -203,9 +242,12 @@ export function enqueueLocalMutation(state, draft, options) {
 }
 
 export function applyMutationBatch(state, mutations, options) {
-  return [...mutations]
-    .sort((left, right) => compareClocks(left.clock, right.clock) || String(left.mutationId).localeCompare(String(right.mutationId)))
-    .reduce((next, mutation) => applyMutation(next, mutation, options), state);
+  const next = clone(state);
+  const ordered = [...mutations].sort((left, right) =>
+    compareClocks(left.clock, right.clock) || String(left.mutationId).localeCompare(String(right.mutationId)));
+  for (const mutation of ordered) applyMutationTo(next, mutation, options);
+  pruneAppliedMutations(next);
+  return next;
 }
 
 export function purgeExpiredTombstones(inputState, now = Date.now()) {

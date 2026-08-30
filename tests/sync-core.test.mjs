@@ -160,3 +160,49 @@ test("equal field clocks use server sequence and then mutation id deterministica
   state = applyMutation(state, mutation({ mutationId: "z", type: "novel.patch", clock, serverSequence: 2, payload: { title: "Tie winner" } }));
   assert.equal(materializeNovel(state.novels["novel-1"]).title, "Tie winner");
 });
+
+test("appliedMutations stays bounded while remaining replay-idempotent", () => {
+  const checkpoints = Array.from({ length: 6000 }, (_, index) => mutation({
+    mutationId: `checkpoint-${index}`,
+    type: "checkpoint.record",
+    clock: baseClock(1000 + index),
+    payload: { event: { id: `event-${index}`, url: `https://example.test/ch-${index}`, label: `Chapter ${index}`, readAt: baseClock(1000 + index) } }
+  }));
+  // A first-sync pull is a batch, so exercise the batch path.
+  let state = applyMutationBatch(createSyncState({ deviceId: deviceA, now: 0 }), [mutation(), ...checkpoints]);
+
+  const appliedCount = Object.keys(state.appliedMutations).length;
+  assert.ok(appliedCount <= 5000, `expected bounded appliedMutations, got ${appliedCount}`);
+  assert.equal(Object.keys(state.novels["novel-1"].chapterHistory).length, 6000, "history itself is not capped");
+  assert.equal(materializeNovel(state.novels["novel-1"]).lastReadChapterUrl, "https://example.test/ch-5999");
+
+  // Replaying an evicted checkpoint is still a no-op: dedup falls back to the
+  // chapterHistory event-id map, so no resurrection and no churn.
+  const historyBefore = Object.keys(state.novels["novel-1"].chapterHistory).length;
+  const headBefore = state.novels["novel-1"].headCheckpointId;
+  state = applyMutation(state, mutation({
+    mutationId: "checkpoint-0",
+    type: "checkpoint.record",
+    clock: baseClock(1000),
+    payload: { event: { id: "event-0", url: "https://example.test/ch-0", label: "Chapter 0", readAt: baseClock(1000) } }
+  }));
+  assert.equal(Object.keys(state.novels["novel-1"].chapterHistory).length, historyBefore);
+  assert.equal(state.novels["novel-1"].headCheckpointId, headBefore, "an old replay must not move the head");
+});
+
+test("an out-of-order checkpoint does not steal the head from a newer read", () => {
+  // chooseHead tracks a running maximum instead of rescanning history; a late
+  // arrival with an older clock has to lose to the incumbent.
+  let state = applyMutationBatch(createSyncState({ deviceId: deviceA, now: 0 }), [mutation()]);
+  const record = (id, wallMs) => mutation({
+    mutationId: `m-${id}`,
+    type: "checkpoint.record",
+    clock: baseClock(wallMs),
+    payload: { event: { id, url: `https://example.test/${id}`, label: id, readAt: baseClock(wallMs) } }
+  });
+  state = applyMutation(state, record("newest", 5000));
+  state = applyMutation(state, record("stale", 2000));
+  assert.equal(materializeNovel(state.novels["novel-1"]).lastReadChapterUrl, "https://example.test/newest");
+  state = applyMutation(state, record("newer-still", 9000));
+  assert.equal(materializeNovel(state.novels["novel-1"]).lastReadChapterUrl, "https://example.test/newer-still");
+});

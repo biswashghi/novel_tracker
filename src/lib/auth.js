@@ -146,36 +146,36 @@ export async function signIn({ hasLocalData = false } = {}) {
     }, shared), hasLocalData, platform);
   }
 
-    const redirectUri = oauthRedirectUri(platform.redirectUri("oauth2"));
-    const verifier = randomValue(64);
-    const state = randomValue(24);
-    const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
-    const authorizeParams = {
-      client_id: AUTH_CONFIG.clientId,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: AUTH_CONFIG.scopes,
-      state,
-      nonce: randomValue(24),
-      code_challenge: await sha256(verifier),
-      code_challenge_method: "S256"
-    };
-    if (AUTH_IDP_HINT) authorizeParams.kc_idp_hint = AUTH_IDP_HINT;
-    authorize.search = new URLSearchParams(authorizeParams).toString();
+  const redirectUri = oauthRedirectUri(platform.redirectUri("oauth2"));
+  const verifier = randomValue(64);
+  const state = randomValue(24);
+  const authorize = new URL(`${AUTH_CONFIG.issuer}/protocol/openid-connect/auth`);
+  const authorizeParams = {
+    client_id: AUTH_CONFIG.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: AUTH_CONFIG.scopes,
+    state,
+    nonce: randomValue(24),
+    code_challenge: await sha256(verifier),
+    code_challenge_method: "S256"
+  };
+  if (AUTH_IDP_HINT) authorizeParams.kc_idp_hint = AUTH_IDP_HINT;
+  authorize.search = new URLSearchParams(authorizeParams).toString();
 
-    const callbackUrl = new URL(await platform.authorize(authorize.toString()));
-    if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");
-    const providerError = callbackUrl.searchParams.get("error");
-    if (providerError) throw new Error(callbackUrl.searchParams.get("error_description") || providerError);
-    const code = callbackUrl.searchParams.get("code");
-    if (!code) throw new Error("Sign-in did not return an authorization code");
-    const tokenPayload = await exchangeToken({
-      grant_type: "authorization_code",
-      client_id: AUTH_CONFIG.clientId,
-      redirect_uri: redirectUri,
-      code,
-      code_verifier: verifier
-    });
+  const callbackUrl = new URL(await platform.authorize(authorize.toString()));
+  if (callbackUrl.searchParams.get("state") !== state) throw new Error("Sign-in state validation failed");
+  const providerError = callbackUrl.searchParams.get("error");
+  if (providerError) throw new Error(callbackUrl.searchParams.get("error_description") || providerError);
+  const code = callbackUrl.searchParams.get("code");
+  if (!code) throw new Error("Sign-in did not return an authorization code");
+  const tokenPayload = await exchangeToken({
+    grant_type: "authorization_code",
+    client_id: AUTH_CONFIG.clientId,
+    redirect_uri: redirectUri,
+    code,
+    code_verifier: verifier
+  });
   return activateTokens(tokenRecord(tokenPayload), hasLocalData, platform);
 }
 
@@ -222,33 +222,51 @@ export async function cancelPendingAccount() {
   return publicAccount(auth);
 }
 
+const TOKEN_EXPIRY_SKEW_MS = 30_000;
+let refreshInFlight = null;
+
 export async function getAccessToken() {
   const platform = getAuthPlatform();
   const auth = await importSafariSession(await readAuth(), platform);
   if (!auth.active?.accessToken) return "";
-  if (auth.active.expiresAt > Date.now()) return auth.active.accessToken;
+  if (auth.active.expiresAt > Date.now() + TOKEN_EXPIRY_SKEW_MS) return auth.active.accessToken;
   if (!auth.active.refreshToken) {
     auth.active = null;
     await writeAuth(auth);
     if (platform.kind === "safari-native") await platform.clearSharedSession();
     return "";
   }
+  // Single-flight: concurrent callers share one refresh exchange so parallel
+  // 401 retries can't thrash (or invalidate each other under rotation).
+  refreshInFlight ||= refreshTokens(auth.active.refreshToken, platform);
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function refreshTokens(refreshToken, platform) {
+  const auth = await readAuth();
   try {
     const refreshed = await exchangeToken({
       grant_type: "refresh_token",
       client_id: AUTH_CONFIG.clientId,
-      refresh_token: auth.active.refreshToken
+      refresh_token: refreshToken
     });
-    auth.active = tokenRecord(refreshed, auth.active);
+    auth.active = tokenRecord(refreshed, auth.active || { refreshToken });
     auth.lastSubject = auth.active.subject;
     auth.lastEmail = auth.active.email;
     await writeAuth(auth);
     await persistSafariSession(auth.active, platform);
     return auth.active.accessToken;
   } catch (error) {
-    auth.active = null;
-    await writeAuth(auth);
-    if (platform.kind === "safari-native") await platform.clearSharedSession();
+    const current = await readAuth();
+    if (current.active?.refreshToken === refreshToken) {
+      current.active = null;
+      await writeAuth(current);
+      if (platform.kind === "safari-native") await platform.clearSharedSession();
+    }
     throw error;
   }
 }

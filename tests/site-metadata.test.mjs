@@ -246,15 +246,73 @@ test("extractPageMetadataFromRoot maps Chikari chapters to their canonical serie
 
 test("extractPageMetadataFromRoot supports Chikari novels reader routes", () => {
   const root = createRoot({
-    title: "Chapter 1 · Three Days of Happiness"
+    title: "Chapter 2 — The Academy’s Weapon Replicator",
+    selectors: {
+      'main header a[href^="/novels/"]': { textContent: "The Academy’s Weapon Replicator" },
+      'main header a[href^="/novels/"] + p': {
+        textContent: "Chapter 1 (1) - The Academy's Weapon Replicator"
+      },
+      "main h2": { textContent: "Comments (4)" }
+    }
   });
 
   const metadata = extractPageMetadataFromRoot(
     root,
-    "https://chikari.moe/novels/three-days-of-happiness/1"
+    "https://chikari.moe/novels/the-academys-weapon-replicator/2"
   );
 
-  assert.equal(metadata.title, "Three Days of Happiness");
-  assert.equal(metadata.novelHomeUrl, "https://chikari.moe/novels/three-days-of-happiness");
-  assert.equal(metadata.lastReadChapterLabel, "Chapter 1");
+  assert.equal(metadata.title, "The Academy’s Weapon Replicator");
+  assert.equal(metadata.novelHomeUrl, "https://chikari.moe/novels/the-academys-weapon-replicator");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1 (1) - The Academy's Weapon Replicator");
+  assert.equal(metadata.autoProgressReady, true);
+});
+
+test("extractPageMetadataFromRoot marks an unhydrated Chikari novel reader as not ready", () => {
+  const root = createRoot({
+    title: "Chapter 2 — The Academy’s Weapon Replicator"
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://chikari.moe/novels/the-academys-weapon-replicator/2"
+  );
+
+  assert.equal(metadata.autoProgressReady, false);
+});
+
+test("extractPageMetadataFromRoot prefers Chikari's published chapter label over its numeric route id", () => {
+  const root = createRoot({
+    title: "Chapter 972 — The Academy’s Weapon Replicator",
+    selectors: {
+      'main header a[href^="/novels/"]': { textContent: "The Academy’s Weapon Replicator" },
+      'main header a[href^="/novels/"] + p': { textContent: "Chapter 603: Salvation (2)" },
+      "main h2": { textContent: "Comments" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://chikari.moe/novels/the-academys-weapon-replicator/972"
+  );
+
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 603: Salvation (2)");
+});
+
+test("extractPageMetadataFromRoot strips Chikari's site suffix from series Open Graph titles", () => {
+  const root = createRoot({
+    selectors: {
+      'meta[property="og:title"]': { content: "Chapter 304 · Omniscient Reader · chikari.moe" },
+      "main h2": { textContent: "Comments (1)" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://chikari.moe/series/omniscient-reader/304"
+  );
+
+  assert.equal(metadata.title, "Omniscient Reader");
+  assert.equal(metadata.novelHomeUrl, "https://chikari.moe/series/omniscient-reader");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 304");
+  assert.equal(metadata.autoProgressReady, true);
 });

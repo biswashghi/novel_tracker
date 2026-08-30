@@ -27,6 +27,24 @@ export function createQueuedTask(task) {
   };
 }
 
+/**
+ * Serializes distinct write tasks in submission order.
+ *
+ * Not the same shape as createQueuedTask above: that one collapses repeat runs
+ * of a single idempotent job, which is right for "sync again" but wrong for
+ * library mutations — collapsing them would silently drop writes.
+ */
+export function createSerialQueue() {
+  let tail = Promise.resolve();
+  return function enqueue(task) {
+    const result = tail.then(task, task);
+    // Keep the chain alive regardless of how the caller's task settled; the
+    // caller still receives the original (possibly rejecting) promise.
+    tail = result.then(() => {}, () => {});
+    return result;
+  };
+}
+
 function storageArea() {
   const storage = getStorageLocal();
   if (!storage) throw new Error("Extension storage is unavailable");
@@ -60,10 +78,20 @@ async function synchronize() {
     const client = new SyncClient({ baseUrl: API_BASE_URL, getAccessToken, fetchImpl: platformFetch });
     state = (await client.pull(state)).state;
     await saveSyncState(state);
-    state = (await client.push(state)).state;
+    const pushed = await client.push(state);
+    state = pushed.state;
     await saveSyncState(state);
     state = (await client.pull(state)).state;
     await saveSyncState(state);
+    const rejected = pushed.rejected || [];
+    if (rejected.length) {
+      const reasons = [...new Set(rejected.map((item) => item.reason))].join(", ");
+      return writeMeta({
+        state: "synced",
+        lastSyncedAt: new Date().toISOString(),
+        lastError: `${rejected.length} change${rejected.length === 1 ? "" : "s"} rejected (${reasons})`
+      });
+    }
     return writeMeta({ state: "synced", lastSyncedAt: new Date().toISOString(), lastError: "" });
   } catch (error) {
     await writeMeta({ state: "error", lastError: error?.message || "Synchronization failed" });

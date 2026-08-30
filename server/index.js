@@ -24,11 +24,20 @@ const audience = process.env.KEYCLOAK_AUDIENCE;
 // prior behavior there.
 const jwksUrl = process.env.KEYCLOAK_JWKS_URL || (issuer ? `${issuer}/protocol/openid-connect/certs` : null);
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
-const app = Fastify({ logger: true, bodyLimit: 1024 * 1024 });
 const MAX_MUTATIONS_PER_BATCH = 500;
+// A single legal mutation stays well under this: notes cap at 4,000 chars and
+// tags at 20 x 40 (see src/lib/storage.js). Anything larger is rejected with an
+// explicit reason (never silently skipped — see the validation loop below).
+const MAX_MUTATION_JSON_BYTES = 8 * 1024;
+// Derived from the two limits above so a worst-case *legal* batch can never be
+// killed by an opaque body-size error before per-item validation runs. The
+// slack covers the JSON envelope around the array.
+const BODY_LIMIT_BYTES = MAX_MUTATIONS_PER_BATCH * MAX_MUTATION_JSON_BYTES + 64 * 1024;
+const app = Fastify({ logger: true, bodyLimit: BODY_LIMIT_BYTES });
 const SYNC_PAGE_SIZE = 1000;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_REQUESTS_PER_WINDOW = 120;
+const PURGE_BATCH_SIZE = 100;
 const requestWindows = new Map();
 const MUTATION_TYPES = new Set(["novel.create", "novel.patch", "checkpoint.record", "novel.delete", "novel.restore"]);
 
@@ -76,6 +85,8 @@ await database.query(`
     purged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (subject, canonical_novel_id)
   );
+  CREATE INDEX IF NOT EXISTS idx_sync_mutations_subject_sequence
+    ON sync_mutations (subject, sequence);
   INSERT INTO sync_mutation_receipts (subject, mutation_id)
   SELECT subject, mutation_id FROM sync_mutations
   ON CONFLICT DO NOTHING;
@@ -111,7 +122,13 @@ app.addHook("preHandler", async (request, reply) => {
 async function lockedState(client, subject) {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [subject]);
   const row = await client.query("SELECT state, sequence FROM sync_states WHERE subject = $1 FOR UPDATE", [subject]);
-  if (row.rowCount) return { state: row.rows[0].state, sequence: Number(row.rows[0].sequence) };
+  if (row.rowCount) {
+    const state = row.rows[0].state;
+    // Stripped before persisting (receipts are the durable dedup), so states
+    // written by this version arrive without it.
+    state.appliedMutations ||= {};
+    return { state, sequence: Number(row.rows[0].sequence) };
+  }
   const state = createSyncState();
   await client.query("INSERT INTO sync_states (subject, state) VALUES ($1, $2)", [subject, state]);
   return { state, sequence: 0 };
@@ -143,8 +160,18 @@ app.post("/v1/sync/mutations", async (request, reply) => {
     let { state, sequence } = await lockedState(client, request.userSubject);
     state = purgeExpiredTombstones(state);
     const acknowledgedMutationIds = [];
+    const rejectedMutations = [];
     const novelIdMappings = [];
-    for (const original of mutations) {
+    let appliedCount = 0;
+    for (const [index, original] of mutations.entries()) {
+      // Structurally invalid mutations are reported, never silently skipped.
+      // A silent skip would leave the mutation in the client's pending queue
+      // forever (the client drops only acknowledged ids), wedging that
+      // account's sync on every future batch. The position is reported
+      // alongside the id because the one mutation an id cannot identify is the
+      // one rejected for having no usable id.
+      const reject = (reason) =>
+        rejectedMutations.push({ index, mutationId: String(original?.mutationId || ""), reason });
       if (
         !original?.mutationId || String(original.mutationId).length > 200 ||
         !original?.deviceId || String(original.deviceId).length > 200 ||
@@ -152,7 +179,14 @@ app.post("/v1/sync/mutations", async (request, reply) => {
         !MUTATION_TYPES.has(original?.type) || !original?.clock ||
         !Number.isInteger(Number(original.generation)) || Number(original.generation) < 1 ||
         typeof original.payload !== "object" || original.payload === null
-      ) continue;
+      ) {
+        reject("invalid-mutation");
+        continue;
+      }
+      if (Buffer.byteLength(JSON.stringify(original), "utf8") > MAX_MUTATION_JSON_BYTES) {
+        reject("payload-too-large");
+        continue;
+      }
       const canonicalId = await canonicalNovelId(client, request.userSubject, state, original);
       novelIdMappings.push({ localNovelId: original.novelId, canonicalNovelId: canonicalId });
       const existing = await client.query(
@@ -184,18 +218,36 @@ app.post("/v1/sync/mutations", async (request, reply) => {
         serverSequence: sequence
       });
       state = applyMutation(state, mutation);
+      appliedCount += 1;
       await client.query(
         "INSERT INTO sync_mutations (subject, mutation_id, sequence, mutation) VALUES ($1, $2, $3, $4)",
         [request.userSubject, mutation.mutationId, sequence, mutation]
       );
       acknowledgedMutationIds.push(mutation.mutationId);
     }
+    // sync_mutation_receipts is the durable dedup record; keeping every
+    // applied id in the JSONB state as well made sync_states grow without
+    // bound and get rewritten on every batch. Strip it before persisting —
+    // replay safety comes from receipts plus structurally idempotent
+    // re-application (see docs/sync-api.md).
+    delete state.appliedMutations;
     await client.query(
       "UPDATE sync_states SET state = $2, sequence = $3, updated_at = now() WHERE subject = $1",
       [request.userSubject, state, sequence]
     );
     await client.query("COMMIT");
-    return { acknowledgedMutationIds, novelIdMappings, state, mutations: [], cursor: String(sequence) };
+    return {
+      acknowledgedMutationIds,
+      rejectedMutations,
+      novelIdMappings,
+      // The full canonical blob only rides along when something actually
+      // changed; steady-state duplicate/heartbeat batches stay tiny. Clients
+      // already fall back to applying an empty batch locally when state is
+      // absent (adoptCanonicalState).
+      ...(appliedCount > 0 ? { state } : {}),
+      mutations: [],
+      cursor: String(sequence)
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -243,38 +295,98 @@ app.delete("/v1/account", async (request) => {
 app.get("/health", async () => ({ ok: true }));
 
 async function purgeExpiredServerTombstones() {
-  const client = await database.connect();
+  // Keyset-paginated by subject: an updated_at cursor would livelock on
+  // subjects with nothing to purge (they never move forward). Each chunk
+  // takes the SAME per-subject advisory lock the mutation path uses — before
+  // any row lock, and in ascending subject order — so a purge chunk can never
+  // deadlock against a concurrent push (push = advisory then row, same
+  // subject; purge holds no row locks while acquiring advisories).
+  let lastSubject = "";
   try {
-    await client.query("BEGIN");
-    const rows = await client.query("SELECT subject, state FROM sync_states FOR UPDATE");
-    for (const row of rows.rows) {
-      const expiredIds = Object.values(row.state.novels || {})
-        .filter((novel) => novel.lifecycle === "deleted" && Date.now() - Number(novel.deletedAtMs || Date.now()) >= TOMBSTONE_RETENTION_MS)
-        .map((novel) => novel.id);
-      if (!expiredIds.length) continue;
-      const state = purgeExpiredTombstones(row.state);
-      await client.query(
-        `INSERT INTO purged_novel_ids (subject, canonical_novel_id)
-         SELECT $1, unnest($2::text[])
-         ON CONFLICT DO NOTHING`,
-        [row.subject, expiredIds]
-      );
-      await client.query("UPDATE sync_states SET state = $2, updated_at = now() WHERE subject = $1", [row.subject, state]);
-      await client.query(
-        "DELETE FROM sync_mutations WHERE subject = $1 AND mutation->>'novelId' = ANY($2::text[])",
-        [row.subject, expiredIds]
-      );
+    for (;;) {
+      const client = await database.connect();
+      try {
+        await client.query("BEGIN");
+        const page = await client.query(
+          "SELECT subject FROM sync_states WHERE subject > $1 ORDER BY subject LIMIT $2",
+          [lastSubject, PURGE_BATCH_SIZE]
+        );
+        if (!page.rows.length) {
+          await client.query("COMMIT");
+          return;
+        }
+        const subjects = page.rows.map((row) => row.subject);
+        for (const subject of subjects) {
+          await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [subject]);
+        }
+        const rows = await client.query(
+          "SELECT subject, state FROM sync_states WHERE subject > $1 AND subject <= $2 ORDER BY subject FOR UPDATE",
+          [lastSubject, subjects.at(-1)]
+        );
+        for (const row of rows.rows) {
+          const expiredIds = Object.values(row.state.novels || {})
+            .filter((novel) => novel.lifecycle === "deleted" && Date.now() - Number(novel.deletedAtMs || Date.now()) >= TOMBSTONE_RETENTION_MS)
+            .map((novel) => novel.id);
+          if (!expiredIds.length) continue;
+          const state = purgeExpiredTombstones(row.state);
+          await client.query(
+            `INSERT INTO purged_novel_ids (subject, canonical_novel_id)
+             SELECT $1, unnest($2::text[])
+             ON CONFLICT DO NOTHING`,
+            [row.subject, expiredIds]
+          );
+          await client.query("UPDATE sync_states SET state = $2, updated_at = now() WHERE subject = $1", [row.subject, state]);
+          await client.query(
+            "DELETE FROM sync_mutations WHERE subject = $1 AND mutation->>'novelId' = ANY($2::text[])",
+            [row.subject, expiredIds]
+          );
+        }
+        lastSubject = subjects.at(-1);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     }
-    await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
     app.log.error(error, "Tombstone cleanup failed");
-  } finally {
-    client.release();
   }
 }
 
 const cleanupTimer = setInterval(purgeExpiredServerTombstones, 24 * 60 * 60 * 1000);
 cleanupTimer.unref();
 purgeExpiredServerTombstones().catch((error) => app.log.error(error));
+
+app.addHook("onClose", async () => {
+  await database.end();
+});
+
+// Drain in-flight requests, then close the pool via the onClose hook above.
+// The timer is the backstop: if a request or a purge chunk refuses to finish,
+// exit anyway rather than sit until the container runtime sends SIGKILL.
+const SHUTDOWN_GRACE_MS = 10_000;
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info({ signal }, "Shutting down");
+  const force = setTimeout(() => {
+    app.log.error({ signal }, "Graceful shutdown timed out; exiting");
+    process.exit(1);
+  }, SHUTDOWN_GRACE_MS);
+  force.unref();
+  app.close().then(
+    () => process.exit(0),
+    (error) => {
+      app.log.error(error, "Shutdown failed");
+      process.exit(1);
+    }
+  );
+}
+
+for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => shutdown(signal));
+
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT || 3000) });

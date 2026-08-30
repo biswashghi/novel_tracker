@@ -3,6 +3,9 @@
   let lastProcessedUrl = "";
   let debounceId = null;
   let extensionAvailable = true;
+  let readinessUrl = "";
+  let readinessAttempts = 0;
+  const MAX_READINESS_ATTEMPTS = 12;
 
   function canUseExtensionRuntime() {
     if (!extensionAvailable) {
@@ -31,8 +34,28 @@
       return;
     }
 
-    lastProcessedUrl = currentUrl;
     const payload = globalThis.NovelTrackerPageMetadata.extractPageMetadata();
+
+    if (payload?.autoProgressReady === false) {
+      if (readinessUrl !== currentUrl) {
+        readinessUrl = currentUrl;
+        readinessAttempts = 0;
+      }
+
+      if (readinessAttempts < MAX_READINESS_ATTEMPTS) {
+        readinessAttempts += 1;
+        scheduleProgressUpdate();
+      } else {
+        // Do not send guessed metadata for a page that never became ready,
+        // and stop retrying until its URL changes.
+        lastProcessedUrl = currentUrl;
+      }
+      return;
+    }
+
+    lastProcessedUrl = currentUrl;
+    readinessUrl = "";
+    readinessAttempts = 0;
 
     try {
       Promise.resolve(extensionApi.runtime.sendMessage({
