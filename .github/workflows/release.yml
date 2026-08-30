@@ -286,10 +286,29 @@ jobs:
         run: gem install fastlane --no-document
 
       - name: Import Apple distribution certificate
-        uses: apple-actions/import-codesign-certs@v7
-        with:
-          p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
-          p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+        shell: bash
+        env:
+          APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
+          APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          certificate_path="$RUNNER_TEMP/novel-tracker-distribution.p12"
+          keychain_path="$RUNNER_TEMP/novel-tracker-signing.keychain-db"
+
+          printf '%s' "$APPSTORE_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$certificate_path"
+          security create-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$APPSTORE_CERTIFICATES_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path" | tee "$RUNNER_TEMP/codesigning-identities.txt"
+          grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
 
       - name: Download iOS app provisioning profile
         uses: apple-actions/download-provisioning-profiles@v6
