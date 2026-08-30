@@ -223,6 +223,8 @@ jobs:
           ls -l "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
 
       - name: Publish to Chrome Web Store
+        id: publish-chrome
+        continue-on-error: true
         if: ${{ needs.check-secrets.outputs.chrome == 'true' }}
         env:
           CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
@@ -251,6 +253,14 @@ jobs:
             ${{ steps.release.outputs.chrome_zip }}
             ${{ steps.release.outputs.firefox_zip }}
             ${{ steps.release.outputs.safari_zip }}
+
+      # Chrome and Firefox are independent stores. A stale Chrome OAuth
+      # token must not prevent Firefox from receiving an otherwise valid
+      # release or suppress the GitHub release artifacts. Preserve a failed
+      # job conclusion after those independent steps have had their chance.
+      - name: Report Chrome publishing failure
+        if: steps.publish-chrome.outcome == 'failure'
+        run: exit 1
 
   publish-safari:
     name: Publish to App Store Connect
