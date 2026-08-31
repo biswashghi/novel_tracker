@@ -311,6 +311,7 @@ jobs:
           grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
 
       - name: Download iOS app provisioning profile
+        id: ios_app_profile
         uses: apple-actions/download-provisioning-profiles@v6
         with:
           bundle-id: app.noveltracker.extension
@@ -320,6 +321,7 @@ jobs:
           api-private-key: ${{ secrets.APP_STORE_CONNECT_P8 }}
 
       - name: Download iOS extension provisioning profile
+        id: ios_extension_profile
         uses: apple-actions/download-provisioning-profiles@v6
         with:
           bundle-id: app.noveltracker.extension.Extension
@@ -329,6 +331,7 @@ jobs:
           api-private-key: ${{ secrets.APP_STORE_CONNECT_P8 }}
 
       - name: Download macOS app provisioning profile
+        id: mac_app_profile
         uses: apple-actions/download-provisioning-profiles@v6
         with:
           bundle-id: app.noveltracker.extension
@@ -338,6 +341,7 @@ jobs:
           api-private-key: ${{ secrets.APP_STORE_CONNECT_P8 }}
 
       - name: Download macOS extension provisioning profile
+        id: mac_extension_profile
         uses: apple-actions/download-provisioning-profiles@v6
         with:
           bundle-id: app.noveltracker.extension.Extension
@@ -375,6 +379,14 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
+          # The download action returns the actual profile names selected
+          # from App Store Connect. Passing those names into Fastlane keeps
+          # release signing explicit without hard-coding profile names that
+          # can change when Apple rotates/recreates a profile.
+          NOVEL_TRACKER_IOS_APP_PROFILE: ${{ fromJSON(steps.ios_app_profile.outputs.profiles)[0].name }}
+          NOVEL_TRACKER_IOS_EXTENSION_PROFILE: ${{ fromJSON(steps.ios_extension_profile.outputs.profiles)[0].name }}
+          NOVEL_TRACKER_MAC_APP_PROFILE: ${{ fromJSON(steps.mac_app_profile.outputs.profiles)[0].name }}
+          NOVEL_TRACKER_MAC_EXTENSION_PROFILE: ${{ fromJSON(steps.mac_extension_profile.outputs.profiles)[0].name }}
           # Empty on a tag-push trigger (no workflow_dispatch inputs exist
           # there) — publish-safari.mjs already defaults an unset/empty
           # value to "mac,ios", so that's fine.

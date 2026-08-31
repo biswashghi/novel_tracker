@@ -30,7 +30,9 @@ shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
 Apple Distribution identity from `APPSTORE_CERTIFICATES_FILE_BASE64` and
 `APPSTORE_CERTIFICATES_PASSWORD`, then downloads the matching iOS and macOS
 App Store provisioning profiles for the containing app and extension before
-Fastlane archives them:
+Fastlane archives them. The profile names returned by the download action are
+passed to Fastlane, which configures only the Release targets for explicit
+Apple Distribution signing; Debug/local development remains automatic:
 
 - **macOS** (`fastlane mac release`) archives, exports, and uploads to App
   Store Connect as a new unreleased draft version. Does **not** submit for

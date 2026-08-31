@@ -20,13 +20,12 @@
 #   synthesizes on the fly that non-interactive builds can't see.
 #   scripts/package-safari.sh now generates real, shared scheme files for
 #   both app targets to fix this.
-# - CI-only failure (a personal dev machine already has a cached signing
-#   identity from ordinary Xcode use; a fresh CI runner has none): "No
-#   profiles ... Automatic signing is disabled and unable to generate a
-#   profile. To enable automatic signing, pass -allowProvisioningUpdates to
-#   xcodebuild." `-allowProvisioningUpdates` below lets xcodebuild use the
-#   App Store Connect API key already passed to provision on demand instead
-#   of requiring a pre-existing local certificate.
+# - CI imports an Apple Distribution identity and downloads all four App
+#   Store profiles before these lanes run. Automatic signing still asks for
+#   Development identities/profiles during archive on a clean runner, so
+#   each Release target is switched to manual distribution signing here.
+#   Profile names come from the download action rather than being hard-coded,
+#   allowing recreated/rotated profiles to be picked up automatically.
 # - iOS lane confirmed working end-to-end for real (a real TestFlight
 #   upload). macOS lane confirmed through archive/export/signing; the
 #   upload itself can still be blocked independently by App Store Connect
@@ -44,6 +43,14 @@ PROJECT = ENV["NOVEL_TRACKER_XCODE_PROJECT"] ||
 # project uses different scheme names.
 MAC_SCHEME = ENV["NOVEL_TRACKER_XCODE_SCHEME"] || "Novel Tracker (macOS)"
 IOS_SCHEME = ENV["NOVEL_TRACKER_IOS_XCODE_SCHEME"] || "Novel Tracker (iOS)"
+TEAM_ID = ENV["NOVEL_TRACKER_APPLE_TEAM_ID"] || "3LQK7JJTX2"
+APP_BUNDLE_ID = "app.noveltracker.extension"
+EXTENSION_BUNDLE_ID = "app.noveltracker.extension.Extension"
+
+MAC_APP_TARGET = "Novel Tracker (macOS)"
+MAC_EXTENSION_TARGET = "Novel Tracker Extension (macOS)"
+IOS_APP_TARGET = "Novel Tracker (iOS)"
+IOS_EXTENSION_TARGET = "Novel Tracker Extension (iOS)"
 
 def connect_api_key
   app_store_connect_api_key(
@@ -54,17 +61,49 @@ def connect_api_key
   )
 end
 
+def require_profile(environment_variable)
+  value = ENV[environment_variable]
+  UI.user_error!("Missing #{environment_variable}; download the matching App Store provisioning profile first") if value.to_s.empty?
+  value
+end
+
+def configure_distribution_signing(target, profile_name)
+  update_code_signing_settings(
+    use_automatic_signing: false,
+    path: PROJECT,
+    team_id: TEAM_ID,
+    targets: [target],
+    build_configurations: ["Release"],
+    code_sign_identity: "Apple Distribution",
+    profile_name: profile_name
+  )
+end
+
 platform :mac do
   desc "Archive and upload the macOS Safari extension app to App Store Connect"
   lane :release do
     connect_api_key
 
+    app_profile = require_profile("NOVEL_TRACKER_MAC_APP_PROFILE")
+    extension_profile = require_profile("NOVEL_TRACKER_MAC_EXTENSION_PROFILE")
+    configure_distribution_signing(MAC_APP_TARGET, app_profile)
+    configure_distribution_signing(MAC_EXTENSION_TARGET, extension_profile)
+
     build_app(
       project: PROJECT,
       scheme: MAC_SCHEME,
       export_method: "app-store",
+      export_options: {
+        signingStyle: "manual",
+        signingCertificate: "Apple Distribution",
+        teamID: TEAM_ID,
+        provisioningProfiles: {
+          APP_BUNDLE_ID => app_profile,
+          EXTENSION_BUNDLE_ID => extension_profile
+        }
+      },
       output_directory: File.expand_path("../../../release", __dir__),
-      xcargs: "-allowProvisioningUpdates"
+      skip_profile_detection: true
     )
 
     upload_to_app_store(
@@ -82,12 +121,26 @@ platform :ios do
   lane :release do
     connect_api_key
 
+    app_profile = require_profile("NOVEL_TRACKER_IOS_APP_PROFILE")
+    extension_profile = require_profile("NOVEL_TRACKER_IOS_EXTENSION_PROFILE")
+    configure_distribution_signing(IOS_APP_TARGET, app_profile)
+    configure_distribution_signing(IOS_EXTENSION_TARGET, extension_profile)
+
     build_app(
       project: PROJECT,
       scheme: IOS_SCHEME,
       export_method: "app-store",
+      export_options: {
+        signingStyle: "manual",
+        signingCertificate: "Apple Distribution",
+        teamID: TEAM_ID,
+        provisioningProfiles: {
+          APP_BUNDLE_ID => app_profile,
+          EXTENSION_BUNDLE_ID => extension_profile
+        }
+      },
       output_directory: File.expand_path("../../../release", __dir__),
-      xcargs: "-allowProvisioningUpdates"
+      skip_profile_detection: true
     )
 
     # TestFlight, not a direct App Store submission — matches how this app
