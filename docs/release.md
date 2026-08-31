@@ -57,7 +57,7 @@ Add them once under Settings → Secrets and variables → Actions:
 | --- | --- | --- |
 | Chrome | `CHROME_WEB_STORE_EXTENSION_ID`, `CHROME_WEB_STORE_CLIENT_ID`, `CHROME_WEB_STORE_CLIENT_SECRET`, `CHROME_WEB_STORE_REFRESH_TOKEN` | [chrome.md](release/chrome.md#one-time-ci-publishing-setup) |
 | Firefox | `AMO_API_KEY`, `AMO_API_SECRET` | [firefox.md](release/firefox.md#one-time-ci-publishing-setup) |
-| Safari | `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_P8`, `APPSTORE_CERTIFICATES_FILE_BASE64`, `APPSTORE_CERTIFICATES_PASSWORD`, `APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64`, `APPSTORE_INSTALLER_CERTIFICATES_PASSWORD` | [safari.md](release/safari.md) |
+| Safari | `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_P8`, `APPSTORE_CERTIFICATES_FILE_BASE64`, `APPSTORE_CERTIFICATES_PASSWORD`, `APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64`; optional `APPSTORE_INSTALLER_CERTIFICATES_PASSWORD` when the installer export uses a different password | [safari.md](release/safari.md) |
 
 ## Platform-specific steps
 

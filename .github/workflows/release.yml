@@ -176,7 +176,7 @@ jobs:
           fi
 
           safari=false
-          if [[ -n "$APP_STORE_CONNECT_KEY_ID" && -n "$APP_STORE_CONNECT_ISSUER_ID" && -n "$APP_STORE_CONNECT_P8" && -n "$APPSTORE_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_CERTIFICATES_PASSWORD" && -n "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_INSTALLER_CERTIFICATES_PASSWORD" ]]; then
+          if [[ -n "$APP_STORE_CONNECT_KEY_ID" && -n "$APP_STORE_CONNECT_ISSUER_ID" && -n "$APP_STORE_CONNECT_P8" && -n "$APPSTORE_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_CERTIFICATES_PASSWORD" && -n "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" ]]; then
             safari=true
           fi
 
@@ -293,7 +293,10 @@ jobs:
           APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
-          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD }}
+          # Most teams protect both exported identities with the same
+          # password. A separately stored installer password still wins when
+          # the exports intentionally use different passwords.
+          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD || secrets.APPSTORE_CERTIFICATES_PASSWORD }}
         run: |
           set -euo pipefail
 

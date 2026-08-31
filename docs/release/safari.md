@@ -30,10 +30,12 @@ shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
 Apple Distribution identity from `APPSTORE_CERTIFICATES_FILE_BASE64` and
 `APPSTORE_CERTIFICATES_PASSWORD`, plus the separate Mac Installer Distribution
 identity from `APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64` and
-`APPSTORE_INSTALLER_CERTIFICATES_PASSWORD`. The latter signs the `.pkg` Xcode
-exports for the Mac App Store and is not interchangeable with the Apple
-Distribution identity that signs the app itself. Fastlane then creates or
-repairs dedicated CI-managed iOS and macOS App Store profiles for the
+`APPSTORE_INSTALLER_CERTIFICATES_PASSWORD`. The installer password secret is
+optional when both `.p12` exports use `APPSTORE_CERTIFICATES_PASSWORD`; a
+dedicated value overrides that fallback. The installer identity signs the
+`.pkg` Xcode exports for the Mac App Store and is not interchangeable with the
+Apple Distribution identity that signs the app itself. Fastlane then creates
+or repairs dedicated CI-managed iOS and macOS App Store profiles for the
 containing app and extension, bound to the Apple Distribution certificate. It
 configures only the Release targets for explicit signing; Debug/local
 development remains automatic. This avoids Apple's Xcode-managed profiles,
