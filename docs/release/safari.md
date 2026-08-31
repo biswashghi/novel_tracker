@@ -37,8 +37,10 @@ dedicated value overrides that fallback. The installer identity signs the
 Apple Distribution identity that signs the app itself. Some Keychain exports
 contain only the installer private key, without a certificate bag. For CI,
 the macOS lane downloads existing `MAC_INSTALLER_DISTRIBUTION` certificates
-from Apple's API and imports only a current certificate for this team whose
-public key matches the P12's private key. This does not create or revoke
+from Apple's API and selects only a current certificate for this team whose
+public key matches the P12's private key. It pairs them in a password-protected,
+temporary P12 and imports the complete identity; the original private key is
+never logged or uploaded anywhere else. This does not create or revoke
 certificates. It fails with an explicit message if no matching certificate
 exists; a misleading P12 filename cannot substitute for a matching identity.
 Fastlane then creates

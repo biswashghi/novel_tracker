@@ -3,6 +3,10 @@ require "openssl"
 # The caller supplies only MAC_INSTALLER_DISTRIBUTION certificates returned
 # by Apple's API. A filename or Keychain label is not proof of a key match.
 module InstallerCertificate
+  def self.identity(private_key, certificate, password:)
+    OpenSSL::PKCS12.create(password, "Mac App Store installer", private_key, certificate)
+  end
+
   def self.match(private_key, certificates, team_id:, now: Time.now)
     raise ArgumentError, "The installer P12 does not contain a private key." unless private_key
 

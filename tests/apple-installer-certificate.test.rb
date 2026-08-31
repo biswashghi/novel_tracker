@@ -55,4 +55,18 @@ class InstallerCertificateTest < Minitest::Test
     error = assert_raises(ArgumentError) { match([certificate], key: nil) }
     assert_match "does not contain a private key", error.message
   end
+
+  def test_complete_identity_contains_both_the_certificate_and_matching_key
+    expected = certificate
+    identity = InstallerCertificate.identity(@key, expected, password: "test-only-password")
+    decoded = OpenSSL::PKCS12.new(identity.to_der, "test-only-password")
+    assert_equal expected.to_der, decoded.certificate.to_der
+    assert decoded.certificate.check_private_key(decoded.key)
+    assert_equal @key.public_key.to_der, decoded.key.public_key.to_der
+  end
+
+  def test_complete_identity_remains_password_protected
+    identity = InstallerCertificate.identity(@key, certificate, password: "test-only-password")
+    assert_raises(OpenSSL::PKCS12::PKCS12Error) { OpenSSL::PKCS12.new(identity.to_der, "wrong-password") }
+  end
 end

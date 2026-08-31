@@ -34,6 +34,7 @@
 #   feedback) — that's Apple's process, not something this lane can bypass.
 
 require "base64"
+require "open3"
 require "tmpdir"
 require_relative "installer_certificate"
 
@@ -116,10 +117,8 @@ def restore_installer_certificate
   installer_p12_path = ENV["NOVEL_TRACKER_INSTALLER_P12_PATH"]
   return if installer_p12_path.to_s.empty?
 
-  p12 = OpenSSL::PKCS12.new(
-    File.binread(installer_p12_path),
-    ENV.fetch("NOVEL_TRACKER_INSTALLER_P12_PASSWORD")
-  )
+  password = ENV.fetch("NOVEL_TRACKER_INSTALLER_P12_PASSWORD")
+  p12 = OpenSSL::PKCS12.new(File.binread(installer_p12_path), password)
   # Read existing certificates only: never create/revoke a signing identity.
   certificates = Spaceship::ConnectAPI::Certificate.all(
     filter: { certificateType: "MAC_INSTALLER_DISTRIBUTION" }
@@ -129,12 +128,19 @@ def restore_installer_certificate
   certificate = InstallerCertificate.match(p12.key, certificates, team_id: TEAM_ID)
 
   Dir.mktmpdir("novel-tracker-installer-certificate") do |directory|
-    certificate_path = File.join(directory, "installer.cer")
-    File.binwrite(certificate_path, certificate.to_der)
-    # The P12's private key was imported by CI already. Importing this public
-    # certificate completes the identity, including for key-only P12 exports.
-    sh("security", "import", certificate_path,
-       "-k", ENV.fetch("NOVEL_TRACKER_KEYCHAIN_PATH"))
+    identity_path = File.join(directory, "installer.p12")
+    identity = InstallerCertificate.identity(p12.key, certificate, password: password)
+    File.open(identity_path, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
+      file.write(identity.to_der)
+    end
+    # Import the key and certificate together: Keychain may silently omit a
+    # lone key from a P12 that has no certificate bag. Keep the existing key
+    # encrypted on disk and never log the import command's password argument.
+    _output, error, status = Open3.capture3(
+      "security", "import", identity_path, "-f", "pkcs12", "-A", "-P", password,
+      "-k", ENV.fetch("NOVEL_TRACKER_KEYCHAIN_PATH")
+    )
+    UI.user_error!("Installer identity import failed: #{error.strip}") unless status.success?
   end
   UI.success("Restored matching installer certificate: #{certificate.subject}")
 end

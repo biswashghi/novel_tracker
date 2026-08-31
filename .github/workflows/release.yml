@@ -298,10 +298,6 @@ jobs:
           APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
-          # Most teams protect both exported identities with the same
-          # password. A separately stored installer password still wins when
-          # the exports intentionally use different passwords.
-          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD || secrets.APPSTORE_CERTIFICATES_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -320,12 +316,8 @@ jobs:
             -t cert \
             -f pkcs12 \
             -k "$keychain_path"
-          security import "$installer_certificate_path" \
-            -P "$APPSTORE_INSTALLER_CERTIFICATES_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$keychain_path"
+          # The macOS lane combines the staged installer key with its
+          # matching Apple certificate before importing the complete identity.
           security list-keychains -d user -s "$keychain_path"
           security find-identity -v -p codesigning "$keychain_path" | tee "$RUNNER_TEMP/codesigning-identities.txt"
           grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
