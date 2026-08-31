@@ -324,7 +324,28 @@ jobs:
           security list-keychains -d user -s "$keychain_path"
           security find-identity -v -p codesigning "$keychain_path" | tee "$RUNNER_TEMP/codesigning-identities.txt"
           grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
-          security find-certificate -c 'Mac Installer Distribution' "$keychain_path" > /dev/null
+
+          # Apple has used multiple display names for the same Mac App Store
+          # installer certificate over time. In particular, certificates
+          # created as "Mac Installer Distribution" are commonly imported
+          # with the legacy "3rd Party Mac Developer Installer" identity
+          # name. Accept every Apple-issued spelling instead of rejecting a
+          # valid P12 based only on its display label.
+          installer_certificate_found=false
+          for installer_certificate_name in \
+            '3rd Party Mac Developer Installer' \
+            'Mac Installer Distribution' \
+            'Mac Installer Submission'; do
+            if security find-certificate -c "$installer_certificate_name" "$keychain_path" > /dev/null 2>&1; then
+              echo "Found $installer_certificate_name certificate"
+              installer_certificate_found=true
+              break
+            fi
+          done
+          if [[ "$installer_certificate_found" != true ]]; then
+            echo 'No Mac App Store installer certificate was found in the imported P12.'
+            exit 1
+          fi
 
       - name: Download Safari package artifact
         uses: actions/download-artifact@v4
