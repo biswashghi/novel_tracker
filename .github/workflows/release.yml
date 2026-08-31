@@ -162,6 +162,8 @@ jobs:
           APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
           APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
+          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD }}
         run: |
           chrome=false
           if [[ -n "$CHROME_WEB_STORE_EXTENSION_ID" && -n "$CHROME_WEB_STORE_CLIENT_ID" && -n "$CHROME_WEB_STORE_CLIENT_SECRET" && -n "$CHROME_WEB_STORE_REFRESH_TOKEN" ]]; then
@@ -174,7 +176,7 @@ jobs:
           fi
 
           safari=false
-          if [[ -n "$APP_STORE_CONNECT_KEY_ID" && -n "$APP_STORE_CONNECT_ISSUER_ID" && -n "$APP_STORE_CONNECT_P8" && -n "$APPSTORE_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_CERTIFICATES_PASSWORD" ]]; then
+          if [[ -n "$APP_STORE_CONNECT_KEY_ID" && -n "$APP_STORE_CONNECT_ISSUER_ID" && -n "$APP_STORE_CONNECT_P8" && -n "$APPSTORE_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_CERTIFICATES_PASSWORD" && -n "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" && -n "$APPSTORE_INSTALLER_CERTIFICATES_PASSWORD" ]]; then
             safari=true
           fi
 
@@ -285,23 +287,33 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane --no-document
 
-      - name: Import Apple distribution certificate
+      - name: Import Apple distribution certificates
         shell: bash
         env:
           APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
+          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD }}
         run: |
           set -euo pipefail
 
-          certificate_path="$RUNNER_TEMP/novel-tracker-distribution.p12"
+          distribution_certificate_path="$RUNNER_TEMP/novel-tracker-distribution.p12"
+          installer_certificate_path="$RUNNER_TEMP/novel-tracker-installer-distribution.p12"
           keychain_path="$RUNNER_TEMP/novel-tracker-signing.keychain-db"
 
-          printf '%s' "$APPSTORE_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$certificate_path"
+          printf '%s' "$APPSTORE_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$distribution_certificate_path"
+          printf '%s' "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$installer_certificate_path"
           security create-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
-          security import "$certificate_path" \
+          security import "$distribution_certificate_path" \
             -P "$APPSTORE_CERTIFICATES_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security import "$installer_certificate_path" \
+            -P "$APPSTORE_INSTALLER_CERTIFICATES_PASSWORD" \
             -A \
             -t cert \
             -f pkcs12 \
@@ -309,6 +321,7 @@ jobs:
           security list-keychains -d user -s "$keychain_path"
           security find-identity -v -p codesigning "$keychain_path" | tee "$RUNNER_TEMP/codesigning-identities.txt"
           grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
+          security find-certificate -c 'Mac Installer Distribution' "$keychain_path" > /dev/null
 
       - name: Download Safari package artifact
         uses: actions/download-artifact@v4
