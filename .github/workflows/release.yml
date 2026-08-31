@@ -36,6 +36,11 @@ jobs:
       - name: Run test suite
         run: npm test
 
+      - name: Test Apple installer certificate matching
+        run: |
+          gem install --user-install minitest --no-document
+          ruby tests/apple-installer-certificate.test.rb
+
   build-chrome:
     name: Chrome package
     needs: test
@@ -366,6 +371,8 @@ jobs:
           # intentionally lives in the job's disposable keychain.
           NOVEL_TRACKER_KEYCHAIN_PATH: ${{ runner.temp }}/novel-tracker-signing.keychain-db
           NOVEL_TRACKER_KEYCHAIN_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          NOVEL_TRACKER_INSTALLER_P12_PATH: ${{ runner.temp }}/novel-tracker-installer-distribution.p12
+          NOVEL_TRACKER_INSTALLER_P12_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD || secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           # Empty on a tag-push trigger (no workflow_dispatch inputs exist
           # there) — publish-safari.mjs already defaults an unset/empty
           # value to "mac,ios", so that's fine.

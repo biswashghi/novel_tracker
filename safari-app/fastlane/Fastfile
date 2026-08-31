@@ -33,6 +33,10 @@
 #   account state (e.g. an existing version sitting on unresolved review
 #   feedback) — that's Apple's process, not something this lane can bypass.
 
+require "base64"
+require "tmpdir"
+require_relative "installer_certificate"
+
 default_platform(:mac)
 
 PROJECT = ENV["NOVEL_TRACKER_XCODE_PROJECT"] ||
@@ -107,10 +111,39 @@ def configure_distribution_signing(target, profile_name)
   )
 end
 
+def restore_installer_certificate
+  # Local releases can continue using an identity already in their keychain.
+  installer_p12_path = ENV["NOVEL_TRACKER_INSTALLER_P12_PATH"]
+  return if installer_p12_path.to_s.empty?
+
+  p12 = OpenSSL::PKCS12.new(
+    File.binread(installer_p12_path),
+    ENV.fetch("NOVEL_TRACKER_INSTALLER_P12_PASSWORD")
+  )
+  # Read existing certificates only: never create/revoke a signing identity.
+  certificates = Spaceship::ConnectAPI::Certificate.all(
+    filter: { certificateType: "MAC_INSTALLER_DISTRIBUTION" }
+  ).map do |certificate|
+    OpenSSL::X509::Certificate.new(Base64.strict_decode64(certificate.certificate_content))
+  end
+  certificate = InstallerCertificate.match(p12.key, certificates, team_id: TEAM_ID)
+
+  Dir.mktmpdir("novel-tracker-installer-certificate") do |directory|
+    certificate_path = File.join(directory, "installer.cer")
+    File.binwrite(certificate_path, certificate.to_der)
+    # The P12's private key was imported by CI already. Importing this public
+    # certificate completes the identity, including for key-only P12 exports.
+    sh("security", "import", certificate_path,
+       "-k", ENV.fetch("NOVEL_TRACKER_KEYCHAIN_PATH"))
+  end
+  UI.success("Restored matching installer certificate: #{certificate.subject}")
+end
+
 platform :mac do
   desc "Archive and upload the macOS Safari extension app to App Store Connect"
   lane :release do
     api_key = connect_api_key
+    restore_installer_certificate
     certificate_id = distribution_certificate_id(api_key, "macos")
     app_profile = app_store_profile(
       api_key,

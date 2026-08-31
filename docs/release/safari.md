@@ -34,7 +34,14 @@ identity from `APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64` and
 optional when both `.p12` exports use `APPSTORE_CERTIFICATES_PASSWORD`; a
 dedicated value overrides that fallback. The installer identity signs the
 `.pkg` Xcode exports for the Mac App Store and is not interchangeable with the
-Apple Distribution identity that signs the app itself. Fastlane then creates
+Apple Distribution identity that signs the app itself. Some Keychain exports
+contain only the installer private key, without a certificate bag. For CI,
+the macOS lane downloads existing `MAC_INSTALLER_DISTRIBUTION` certificates
+from Apple's API and imports only a current certificate for this team whose
+public key matches the P12's private key. This does not create or revoke
+certificates. It fails with an explicit message if no matching certificate
+exists; a misleading P12 filename cannot substitute for a matching identity.
+Fastlane then creates
 or repairs dedicated CI-managed iOS and macOS App Store profiles for the
 containing app and extension, bound to the Apple Distribution certificate. It
 configures only the Release targets for explicit signing; Debug/local
