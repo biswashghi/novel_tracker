@@ -55,6 +55,11 @@ Without that, Fastlane searches the runner's empty login keychain, fails to
 recognize the imported certificate, and incorrectly tries to create another
 distribution certificate.
 
+Safari packaging requires a full Git checkout (`fetch-depth: 0` in both CI
+workflows), because the Apple build number is `git rev-list --count HEAD`.
+The packaging script rejects shallow clones before generating any artifacts,
+preventing an accidental build-number reset to `1`.
+
 - **macOS** (`fastlane mac release`) archives, exports, and uploads to App
   Store Connect as a new unreleased draft version. Does **not** submit for
   review — that stays a manual step. Verified locally: archive/export/sign

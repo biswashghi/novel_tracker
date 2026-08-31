@@ -5,6 +5,14 @@ apple_team_id="3LQK7JJTX2"
 
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
+# A shallow CI checkout makes every release look like build 1. Refuse to
+# package it rather than upload an incorrect/duplicate Apple build number.
+if [[ "$(git -C "$root_dir" rev-parse --is-shallow-repository)" != false ]]; then
+  echo "Safari packaging requires full Git history for Apple's build number. Use actions/checkout with fetch-depth: 0 or git fetch --unshallow." >&2
+  exit 1
+fi
+build_number="$(git -C "$root_dir" rev-list --count HEAD)"
+
 # .github/workflows/pr.yml sets this to keep PR validation builds clearly
 # distinct from a real release's version (see AGENTS.md — Versioning).
 # Empty/unset in the normal release path, where package.json's own version
@@ -526,7 +534,7 @@ node --input-type=module -e '
   "$xcode_project" \
   "$apple_team_id" \
   "$marketing_version" \
-  "$(cd "$root_dir" && git rev-list --count HEAD)"
+  "$build_number"
 
 echo "Configured Xcode project:"
 echo "  Apple team:        $apple_team_id"
@@ -534,7 +542,7 @@ echo "  Signing:           Automatic"
 echo "  macOS minimum:     11.0"
 echo "  macOS networking:  Enabled"
 echo "  App version:       $marketing_version"
-echo "  Build number:      $(cd "$root_dir" && git rev-list --count HEAD)"
+echo "  Build number:      $build_number"
 
 # ---------------------------------------------------------------------------
 # Show resulting configuration

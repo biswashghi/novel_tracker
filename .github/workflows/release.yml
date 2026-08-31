@@ -106,6 +106,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # Apple's build number is the full commit count, not the count
+          # of the default one-commit shallow checkout.
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
