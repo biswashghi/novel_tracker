@@ -28,11 +28,12 @@ Steps:
 shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
 `APP_STORE_CONNECT_*` secrets — one lane per platform. The job imports the
 Apple Distribution identity from `APPSTORE_CERTIFICATES_FILE_BASE64` and
-`APPSTORE_CERTIFICATES_PASSWORD`, then downloads the matching iOS and macOS
-App Store provisioning profiles for the containing app and extension before
-Fastlane archives them. The profile names returned by the download action are
-passed to Fastlane, which configures only the Release targets for explicit
-Apple Distribution signing; Debug/local development remains automatic:
+`APPSTORE_CERTIFICATES_PASSWORD`. Fastlane then creates or repairs dedicated
+CI-managed iOS and macOS App Store profiles for the containing app and
+extension, bound to that installed certificate. It configures only the
+Release targets for explicit Apple Distribution signing; Debug/local
+development remains automatic. This avoids Apple's Xcode-managed profiles,
+which cannot be selected by a manually signed CI archive:
 
 - **macOS** (`fastlane mac release`) archives, exports, and uploads to App
   Store Connect as a new unreleased draft version. Does **not** submit for
