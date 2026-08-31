@@ -339,6 +339,10 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
+          # Fastlane defaults to login.keychain-db, but the imported identity
+          # intentionally lives in the job's disposable keychain.
+          NOVEL_TRACKER_KEYCHAIN_PATH: ${{ runner.temp }}/novel-tracker-signing.keychain-db
+          NOVEL_TRACKER_KEYCHAIN_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           # Empty on a tag-push trigger (no workflow_dispatch inputs exist
           # there) — publish-safari.mjs already defaults an unset/empty
           # value to "mac,ios", so that's fine.

@@ -73,6 +73,8 @@ def distribution_certificate_id(api_key, platform)
     team_id: TEAM_ID,
     platform: platform,
     generate_apple_certs: true,
+    keychain_path: ENV.fetch("NOVEL_TRACKER_KEYCHAIN_PATH"),
+    keychain_password: ENV.fetch("NOVEL_TRACKER_KEYCHAIN_PASSWORD"),
     skip_set_partition_list: true
   )
 

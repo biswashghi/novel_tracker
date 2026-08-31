@@ -35,6 +35,11 @@ Release targets for explicit Apple Distribution signing; Debug/local
 development remains automatic. This avoids Apple's Xcode-managed profiles,
 which cannot be selected by a manually signed CI archive:
 
+The workflow passes the disposable keychain path to Fastlane explicitly.
+Without that, Fastlane searches the runner's empty login keychain, fails to
+recognize the imported certificate, and incorrectly tries to create another
+distribution certificate.
+
 - **macOS** (`fastlane mac release`) archives, exports, and uploads to App
   Store Connect as a new unreleased draft version. Does **not** submit for
   review — that stays a manual step. Verified locally: archive/export/sign
