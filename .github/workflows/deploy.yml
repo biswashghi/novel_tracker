@@ -10,6 +10,7 @@ on:
       - scripts/remote/**
       - deploy/**
       - tests/deploy-production.test.sh
+      - tests/e2e/**
       - scripts/configure-keycloak.sh
       - scripts/backup-vps.sh
       - compose*.yml
