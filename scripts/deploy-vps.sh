@@ -1,73 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 3 || $# -gt 4 ]]; then
-  echo "Usage: $0 <deploy-user> <server-ip> <repo-url> [branch]" >&2
-  exit 1
-fi
+usage() {
+  echo "Usage: NOVEL_API_DOMAIN=... NOVEL_AUTH_DOMAIN=... NOVEL_API_IMAGE=... $0 <deploy-user> <server-ip> [repo-url] [branch]"
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then usage; exit 0; fi
+if [[ $# -lt 2 || $# -gt 4 ]]; then usage >&2; exit 1; fi
 
 DEPLOY_USER="$1"
 SERVER_IP="$2"
-REPO_URL="$3"
-BRANCH="${4:-main}"
-APP_DIR="/opt/novel-tracker"
-SERVER_ENV_FILE="/etc/novel-tracker/app.env"
-API_PORT="${NOVEL_API_HOST_PORT:-8792}"
-AUTH_PORT="${NOVEL_AUTH_HOST_PORT:-8793}"
+API_DOMAIN="${NOVEL_API_DOMAIN:-${APP_API_DOMAIN:-}}"
+AUTH_DOMAIN="${NOVEL_AUTH_DOMAIN:-${AUTH_HOST:-}}"
+API_IMAGE="${NOVEL_API_IMAGE:-}"
+VERIFY_PUBLIC_DEPLOYMENT="${VERIFY_PUBLIC_DEPLOYMENT:-1}"
 
-ssh "${DEPLOY_USER}@${SERVER_IP}" <<EOF
-set -euo pipefail
-
-if ! command -v docker >/dev/null 2>&1; then
-  sudo apt-get update
-  sudo apt-get install -y ca-certificates curl git
-  sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc >/dev/null
-  sudo chmod a+r /etc/apt/keyrings/docker.asc
-  echo "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \$(. /etc/os-release && echo \$VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-  sudo apt-get update
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  sudo usermod -aG docker ${DEPLOY_USER}
-fi
-
-if ! sudo test -f "${SERVER_ENV_FILE}"; then
-  echo "Missing ${SERVER_ENV_FILE}. Create it on the VPS with POSTGRES_PASSWORD, KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD, and AUTH_HOST." >&2
-  exit 1
-fi
-
-if [[ ! -d "${APP_DIR}/.git" ]]; then
-  sudo mkdir -p "${APP_DIR}"
-  sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}"
-  git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
-else
-  cd "${APP_DIR}"
-  git fetch origin
-  git checkout "${BRANCH}"
-  git pull --ff-only origin "${BRANCH}"
-fi
-
-sudo cp "${SERVER_ENV_FILE}" "${APP_DIR}/.env.prod"
-sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}/.env.prod"
-cd "${APP_DIR}"
-sudo NOVEL_API_HOST_PORT="${API_PORT}" NOVEL_AUTH_HOST_PORT="${AUTH_PORT}" docker compose --env-file .env.prod -f infra/docker-compose.yml up -d --build
-for attempt in \$(seq 1 60); do
-  if curl --fail --silent "http://127.0.0.1:${AUTH_PORT}/realms/novel-tracker/.well-known/openid-configuration" >/dev/null; then
-    break
-  fi
-  if [[ "\${attempt}" -eq 60 ]]; then
-    echo "Keycloak did not become ready in time." >&2
-    exit 1
-  fi
-  sleep 2
+for domain in "$API_DOMAIN" "$AUTH_DOMAIN"; do
+  [[ "$domain" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || { echo "Novel Tracker domains must be valid DNS names." >&2; exit 1; }
 done
-./scripts/configure-keycloak.sh
-sudo install -m 0644 infra/novel-tracker-backup.service /etc/systemd/system/novel-tracker-backup.service
-sudo install -m 0644 infra/novel-tracker-backup.timer /etc/systemd/system/novel-tracker-backup.timer
-sudo systemctl daemon-reload
-sudo systemctl enable --now novel-tracker-backup.timer
-sudo docker compose --env-file .env.prod -f infra/docker-compose.yml ps
-curl --fail --silent "http://127.0.0.1:${API_PORT}/health" >/dev/null
-curl --fail --silent "https://api.novel.bghimire.com/health" >/dev/null
-curl --fail --silent "https://auth.novel.bghimire.com/realms/novel-tracker/.well-known/openid-configuration" >/dev/null
-echo "Novel Tracker API, authentication, and backup timer are ready."
-EOF
+[[ "$API_IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || { echo "NOVEL_API_IMAGE must be an immutable GHCR digest." >&2; exit 1; }
+[[ "$VERIFY_PUBLIC_DEPLOYMENT" =~ ^[01]$ ]] || { echo "VERIFY_PUBLIC_DEPLOYMENT must be 0 or 1." >&2; exit 1; }
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PAYLOAD_FILE="$(mktemp)"
+trap 'rm -f "$PAYLOAD_FILE"' EXIT
+chmod 0600 "$PAYLOAD_FILE"
+printf '%s\n' "NOVEL_API_IMAGE=${API_IMAGE}" >"$PAYLOAD_FILE"
+
+scp -q "$ROOT_DIR/compose.yml" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-compose.yml"
+scp -q "$ROOT_DIR/compose.production.yml" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-compose.production.yml"
+scp -q "$ROOT_DIR/infra/keycloak-realm.json" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-keycloak-realm.json"
+scp -q "$ROOT_DIR/infra/novel-tracker-backup.service" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-backup.service"
+scp -q "$ROOT_DIR/infra/novel-tracker-backup.timer" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-backup.timer"
+scp -q "$ROOT_DIR/scripts/configure-keycloak.sh" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-configure-keycloak.sh"
+scp -q "$ROOT_DIR/scripts/backup-vps.sh" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-backup-vps.sh"
+scp -q "$ROOT_DIR/deploy/novel-tracker.caddy.template" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker.caddy.template"
+scp -q "$ROOT_DIR/scripts/remote/deploy-production.sh" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-deploy-production.sh"
+scp -q "$PAYLOAD_FILE" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-release.env"
+
+ssh "${DEPLOY_USER}@${SERVER_IP}" \
+  API_DOMAIN="$API_DOMAIN" AUTH_DOMAIN="$AUTH_DOMAIN" \
+  VERIFY_PUBLIC_DEPLOYMENT="$VERIFY_PUBLIC_DEPLOYMENT" \
+  'bash /tmp/novel-deploy-production.sh'

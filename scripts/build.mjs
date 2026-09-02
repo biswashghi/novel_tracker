@@ -22,7 +22,7 @@ if (!new Set(["chrome", "firefox", "safari"]).has(target)) {
   throw new Error(`Unsupported build target: ${target}`);
 }
 if (!new Set(["production", "local"]).has(env)) {
-  throw new Error(`Unsupported build env: ${env}. Use --env=local to point at infra/docker-compose.yml (see docs/testing-locally.md).`);
+  throw new Error(`Unsupported build env: ${env}. Use --env=local to point at the local Compose stack (see docs/testing-locally.md).`);
 }
 
 const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
@@ -48,7 +48,7 @@ await rm(distDir, { recursive: true, force: true });
 await mkdir(distDir, { recursive: true });
 await cp(srcDir, distDir, { recursive: true });
 
-// --env=local points the extension at the infra/docker-compose.yml stack
+// --env=local points the extension at the standardized local Compose stack
 // (docs/testing-locally.md) instead of production. This overwrites the
 // *build output's* lib/config.js only — src/lib/config.js (the production
 // default) is never touched.

@@ -1,0 +1,56 @@
+SHELL := /bin/bash
+
+POSTGRES_PASSWORD ?= novel-tracker-local-password
+KEYCLOAK_ADMIN ?= admin
+KEYCLOAK_ADMIN_PASSWORD ?= novel-tracker-local-admin-password
+AUTH_URL ?= http://localhost:8793
+KEYCLOAK_ISSUER ?= http://localhost:8793/realms/novel-tracker
+KEYCLOAK_JWKS_URL ?= http://keycloak:8080/realms/novel-tracker/protocol/openid-connect/certs
+export POSTGRES_PASSWORD KEYCLOAK_ADMIN KEYCLOAK_ADMIN_PASSWORD AUTH_URL KEYCLOAK_ISSUER KEYCLOAK_JWKS_URL
+
+NOVEL_ENV = env POSTGRES_PASSWORD="$(POSTGRES_PASSWORD)" KEYCLOAK_ADMIN="$(KEYCLOAK_ADMIN)" KEYCLOAK_ADMIN_PASSWORD="$(KEYCLOAK_ADMIN_PASSWORD)" AUTH_URL="$(AUTH_URL)" KEYCLOAK_ISSUER="$(KEYCLOAK_ISSUER)" KEYCLOAK_JWKS_URL="$(KEYCLOAK_JWKS_URL)"
+LOCAL_COMPOSE = $(NOVEL_ENV) docker compose -p novel-tracker-local -f compose.yml -f compose.local.yml
+STAGING_PROJECT ?= novel-tracker-staging
+STAGING_COMPOSE = $(NOVEL_ENV) docker compose -p $(STAGING_PROJECT) -f compose.yml -f compose.staging.yml
+PRODUCTION_COMPOSE = $(NOVEL_ENV) docker compose -p novel-tracker -f compose.yml -f compose.production.yml
+
+.PHONY: local-up local-test local-down local-reset docker-build staging-test production-validate deployment-test
+
+local-up:
+	$(LOCAL_COMPOSE) up -d --build --wait
+
+local-test:
+	npm ci
+	npm run test
+	$(LOCAL_COMPOSE) up -d --build --wait
+	npm run build:e2e
+	npm run test:e2e
+
+local-down:
+	$(LOCAL_COMPOSE) down
+
+local-reset:
+	$(LOCAL_COMPOSE) down --volumes --remove-orphans
+
+docker-build:
+	$(STAGING_COMPOSE) build api
+
+staging-test:
+	@set -uo pipefail; rm -f staging.log; \
+	  cleanup() { $(STAGING_COMPOSE) down --volumes --remove-orphans; }; \
+	  trap cleanup EXIT; \
+	  status=0; \
+	  $(STAGING_COMPOSE) up -d $${STAGING_NO_BUILD:+--no-build} --wait || status=$$?; \
+	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error http://127.0.0.1:$${NOVEL_API_STAGING_PORT:-8792}/health >/dev/null || status=$$?; fi; \
+	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error --retry 60 --retry-delay 2 --retry-all-errors http://127.0.0.1:$${NOVEL_AUTH_STAGING_PORT:-8793}/realms/novel-tracker/.well-known/openid-configuration >/dev/null || status=$$?; fi; \
+	  if [[ $$status -eq 0 ]]; then npm run build:e2e || status=$$?; fi; \
+	  if [[ $$status -eq 0 ]]; then npm run test:e2e || status=$$?; fi; \
+	  if [[ $$status -ne 0 ]]; then $(STAGING_COMPOSE) logs --no-color > staging.log 2>&1 || true; fi; \
+	  exit $$status
+
+production-validate:
+	$(PRODUCTION_COMPOSE) config --quiet
+	$(MAKE) deployment-test
+
+deployment-test:
+	bash tests/deploy-production.test.sh

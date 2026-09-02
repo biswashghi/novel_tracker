@@ -92,6 +92,19 @@ docs/                         Architecture, sync API, release, operations
 
 Development, build, packaging, and platform-specific testing instructions (including Safari macOS and iOS) have moved to the documentation: see [docs/development.md](docs/development.md).
 
+The server stack uses the shared Docker contract:
+
+```bash
+make local-up
+make local-test
+make local-down
+make staging-test
+make production-validate
+```
+
+Only the API is published as a Docker image. Chrome, Firefox, and Safari
+packages are tested in Actions and delivered directly to their stores.
+
 ## Load Locally In Chrome Or Edge
 
 1. Run `npm run build`.

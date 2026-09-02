@@ -2,8 +2,8 @@
 
 The e2e suite loads the real packaged extension (not a mocked `chrome`
 global) with Playwright, and for the sign-in/sync specs, exercises it against
-the same Postgres + Keycloak + API stack used in production
-(`infra/docker-compose.yml`) pointed at throwaway local credentials instead.
+the same Postgres + Keycloak + API services used in production
+(`compose.yml` plus `compose.local.yml`) with throwaway local credentials.
 
 ## Quick start
 

@@ -85,6 +85,7 @@ jobs:
           name: chrome-package-pr${{ github.event.pull_request.number }}
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14
 
   build-firefox:
     name: Firefox package
@@ -112,6 +113,7 @@ jobs:
           name: firefox-package-pr${{ github.event.pull_request.number }}
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14
 
   build-safari:
     name: Safari package
@@ -143,3 +145,4 @@ jobs:
           name: safari-package-pr${{ github.event.pull_request.number }}
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14

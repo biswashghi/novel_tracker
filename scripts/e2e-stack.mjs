@@ -1,18 +1,27 @@
 #!/usr/bin/env node
-// Brings the local Postgres + Keycloak + API stack (infra/docker-compose.yml)
+// Brings the standardized local Postgres + Keycloak + API stack
 // up or down for e2e testing. See docs/testing-locally.md.
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const infraDir = path.join(root, "infra");
 const composeArgs = [
   "compose",
-  "-f", path.join(infraDir, "docker-compose.yml"),
-  "-f", path.join(infraDir, "docker-compose.e2e.yml"),
-  "--env-file", path.join(infraDir, ".env.e2e")
+  "-p", "novel-tracker-local",
+  "-f", path.join(root, "compose.yml"),
+  "-f", path.join(root, "compose.local.yml")
 ];
+
+const composeEnvironment = {
+  ...process.env,
+  POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD || "novel-tracker-e2e-password",
+  KEYCLOAK_ADMIN: process.env.KEYCLOAK_ADMIN || "admin",
+  KEYCLOAK_ADMIN_PASSWORD: process.env.KEYCLOAK_ADMIN_PASSWORD || "novel-tracker-e2e-admin-password",
+  AUTH_URL: process.env.AUTH_URL || "http://localhost:8793",
+  KEYCLOAK_ISSUER: process.env.KEYCLOAK_ISSUER || "http://localhost:8793/realms/novel-tracker",
+  KEYCLOAK_JWKS_URL: process.env.KEYCLOAK_JWKS_URL || "http://keycloak:8080/realms/novel-tracker/protocol/openid-connect/certs"
+};
 
 const mode = process.argv[2];
 if (!["up", "down"].includes(mode)) {
@@ -22,7 +31,7 @@ if (!["up", "down"].includes(mode)) {
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = spawn(command, args, { stdio: "inherit", env: composeEnvironment });
     child.on("exit", (code) => (code === 0
       ? resolve()
       : reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`))));
@@ -42,7 +51,7 @@ async function waitForKeycloakRealm(timeoutMs = 120_000) {
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
-  throw new Error(`Timed out waiting for the novel-tracker realm at ${url}. Check: docker compose -f infra/docker-compose.yml -f infra/docker-compose.e2e.yml logs keycloak`);
+  throw new Error(`Timed out waiting for the novel-tracker realm at ${url}. Check: make local-up`);
 }
 
 if (mode === "up") {

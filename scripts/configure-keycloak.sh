@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE=(sudo docker compose --env-file "${ROOT_DIR}/.env.prod" -f "${ROOT_DIR}/infra/docker-compose.yml")
+ENV_FILE="${NOVEL_ENV_FILE:-/etc/novel-tracker/app.env}"
+COMPOSE=(sudo docker compose --project-name novel-tracker --env-file "${ENV_FILE}" -f "${ROOT_DIR}/compose.yml" -f "${ROOT_DIR}/compose.production.yml")
 
 "${COMPOSE[@]}" exec -T keycloak sh -ec '
 KCADM=/opt/keycloak/bin/kcadm.sh

@@ -2,9 +2,27 @@
 
 ## Deploy
 
-The Hetzner wrapper invokes `scripts/deploy-vps.sh`. Deployment waits for
-Keycloak, configures the API audience mapper, installs the nightly backup timer,
-and verifies the local and public health endpoints.
+The provider-neutral shared VPS platform must be bootstrapped once before the app
+deploy runs. A push to `main` affecting the service builds an immutable API image,
+runs the authenticated extension suite against an ephemeral Docker staging stack,
+and invokes `scripts/deploy-vps.sh` with that exact digest. Deployment updates only the `novel-tracker`
+Compose project and `/opt/shared-caddy/apps/novel-tracker.caddy`; it never recreates
+the proxy. It waits for Keycloak, configures the API audience mapper, installs the
+nightly backup timer, and verifies the local and public health endpoints.
+
+The local `scripts/deploy-vps.sh` is limited to validation and upload. The
+complete VPS sequence is readable in `scripts/remote/deploy-production.sh`,
+with routing in `deploy/novel-tracker.caddy.template`.
+`make deployment-test` exercises both successful orchestration and rollback
+after failed public verification.
+
+The Compose project name changed from the implicit `infra` name, but the Postgres
+volume remains explicitly named `infra_postgres-data`. Do not rename that volume:
+it contains both synchronized novel state and Keycloak identity data. The first new
+deployment shuts down the old `infra` project without `--volumes` before starting
+the named project, preventing concurrent PostgreSQL access to that volume.
+Production uses `compose.yml` with `compose.production.yml`. Scripts read secrets directly from root-owned
+`/etc/novel-tracker/app.env`; they no longer copy the file into the Git checkout.
 
 ## Backups
 

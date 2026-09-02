@@ -36,6 +36,12 @@ jobs:
       - name: Run test suite
         run: npm test
 
+      - name: Install Chromium for extension E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated extension E2E against Docker staging
+        run: make staging-test
+
       - name: Test Apple installer certificate matching
         run: |
           gem install --user-install minitest --no-document
@@ -69,6 +75,7 @@ jobs:
           name: chrome-package
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14
 
   build-firefox:
     name: Firefox package
@@ -91,6 +98,7 @@ jobs:
         run: |
           npm run build:firefox
           npm run package:firefox
+          npx --yes web-ext@8.9.0 lint --source-dir dist-firefox
 
       - name: Upload Firefox artifact
         uses: actions/upload-artifact@v4
@@ -98,6 +106,7 @@ jobs:
           name: firefox-package
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14
 
   build-safari:
     name: Safari package
@@ -125,12 +134,22 @@ jobs:
           npm run build:safari
           npm run package:safari
 
+      - name: Compile unsigned macOS and iOS Safari apps
+        run: |
+          project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"
+          xcodebuild -project "$project" -scheme "Novel Tracker (macOS)" \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project "$project" -scheme "Novel Tracker (iOS)" \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+
       - name: Upload Safari artifact
         uses: actions/upload-artifact@v4
         with:
           name: safari-package
           path: release/*.zip
           if-no-files-found: error
+          retention-days: 14
 
       # publish-safari (below) needs the actual generated Xcode project, not
       # just the zip of it — Fastlane builds/archives/signs from the
@@ -143,6 +162,7 @@ jobs:
           name: safari-xcode-project
           path: build/safari-xcode
           if-no-files-found: error
+          retention-days: 14
 
   # `secrets` cannot be referenced inside any `if:` conditional — job-level
   # or step-level (actionlint flags this; GitHub's context-availability
@@ -253,24 +273,10 @@ jobs:
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
         run: node scripts/publish-firefox.mjs "${{ steps.release.outputs.firefox_zip }}"
 
-      # Safari's own upload runs in publish-safari below, on a macOS runner —
-      # Fastlane's build_app step needs real Xcode, which ubuntu-latest (this
-      # job) doesn't have. This job still downloads and attaches the Safari
-      # zip to the GitHub Release above/below, just doesn't publish it.
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ${{ steps.release.outputs.chrome_zip }}
-            ${{ steps.release.outputs.firefox_zip }}
-            ${{ steps.release.outputs.safari_zip }}
-
       # Chrome and Firefox are independent stores. A stale Chrome OAuth
       # token must not prevent Firefox from receiving an otherwise valid
-      # release or suppress the GitHub release artifacts. Preserve a failed
-      # job conclusion after those independent steps have had their chance.
+      # release. Preserve a failed job conclusion after those independent
+      # steps have had their chance.
       - name: Report Chrome publishing failure
         if: steps.publish-chrome.outcome == 'failure'
         run: exit 1

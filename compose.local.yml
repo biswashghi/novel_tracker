@@ -1,0 +1,18 @@
+services:
+  postgres:
+    volumes:
+      - novel-local-postgres:/var/lib/postgresql/data
+  keycloak:
+    ports:
+      - "127.0.0.1:${NOVEL_AUTH_LOCAL_PORT:-8793}:8080"
+    volumes:
+      - ./infra/keycloak-realm.e2e.json:/opt/keycloak/data/import/novel-tracker-realm.json:ro
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "127.0.0.1:${NOVEL_API_LOCAL_PORT:-8792}:3000"
+
+volumes:
+  novel-local-postgres:

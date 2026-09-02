@@ -1,0 +1,33 @@
+services:
+  postgres:
+    restart: unless-stopped
+    networks: [private]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  keycloak:
+    restart: unless-stopped
+    expose: ["8080"]
+    networks:
+      private:
+      edge:
+        aliases: [novel-auth]
+    volumes:
+      - ./infra/keycloak-realm.json:/opt/keycloak/data/import/novel-tracker-realm.json:ro
+  api:
+    restart: unless-stopped
+    expose: ["3000"]
+    networks:
+      private:
+      edge:
+        aliases: [novel-api]
+
+volumes:
+  postgres-data:
+    name: infra_postgres-data
+
+networks:
+  private:
+  edge:
+    external: true
+    name: vps-edge
+

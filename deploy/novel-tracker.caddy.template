@@ -1,0 +1,9 @@
+{{NOVEL_API_DOMAIN}} {
+  encode zstd gzip
+  reverse_proxy novel-api:3000
+}
+
+{{NOVEL_AUTH_DOMAIN}} {
+  encode zstd gzip
+  reverse_proxy novel-auth:8080
+}
