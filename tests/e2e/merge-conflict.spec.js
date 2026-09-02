@@ -35,7 +35,9 @@ const CHAPTER_HTML = `
 async function openDevice(name) {
   const userDataDir = await mkdtemp(path.join(tmpdir(), `novel-tracker-e2e-${name}-`));
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    // Chrome's current headless mode supports unpacked extensions and also
+    // works on GitHub's Linux runners, where no X server is available.
+    headless: true,
     args: [`--disable-extensions-except=${DIST_DIR}`, `--load-extension=${DIST_DIR}`, '--no-first-run']
   });
   context.on('page', (page) => logConsole(page, `${name} page`));
