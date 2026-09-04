@@ -36,6 +36,7 @@ const outDir = path.join(rootDir, "store-assets");
 const PORT = 8899;
 const BUNDLE_ID = "app.noveltracker.extension";
 const keepDevices = process.argv.includes("--keep-devices");
+const deviceKey = process.argv.find((argument) => argument.startsWith("--device="))?.split("=")[1];
 
 const DEVICES = [
   {
@@ -55,6 +56,13 @@ const DEVICES = [
     prefix: "ios-screenshot"
   }
 ];
+const devicesToCapture = deviceKey
+  ? DEVICES.filter((device) => device.key === deviceKey)
+  : DEVICES;
+
+if (deviceKey && devicesToCapture.length === 0) {
+  throw new Error(`Unknown --device=${deviceKey}. Use --device=ipad or --device=iphone.`);
+}
 
 // Library first, filtering second, saving a chapter third, and the app screen
 // last: Apple requires the majority to show the app in use and weights the
@@ -328,7 +336,7 @@ async function main() {
   });
 
   try {
-    for (const device of DEVICES) {
+    for (const device of devicesToCapture) {
       await ensureDevice(device);
       let index = 0;
 
@@ -347,7 +355,12 @@ async function main() {
         } else {
           simctl(["openurl", device.name, shot.url]);
         }
-        await new Promise((resolve) => setTimeout(resolve, 6000));
+        // A freshly-created iPhone simulator can display Safari onboarding
+        // cards and transient system tips while the first URL is still
+        // loading. Give its web captures enough time for the redirect, seeded
+        // storage render, and those overlays to settle before taking the shot.
+        const settleTime = device.key === "iphone" && !shot.app ? 18_000 : 6_000;
+        await new Promise((resolve) => setTimeout(resolve, settleTime));
 
         await capture(device, raw);
         await sharp(raw).jpeg({ quality: 92, chromaSubsampling: "4:4:4" }).toFile(target);
