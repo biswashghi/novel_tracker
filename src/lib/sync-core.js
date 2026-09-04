@@ -86,8 +86,21 @@ function normalizedFieldPayload(payload = {}) {
 }
 
 function ensureNovel(state, mutation) {
+  state.novels ||= {};
   const existing = state.novels[mutation.novelId];
-  if (existing) return existing;
+  if (existing) {
+    // SYNC_STATE_VERSION was already 1 when chapter history moved from the
+    // materialized library into the replicated state. Records persisted by
+    // those early builds therefore pass the version check but can lack these
+    // containers. Normalize on read so the first incoming checkpoint upgrades
+    // the record instead of crashing the entire sign-in/sync request.
+    existing.fields ||= {};
+    existing.chapterHistory ||= {};
+    existing.headCheckpointId ||= "";
+    existing.lifecycle ||= "active";
+    existing.generation ||= mutation.generation || 1;
+    return existing;
+  }
   const novel = {
     id: mutation.novelId,
     generation: mutation.generation || 1,
@@ -262,8 +275,10 @@ export function purgeExpiredTombstones(inputState, now = Date.now()) {
 
 export function materializeNovel(novel) {
   if (!novel || novel.lifecycle === "deleted") return null;
-  const fields = Object.fromEntries(Object.entries(novel.fields).map(([name, register]) => [name, register.value]));
-  const history = Object.values(novel.chapterHistory)
+  const fieldsByName = novel.fields || {};
+  const chapterHistory = novel.chapterHistory || {};
+  const fields = Object.fromEntries(Object.entries(fieldsByName).map(([name, register]) => [name, register.value]));
+  const history = Object.values(chapterHistory)
     .sort((left, right) => compareClocks(left.readAt, right.readAt) || String(left.id).localeCompare(String(right.id)))
     .map((event) => ({
       id: event.id,
@@ -272,7 +287,7 @@ export function materializeNovel(novel) {
       readAt: new Date(event.readAt.wallMs).toISOString(),
       source: event.source
     }));
-  const head = novel.chapterHistory[novel.headCheckpointId];
+  const head = chapterHistory[novel.headCheckpointId];
   return {
     id: novel.id,
     tags: [],
@@ -288,7 +303,7 @@ export function materializeNovel(novel) {
 }
 
 export function materializeNovels(state) {
-  return Object.values(state.novels).map(materializeNovel).filter(Boolean);
+  return Object.values(state.novels || {}).map(materializeNovel).filter(Boolean);
 }
 
 function normalizeIdentityText(value) {

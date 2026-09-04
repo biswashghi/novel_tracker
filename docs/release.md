@@ -38,19 +38,40 @@ git push --follow-tags
 That's the single source of truth for the version — don't hand-edit
 `package.json`'s version separately from tagging a release.
 
-Pushing the tag runs `.github/workflows/release.yml`'s `test` job (unit
-tests only — the Docker-backed e2e suite in `tests/e2e/` is local-only, see
-[testing-locally.md](testing-locally.md)), then builds and uploads
-Chrome/Firefox/Safari packages, then publishes to all three stores
-automatically. To dry-run packaging without publishing, use
+Pushing the tag runs `.github/workflows/release.yml`'s test and authenticated
+staging checks, then builds and uploads Chrome, Firefox, and Safari packages.
+Each store publishes independently, so a packaging or credential failure for
+one store does not block the others. To dry-run packaging without publishing, use
 `workflow_dispatch` with `publish_to_stores` left `false`.
+
+## Backend and store rollout compatibility
+
+Store approvals and automatic updates lag behind the server deployment. Treat
+the version currently available in each public store as a supported production
+client, even after newer source has reached `main`.
+
+For a change that affects both the API and an extension:
+
+1. Deploy an additive, backward-compatible server change first. It must still
+   accept requests from every currently published extension version.
+2. Publish the extension update and verify the signed store build against
+   production.
+3. Wait for store approval and sufficient client adoption before removing old
+   server behavior in a later release.
+
+If the client has to ship first, it must support both the old and new server
+behavior. Do not use a server deployment to force an immediate store-client
+upgrade; users do not control store review and update timing.
+
+A failed release tag is immutable history. Fix the cause on `main`, bump to a
+new version, and publish a new tag rather than moving or rerunning the old tag.
 
 ## One-time CI setup
 
-The `publish` and `publish-safari` jobs in `release.yml` each skip
-themselves automatically (via the `check-secrets` job) if their store's
-secrets aren't configured on the repo — so the workflow is always safe to
-run, but a given store's publish step is a no-op until its secrets exist.
+The `publish-chrome`, `publish-firefox`, and `publish-safari` jobs in
+`release.yml` each skip themselves automatically (via the `check-secrets`
+job) if that store's secrets aren't configured on the repo. A given store's
+publish step is a no-op until its secrets exist.
 Add them once under Settings → Secrets and variables → Actions:
 
 | Store | Secrets | One-time setup |

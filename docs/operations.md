@@ -7,8 +7,9 @@ deploy runs. A push to `main` affecting the service builds an immutable API imag
 runs the authenticated extension suite against an ephemeral Docker staging stack,
 and invokes `scripts/deploy-vps.sh` with that exact digest. Deployment updates only the `novel-tracker`
 Compose project and `/opt/shared-caddy/apps/novel-tracker.caddy`; it never recreates
-the proxy. It waits for Keycloak, configures the API audience mapper, installs the
-nightly backup timer, and verifies the local and public health endpoints.
+the proxy. It waits for Keycloak, configures the API audience mapper, repairs the
+known Chrome, Firefox, and Safari extension callbacks, installs the nightly backup
+timer, and verifies the local and public health endpoints.
 
 The local `scripts/deploy-vps.sh` is limited to validation and upload. The
 complete VPS sequence is readable in `scripts/remote/deploy-production.sh`,

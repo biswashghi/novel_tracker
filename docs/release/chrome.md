@@ -21,9 +21,11 @@ npm run package:webstore
 ```
 
 3. Load `dist/` unpacked for a final manual verification (optional).
-4. Record the callback returned by `chrome.identity.getRedirectURL("oauth2")`
-   and register its exact value on the Keycloak `novel-tracker-extension`
-   client before the production store release.
+4. Confirm the production callback
+   `https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2` is on the
+   Keycloak `novel-tracker-extension` client. Production deployment repairs
+   this callback automatically, but the signed store build should still be
+   tested after publishing.
 5. Upload the ZIP from `release/` to the Chrome Web Store Developer Dashboard.
 
 Verification checklist:
@@ -34,7 +36,7 @@ Verification checklist:
 
 ## One-time CI publishing setup
 
-`.github/workflows/release.yml`'s `publish` job runs
+`.github/workflows/release.yml`'s `publish-chrome` job runs
 `scripts/publish-chrome.mjs` against the Chrome Web Store publish API
 instead of the manual dashboard upload above. It needs four secrets
 (Settings → Secrets and variables → Actions on the repo):

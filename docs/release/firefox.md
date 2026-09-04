@@ -27,14 +27,15 @@ npm run package:firefox
 
 Notes:
 
-- Firefox desktop 140 and Android 142 are the minimum supported versions because
-  they provide built-in optional data-transmission consent.
+- AMO currently reserves the manifest `data_collection_permissions` property;
+  including it makes validation fail. Keep the required data-use declarations
+  in the AMO submission form until AMO accepts that manifest property.
 - Register the exact callback returned by `identity.getRedirectURL("oauth2")`
   in Keycloak and test the signed AMO build on Android.
 
 ## One-time CI publishing setup
 
-`.github/workflows/release.yml`'s `publish` job runs
+`.github/workflows/release.yml`'s `publish-firefox` job runs
 `scripts/publish-firefox.mjs` (via `web-ext sign`) instead of the manual AMO
 submission above. It needs two secrets (Settings → Secrets and variables →
 Actions on the repo): `AMO_API_KEY` and `AMO_API_SECRET`. Unlike Chrome,

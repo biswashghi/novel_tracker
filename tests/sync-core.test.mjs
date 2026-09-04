@@ -116,6 +116,35 @@ test("novels created before tags/notes/rating existed still materialize with saf
   assert.equal(novel.rating, 0);
 });
 
+test("a checkpoint upgrades an early version-1 novel with no chapter history map", () => {
+  const state = createSyncState({ deviceId: deviceA, now: 0 });
+  state.novels["legacy-novel"] = {
+    id: "legacy-novel",
+    generation: 1,
+    lifecycle: "active",
+    fields: {
+      title: { value: "Legacy Novel", clock: baseClock(100), mutationId: "legacy-create" }
+    }
+  };
+
+  const next = applyMutation(state, mutation({
+    mutationId: "remote-checkpoint",
+    novelId: "legacy-novel",
+    type: "checkpoint.record",
+    clock: baseClock(200, deviceB),
+    payload: {
+      event: {
+        id: "4820ace1-5537-4cbd-9798-c7183f87bf15",
+        url: "https://example.test/chapter-2",
+        label: "Chapter 2"
+      }
+    }
+  }));
+
+  assert.equal(next.novels["legacy-novel"].headCheckpointId, "4820ace1-5537-4cbd-9798-c7183f87bf15");
+  assert.equal(materializeNovel(next.novels["legacy-novel"]).lastReadChapterLabel, "Chapter 2");
+});
+
 test("expired tombstones are purged after the retention window", () => {
   let state = createSyncState({ deviceId: deviceA, now: 0 });
   state = applyMutation(state, mutation());

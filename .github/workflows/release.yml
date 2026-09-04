@@ -154,8 +154,8 @@ jobs:
       # publish-safari (below) needs the actual generated Xcode project, not
       # just the zip of it — Fastlane builds/archives/signs from the
       # xcodeproj directly (safari-app/fastlane/Fastfile), and that has to
-      # run on a macOS runner, unlike the shared `publish` job below which
-      # runs on ubuntu-latest for the Chrome/Firefox legs.
+      # run on a macOS runner, unlike the independent Chrome and Firefox
+      # publish jobs below, which run on ubuntu-latest.
       - name: Upload Safari Xcode project artifact
         uses: actions/upload-artifact@v4
         with:
@@ -215,50 +215,33 @@ jobs:
             echo "safari=$safari"
           } >> "$GITHUB_OUTPUT"
 
-  publish:
-    name: Publish to stores
-    needs:
-      - build-chrome
-      - build-firefox
-      - build-safari
-      - check-secrets
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/') }}
+  # Each store publishes independently. A validation or credential failure in
+  # one package must not strand already-tested releases for the other stores.
+  publish-chrome:
+    name: Publish to Chrome Web Store
+    needs: [build-chrome, check-secrets]
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/')) && needs.check-secrets.outputs.chrome == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Download package artifacts
+      - name: Download Chrome package
         uses: actions/download-artifact@v4
         with:
-          path: release-artifacts
+          name: chrome-package
+          path: release-artifacts/chrome-package
 
-      - name: Resolve release ZIP paths
+      - name: Resolve Chrome ZIP path
         id: release
         shell: bash
         run: |
           set -euo pipefail
-
           CHROME_ZIP=$(find release-artifacts/chrome-package -name '*.zip' -print -quit)
-          FIREFOX_ZIP=$(find release-artifacts/firefox-package -name '*.zip' -print -quit)
-          SAFARI_ZIP=$(find release-artifacts/safari-package -name '*.zip' -print -quit)
-
           [[ -n "$CHROME_ZIP" ]] || { echo 'Chrome ZIP not found'; exit 1; }
-          [[ -n "$FIREFOX_ZIP" ]] || { echo 'Firefox ZIP not found'; exit 1; }
-          [[ -n "$SAFARI_ZIP" ]] || { echo 'Safari ZIP not found'; exit 1; }
-
-          {
-            echo "chrome_zip=$CHROME_ZIP"
-            echo "firefox_zip=$FIREFOX_ZIP"
-            echo "safari_zip=$SAFARI_ZIP"
-          } >> "$GITHUB_OUTPUT"
-
-          ls -l "$CHROME_ZIP" "$FIREFOX_ZIP" "$SAFARI_ZIP"
+          echo "chrome_zip=$CHROME_ZIP" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Chrome Web Store
-        id: publish-chrome
-        continue-on-error: true
-        if: ${{ needs.check-secrets.outputs.chrome == 'true' }}
         env:
           CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
           CHROME_WEB_STORE_CLIENT_ID: ${{ secrets.CHROME_WEB_STORE_CLIENT_ID }}
@@ -266,25 +249,40 @@ jobs:
           CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
         run: node scripts/publish-chrome.mjs "${{ steps.release.outputs.chrome_zip }}"
 
+  publish-firefox:
+    name: Publish to Firefox AMO
+    needs: [build-firefox, check-secrets]
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.publish_to_stores == true) || startsWith(github.ref, 'refs/tags/')) && needs.check-secrets.outputs.firefox == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Firefox package
+        uses: actions/download-artifact@v4
+        with:
+          name: firefox-package
+          path: release-artifacts/firefox-package
+
+      - name: Resolve Firefox ZIP path
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIREFOX_ZIP=$(find release-artifacts/firefox-package -name '*.zip' -print -quit)
+          [[ -n "$FIREFOX_ZIP" ]] || { echo 'Firefox ZIP not found'; exit 1; }
+          echo "firefox_zip=$FIREFOX_ZIP" >> "$GITHUB_OUTPUT"
+
       - name: Publish to Firefox AMO
-        if: ${{ needs.check-secrets.outputs.firefox == 'true' }}
         env:
           AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
         run: node scripts/publish-firefox.mjs "${{ steps.release.outputs.firefox_zip }}"
 
-      # Chrome and Firefox are independent stores. A stale Chrome OAuth
-      # token must not prevent Firefox from receiving an otherwise valid
-      # release. Preserve a failed job conclusion after those independent
-      # steps have had their chance.
-      - name: Report Chrome publishing failure
-        if: steps.publish-chrome.outcome == 'failure'
-        run: exit 1
-
   publish-safari:
     name: Publish to App Store Connect
     needs: [build-safari, check-secrets]
-    # Same trigger gate as `publish`, plus (at the job level, not just the
+    # Same trigger gate as the browser-store jobs, plus (at the job level, not just the
     # step) all three Apple secrets present — macOS runners are the most
     # expensive GitHub-hosted minute, not worth spinning one up just to have
     # the script immediately no-op on missing secrets.

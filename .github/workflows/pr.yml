@@ -107,6 +107,9 @@ jobs:
       - name: Build Firefox package
         run: node scripts/package-firefox.mjs --version-override="${{ needs.version.outputs.version_override }}"
 
+      - name: Validate Firefox manifest with AMO tooling
+        run: npx --yes web-ext@8.9.0 lint --source-dir dist-firefox
+
       - name: Upload Firefox artifact
         uses: actions/upload-artifact@v4
         with:

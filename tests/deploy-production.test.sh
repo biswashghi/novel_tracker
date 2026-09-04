@@ -41,5 +41,6 @@ grep -Fq 'novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/deploy-vps.sh"
 grep -Fq 'systemctl start novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/remote/deploy-production.sh"
 grep -Fq 'systemctl enable --now novel-tracker-apple-secret.timer' "$ROOT_DIR/scripts/remote/deploy-production.sh"
 grep -Fq 'compose --project-name novel-tracker' "$ROOT_DIR/infra/novel-tracker-apple-secret.service"
+grep -Fq 'https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2' "$ROOT_DIR/scripts/configure-keycloak.sh"
 
 echo "Remote deployment orchestration test passed."

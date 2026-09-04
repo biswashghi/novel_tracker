@@ -23,6 +23,16 @@ if [ -z "$CLIENT_UUID" ]; then
   exit 1
 fi
 
+# The Chrome Web Store extension ID is public and stable. Realm imports only
+# initialize new databases; an existing production realm does not pick up a
+# later redirectUris change from infra/keycloak-realm.json. Repair the exact
+# callback on every deployment so chrome.identity.launchWebAuthFlow can finish.
+CHROME_REDIRECT=https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2
+CHROME_REDIRECT_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID" -r "$REALM" --fields redirectUris --format csv --noquotes | grep -F "$CHROME_REDIRECT" || true)
+if [ -z "$CHROME_REDIRECT_EXISTS" ]; then
+  "$KCADM" update "clients/$CLIENT_UUID" -r "$REALM" -s 'redirectUris+="https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2"'
+fi
+
 FIREFOX_REDIRECT=http://127.0.0.1/mozoauth2/*
 REDIRECT_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID" -r "$REALM" --fields redirectUris --format csv --noquotes | grep -F "$FIREFOX_REDIRECT" || true)
 if [ -z "$REDIRECT_EXISTS" ]; then
@@ -72,6 +82,6 @@ rm -f /tmp/novel-provider-mapper.json
 "$KCADM" update "realms/$REALM" -s '"'"'loginWithEmailAllowed=false'"'"'
 "$KCADM" update "realms/$REALM" -s '"'"'duplicateEmailsAllowed=true'"'"'
 
-echo "Keycloak client audience mapping, provider claim, and realm login policy are configured."
+echo "Keycloak client redirects, audience mapping, provider claim, and realm login policy are configured."
 echo "Run scripts/rotate-apple-secret.mjs to create or refresh the Apple identity provider."
 '
