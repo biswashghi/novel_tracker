@@ -104,11 +104,11 @@ if (!up) {
   test("server sync API integration", { skip: "local e2e stack not running — npm run e2e:stack:up" }, () => {});
 } else {
   test.before(async () => {
-    await authedApi("/v1/account", { method: "DELETE" }).catch(() => {});
+    await authedApi("/v1/account/data", { method: "DELETE" }).catch(() => {});
   });
 
   test.after(async () => {
-    await authedApi("/v1/account", { method: "DELETE" }).catch(() => {});
+    await authedApi("/v1/account/data", { method: "DELETE" }).catch(() => {});
   });
 
   test("valid push is acknowledged and returns the canonical state blob", async () => {

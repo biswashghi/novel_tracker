@@ -32,6 +32,8 @@ scp -q "$ROOT_DIR/compose.production.yml" "${DEPLOY_USER}@${SERVER_IP}:/tmp/nove
 scp -q "$ROOT_DIR/infra/keycloak-realm.json" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-keycloak-realm.json"
 scp -q "$ROOT_DIR/infra/novel-tracker-backup.service" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-backup.service"
 scp -q "$ROOT_DIR/infra/novel-tracker-backup.timer" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-backup.timer"
+scp -q "$ROOT_DIR/infra/novel-tracker-apple-secret.service" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-apple-secret.service"
+scp -q "$ROOT_DIR/infra/novel-tracker-apple-secret.timer" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker-apple-secret.timer"
 scp -q "$ROOT_DIR/scripts/configure-keycloak.sh" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-configure-keycloak.sh"
 scp -q "$ROOT_DIR/scripts/backup-vps.sh" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-backup-vps.sh"
 scp -q "$ROOT_DIR/deploy/novel-tracker.caddy.template" "${DEPLOY_USER}@${SERVER_IP}:/tmp/novel-tracker.caddy.template"

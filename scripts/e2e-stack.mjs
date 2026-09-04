@@ -20,7 +20,13 @@ const composeEnvironment = {
   KEYCLOAK_ADMIN_PASSWORD: process.env.KEYCLOAK_ADMIN_PASSWORD || "novel-tracker-e2e-admin-password",
   AUTH_URL: process.env.AUTH_URL || "http://localhost:8793",
   KEYCLOAK_ISSUER: process.env.KEYCLOAK_ISSUER || "http://localhost:8793/realms/novel-tracker",
-  KEYCLOAK_JWKS_URL: process.env.KEYCLOAK_JWKS_URL || "http://keycloak:8080/realms/novel-tracker/protocol/openid-connect/certs"
+  KEYCLOAK_JWKS_URL: process.env.KEYCLOAK_JWKS_URL || "http://keycloak:8080/realms/novel-tracker/protocol/openid-connect/certs",
+  // DELETE /v1/account removes the Keycloak user, not just synced rows, and
+  // refuses outright without these. Seeded by infra/keycloak-realm.e2e.json.
+  KEYCLOAK_ADMIN_URL: process.env.KEYCLOAK_ADMIN_URL || "http://keycloak:8080",
+  KEYCLOAK_ADMIN_CLIENT_ID: process.env.KEYCLOAK_ADMIN_CLIENT_ID || "novel-tracker-admin",
+  KEYCLOAK_ADMIN_CLIENT_SECRET:
+    process.env.KEYCLOAK_ADMIN_CLIENT_SECRET || "novel-tracker-e2e-admin-client-secret"
 };
 
 const mode = process.argv[2];

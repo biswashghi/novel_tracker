@@ -28,7 +28,10 @@ private enum SharedSessionStore {
             session["expiresAt"] is NSNumber,
             session["subject"] is String
         else { throw StoreError.invalidSession }
-        let allowed = Set(["accessToken", "refreshToken", "idToken", "expiresAt", "subject", "email", "name"])
+        // `provider` records which identity provider minted the session. It has
+        // to be listed here or every write of a session carrying it is rejected
+        // as invalid, which breaks sign-in outright.
+        let allowed = Set(["accessToken", "refreshToken", "idToken", "expiresAt", "subject", "email", "name", "provider"])
         guard Set(session.keys).isSubset(of: allowed) else { throw StoreError.invalidSession }
         let data = try JSONSerialization.data(withJSONObject: session)
         let query = baseQuery()
@@ -96,7 +99,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling, ASW
 
     private func authorize(_ message: [String: Any], context: NSExtensionContext) {
 #if os(iOS)
-        complete(context, error: "Open the Novel Tracker app and sign in with Google before using Safari sync.")
+        complete(context, error: "Open the Novel Tracker app and sign in before using Safari sync.")
 #else
         guard
             let value = message["authorizationUrl"] as? String,

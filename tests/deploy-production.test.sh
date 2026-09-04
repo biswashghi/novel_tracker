@@ -32,4 +32,14 @@ if main; then
 fi
 diff -u <(printf '%s\n' validate lock prepare deploy health configure route public rollback) "$TRACE_FILE"
 
+# Apple provider bootstrap is part of the immutable API image and the remote
+# deployment installs, runs, and schedules it. These assertions keep a future
+# deployment refactor from silently dropping one side of that contract.
+grep -Fq 'COPY scripts/rotate-apple-secret.mjs ./scripts/rotate-apple-secret.mjs' "$ROOT_DIR/server/Dockerfile"
+grep -Fq '!scripts/rotate-apple-secret.mjs' "$ROOT_DIR/.dockerignore"
+grep -Fq 'novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/deploy-vps.sh"
+grep -Fq 'systemctl start novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/remote/deploy-production.sh"
+grep -Fq 'systemctl enable --now novel-tracker-apple-secret.timer' "$ROOT_DIR/scripts/remote/deploy-production.sh"
+grep -Fq 'compose --project-name novel-tracker' "$ROOT_DIR/infra/novel-tracker-apple-secret.service"
+
 echo "Remote deployment orchestration test passed."

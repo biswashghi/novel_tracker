@@ -105,14 +105,19 @@ export function syncNow() {
   return runQueuedSync();
 }
 
-export async function deleteCloudAccount() {
+// Deletes the Novel Tracker account itself, not just its synced rows: the
+// server drops the sync data, revokes the Sign in with Apple token when the
+// account came from Apple, and removes the identity provider user. Required by
+// App Store guideline 5.1.1(v) — offering only a "disconnect" is not enough.
+// The library stored on this device is deliberately left alone.
+export async function deleteAccount() {
   const token = await getAccessToken();
-  if (!token) throw new Error("Sign in is required to delete cloud data");
+  if (!token) throw new Error("Sign in is required to delete your account");
   const response = await platformFetch(`${API_BASE_URL}/v1/account`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${token}` }
   });
-  if (!response.ok) throw new Error(`Cloud account deletion failed (${response.status})`);
+  if (!response.ok) throw new Error(`Account deletion failed (${response.status})`);
   await signOut();
   await disconnectSyncAccount();
   return writeMeta({ state: "local-only", lastSyncedAt: "", lastError: "" });

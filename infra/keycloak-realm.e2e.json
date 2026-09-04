@@ -28,7 +28,9 @@
         "https://*.chromiumapp.org/*",
         "*"
       ],
-      "webOrigins": ["+"],
+      "webOrigins": [
+        "+"
+      ],
       "protocolMappers": [
         {
           "name": "novel-tracker-api-audience",
@@ -40,8 +42,31 @@
             "access.token.claim": "true",
             "id.token.claim": "false"
           }
+        },
+        {
+          "name": "novel-tracker-identity-provider",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.session.note": "identity_provider",
+            "claim.name": "provider",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
         }
       ]
+    },
+    {
+      "clientId": "novel-tracker-admin",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "novel-tracker-e2e-admin-client-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "identityProviders": [],
@@ -54,7 +79,40 @@
       "enabled": true,
       "emailVerified": true,
       "requiredActions": [],
-      "realmRoles": ["offline_access", "default-roles-novel-tracker"],
+      "realmRoles": [
+        "offline_access",
+        "default-roles-novel-tracker"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "novel-tracker-e2e-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "service-account-novel-tracker-admin",
+      "enabled": true,
+      "serviceAccountClientId": "novel-tracker-admin",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
+    },
+    {
+      "username": "e2e-deletable",
+      "email": "e2e-deletable@example.com",
+      "firstName": "E2E",
+      "lastName": "Deletable",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "realmRoles": [
+        "offline_access",
+        "default-roles-novel-tracker"
+      ],
       "credentials": [
         {
           "type": "password",
@@ -63,5 +121,7 @@
         }
       ]
     }
-  ]
+  ],
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true
 }

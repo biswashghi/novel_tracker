@@ -98,6 +98,46 @@ for the container runtime's SIGKILL.
 ## Retention and deletion
 
 Delete tombstones are synchronized for 30 days. The API cleanup job then purges
-the novel, its mutation history, and canonical ID mappings. **Delete cloud
-data** removes all synchronized records for the authenticated subject while
-leaving the browser's local library intact.
+the novel, its mutation history, and canonical ID mappings.
+
+`DELETE /v1/account/data` removes all synchronized records for the authenticated
+subject while leaving the browser's local library intact.
+
+`DELETE /v1/account` deletes the account itself, as App Store guideline 5.1.1(v)
+requires: it revokes the Apple token for Apple-created accounts, erases the
+synced data, and then removes the Keycloak user — in that order, so any failure
+short of the last step leaves the reader able to retry. It returns `503` without
+touching anything when the credentials below are missing, rather than performing
+a partial deletion that leaves the account alive. The local library is never
+touched.
+
+## Identity providers
+
+Google and Apple are both brokered through Keycloak, so one PKCE flow serves
+both and Apple sign-in works in every browser rather than only on Apple
+platforms. Readers who use both end up with two separate accounts and two
+separate libraries; the realm sets `duplicateEmailsAllowed` with
+`loginWithEmailAllowed` off so a shared email address does not interrupt the
+flow with Keycloak's "account already exists" screen.
+
+`/etc/novel-tracker/app.env` must carry:
+
+| Variable | Purpose |
+| --- | --- |
+| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service-account client with `realm-management` roles `manage-users` and `manage-identity-providers`, used to delete Keycloak users and create or refresh the Apple provider |
+| `KEYCLOAK_ADMIN_URL` | Optional; container-internal Keycloak address, for the same reason `KEYCLOAK_JWKS_URL` exists |
+| `APPLE_TEAM_ID`, `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple credentials, used to revoke Apple tokens and to mint the provider's client secret |
+
+`APPLE_SERVICES_ID` is the Services ID from the Apple Developer portal, not the
+app's bundle identifier, and its return URL must be
+`https://auth.novel.bghimire.com/realms/novel-tracker/broker/apple/endpoint`.
+
+**Apple's client secret expires within six months.** It is an ES256 JWT rather
+than a fixed string, and when it lapses every Apple sign-in fails in a way that
+looks like a Keycloak broker fault rather than an expiry.
+Production deployment runs `scripts/rotate-apple-secret.mjs` once immediately:
+the first run creates the `apple` identity provider, while later deployments
+refresh its client secret. `novel-tracker-apple-secret.timer` runs the same
+one-shot container monthly so the secret cannot reach Apple's expiry ceiling.
+Run `npm run keycloak:apple` from a complete repository checkout after changing
+any `APPLE_*` value when an out-of-band refresh is needed.

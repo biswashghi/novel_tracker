@@ -10,6 +10,8 @@ import { computeReadingStats } from "./lib/reading-stats.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
 
+import { AUTH_PROVIDERS } from "./lib/config.js";
+
 const library = document.querySelector("#library");
 
 const searchInput = document.querySelector("#search");
@@ -31,10 +33,10 @@ const accountTitle = document.querySelector("#account-title");
 const syncDetail = document.querySelector("#sync-detail");
 const syncIndicator = document.querySelector("#sync-indicator");
 
-const signInButton = document.querySelector("#sign-in");
+const signInActions = document.querySelector("#sign-in-actions");
 const signOutButton = document.querySelector("#sign-out");
 const syncNowButton = document.querySelector("#sync-now");
-const deleteCloudButton = document.querySelector("#delete-cloud");
+const deleteAccountButton = document.querySelector("#delete-account");
 
 let novels = [];
 
@@ -73,16 +75,22 @@ function setVisible(element, visible) {
   element.classList.toggle("is-hidden", !visible);
 }
 
+function providerName(providerId) {
+  const provider = AUTH_PROVIDERS.find((candidate) => candidate.id === providerId);
+  // Labels read "Sign in with Google"; the bare name is what reads well mid-sentence.
+  return provider ? provider.label.replace(/^Sign in with\s+/i, "") : "";
+}
+
 function renderAccount(snapshot) {
   const account = snapshot?.account || {};
   const sync = snapshot?.sync || {};
   const signedIn = Boolean(account.signedIn);
 
-  // Signed out: only "Sign in" is shown. Signed in: Sync / Sign out / Delete.
-  setVisible(signInButton, !signedIn);
+  // Signed out: only the sign-in buttons are shown. Signed in: Sync / Sign out / Delete.
+  setVisible(signInActions, !signedIn);
   setVisible(syncNowButton, signedIn);
   setVisible(signOutButton, signedIn);
-  setVisible(deleteCloudButton, signedIn);
+  setVisible(deleteAccountButton, signedIn);
 
   syncIndicator?.classList.remove("syncing", "error", "signed-out");
 
@@ -692,21 +700,40 @@ importFileInput.addEventListener("change", async (event) => {
    SIGN IN
 ========================================================= */
 
-signInButton.addEventListener("click", () =>
-  withBusy(signInButton, async () => {
-    await requestFirefoxSyncConsent();
-    let snapshot = await sendMessage("novel-tracker:account-sign-in");
+async function startSignIn(provider) {
+  await requestFirefoxSyncConsent();
+  let snapshot = await sendMessage("novel-tracker:account-sign-in", { provider });
 
-    if (snapshot.account?.needsAccountConfirmation) {
-      const email = snapshot.account.pendingEmail || "the new account";
-      const confirmed = window.confirm(`Merge the library retained on this device into ${email}?`);
-      snapshot = await sendMessage(confirmed ? "novel-tracker:account-confirm" : "novel-tracker:account-cancel");
-    }
+  if (snapshot.account?.needsAccountConfirmation) {
+    const email = snapshot.account.pendingEmail || "the new account";
+    // Switching providers lands here too, since Apple and Google are different
+    // subjects — name the provider so the choice isn't just an unfamiliar email.
+    const name = providerName(snapshot.account.pendingProvider);
+    const target = name ? `${email} (${name})` : email;
+    const confirmed = window.confirm(
+      `This sign-in uses a different sync account. Merge this device's library into ${target}?`
+    );
+    snapshot = await sendMessage(confirmed ? "novel-tracker:account-confirm" : "novel-tracker:account-cancel");
+  }
 
-    renderAccount(snapshot);
-    await refresh();
-  })
-);
+  renderAccount(snapshot);
+  await refresh();
+}
+
+for (const provider of AUTH_PROVIDERS) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = `sign-in-${provider.id}`;
+  button.className = "top-action primary-action sign-in-button";
+  button.dataset.provider = provider.id;
+
+  const label = document.createElement("span");
+  label.textContent = provider.label;
+  button.append(icon(provider.icon || "user"), label);
+
+  button.addEventListener("click", () => withBusy(button, () => startSignIn(provider.id)));
+  signInActions.append(button);
+}
 
 /* =========================================================
    SYNC
@@ -734,17 +761,18 @@ signOutButton.addEventListener("click", () =>
 );
 
 /* =========================================================
-   DELETE CLOUD DATA
+   DELETE ACCOUNT
 ========================================================= */
 
-deleteCloudButton.addEventListener("click", () =>
-  withBusy(deleteCloudButton, async () => {
+deleteAccountButton.addEventListener("click", () =>
+  withBusy(deleteAccountButton, async () => {
     const confirmed = window.confirm(
-      "Permanently delete this account's synchronized Novel Tracker data? Your library will remain on this device."
+      "Permanently delete your Novel Tracker account? This removes the account and everything synced to it. " +
+      "Your library will remain on this device, and you can export it first from the library page."
     );
     if (!confirmed) return;
 
-    renderAccount(await sendMessage("novel-tracker:account-delete-cloud"));
+    renderAccount(await sendMessage("novel-tracker:account-delete"));
   })
 );
 

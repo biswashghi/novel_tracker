@@ -38,6 +38,10 @@ Other sites fall back to generic page metadata and can still be saved manually.
 NovelUpdates is useful for discovery, but it is not treated as a reading source
 because it indexes releases rather than hosting chapters.
 
+## Support
+
+Questions, bug reports, and help with setup: see [docs/support.md](docs/support.md).
+
 ## Privacy Policy
 
 The full privacy policy and data-handling details are maintained in the documentation: see [docs/privacy-policy.md](docs/privacy-policy.md).

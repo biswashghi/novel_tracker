@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 const store = new Map();
 let nextSubject = "google-user-1";
 let authorizeUrl = "";
+// Empty means "realm has no provider mapper", which is the local/e2e case and
+// exercises the fallback to the requested provider id.
+let nextProviderClaim = "";
 
 function jwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -37,7 +40,12 @@ globalThis.fetch = async () => ({
   ok: true,
   async json() {
     return {
-      access_token: jwt({ sub: nextSubject, email: `${nextSubject}@example.test`, name: "Reader" }),
+      access_token: jwt({
+        sub: nextSubject,
+        email: `${nextSubject}@example.test`,
+        name: "Reader",
+        ...(nextProviderClaim ? { provider: nextProviderClaim } : {})
+      }),
       refresh_token: "refresh-token",
       expires_in: 300
     };
@@ -125,4 +133,76 @@ test("an unrefreshable expired session is cleared instead of handed out", async 
 
   assert.equal(await auth.getAccessToken(), "");
   assert.equal(store.get("novel-tracker:auth").active, null);
+});
+
+// Sign in with Apple is required by App Store guideline 4.8. It is brokered
+// through Keycloak so both providers share this one flow, differing only by
+// `kc_idp_hint` — which is what these tests pin down.
+
+test("Apple sign-in reuses the Google flow and only swaps the provider hint", async () => {
+  store.clear();
+  nextSubject = "apple-user-1";
+  nextProviderClaim = "";
+
+  const account = await auth.signIn({ provider: "apple", hasLocalData: false });
+  const query = new URL(authorizeUrl).searchParams;
+
+  assert.equal(query.get("kc_idp_hint"), "apple");
+  // Same PKCE flow as Google: nothing Apple-specific in the request itself.
+  assert.equal(query.get("response_type"), "code");
+  assert.equal(query.get("code_challenge_method"), "S256");
+  assert.equal(account.signedIn, true);
+  // No mapper in this realm, so the requested provider is what gets recorded.
+  assert.equal(account.provider, "apple");
+});
+
+test("the realm's provider claim outranks the button that was tapped", async () => {
+  store.clear();
+  nextSubject = "apple-user-2";
+  nextProviderClaim = "apple";
+
+  try {
+    const account = await auth.signIn({ provider: "google", hasLocalData: false });
+    assert.equal(account.provider, "apple");
+  } finally {
+    nextProviderClaim = "";
+  }
+});
+
+test("the provider survives a token refresh", async () => {
+  store.clear();
+  nextSubject = "apple-user-3";
+  await auth.signIn({ provider: "apple", hasLocalData: false });
+
+  const stored = store.get("novel-tracker:auth");
+  stored.active.expiresAt = Date.now() - 1000;
+  store.set("novel-tracker:auth", stored);
+
+  await auth.getAccessToken();
+  // Refresh responses carry no provider claim here, so this is the `previous`
+  // fallback in tokenRecord doing its job. Losing it would silently downgrade
+  // an Apple account to Google and skip Apple's required token revocation on
+  // deletion.
+  assert.equal(store.get("novel-tracker:auth").active.provider, "apple");
+});
+
+test("switching providers is held pending and names the provider", async () => {
+  store.clear();
+  nextSubject = "google-user-5";
+  await auth.signIn({ provider: "google", hasLocalData: false });
+  await auth.signOut();
+
+  nextSubject = "apple-user-4";
+  const pending = await auth.signIn({ provider: "apple", hasLocalData: true });
+
+  assert.equal(pending.needsAccountConfirmation, true);
+  assert.equal(pending.pendingProvider, "apple");
+});
+
+test("an unknown provider is refused before any browser window opens", async () => {
+  store.clear();
+  await assert.rejects(
+    () => auth.signIn({ provider: "facebook", hasLocalData: false }),
+    /Unknown sign-in provider: facebook/
+  );
 });

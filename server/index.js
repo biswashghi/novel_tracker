@@ -9,6 +9,13 @@ import {
   TOMBSTONE_RETENTION_MS
 } from "../src/lib/sync-core.js";
 import { clampMutationClock } from "../src/lib/sync-policy.js";
+import { readAppleConfig } from "./apple-client-secret.js";
+import {
+  deleteIdentityUser,
+  readBrokerToken,
+  readIdentityAdminConfig,
+  revokeAppleToken
+} from "./identity-admin.js";
 
 const { Pool } = pg;
 const database = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -24,6 +31,8 @@ const audience = process.env.KEYCLOAK_AUDIENCE;
 // prior behavior there.
 const jwksUrl = process.env.KEYCLOAK_JWKS_URL || (issuer ? `${issuer}/protocol/openid-connect/certs` : null);
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
+const appleConfig = readAppleConfig();
+const identityAdminConfig = readIdentityAdminConfig();
 const MAX_MUTATIONS_PER_BATCH = 500;
 // A single legal mutation stays well under this: notes cap at 4,000 chars and
 // tags at 20 x 40 (see src/lib/storage.js). Anything larger is rejected with an
@@ -99,6 +108,12 @@ app.addHook("preHandler", async (request, reply) => {
   try {
     const { payload } = await jwtVerify(token, jwks, { issuer, audience });
     request.userSubject = payload.sub;
+    // `provider` is a Keycloak mapper over the `identity_provider` session note
+    // (scripts/configure-keycloak.sh). Account deletion needs it to decide
+    // whether an Apple grant also has to be revoked, and the raw token is what
+    // reads that user's stored broker token.
+    request.userProvider = typeof payload.provider === "string" ? payload.provider : "";
+    request.userAccessToken = token;
     const now = Date.now();
     const current = requestWindows.get(payload.sub);
     const window = !current || now - current.startedAt >= RATE_WINDOW_MS
@@ -272,16 +287,16 @@ app.get("/v1/sync", async (request) => {
   };
 });
 
-app.delete("/v1/account", async (request) => {
+async function deleteSyncData(subject) {
   const client = await database.connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [request.userSubject]);
-    await client.query("DELETE FROM purged_novel_ids WHERE subject = $1", [request.userSubject]);
-    await client.query("DELETE FROM sync_mutation_receipts WHERE subject = $1", [request.userSubject]);
-    await client.query("DELETE FROM novel_id_mappings WHERE subject = $1", [request.userSubject]);
-    await client.query("DELETE FROM sync_states WHERE subject = $1", [request.userSubject]);
-    await client.query("DELETE FROM sync_mutations WHERE subject = $1", [request.userSubject]);
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [subject]);
+    await client.query("DELETE FROM purged_novel_ids WHERE subject = $1", [subject]);
+    await client.query("DELETE FROM sync_mutation_receipts WHERE subject = $1", [subject]);
+    await client.query("DELETE FROM novel_id_mappings WHERE subject = $1", [subject]);
+    await client.query("DELETE FROM sync_states WHERE subject = $1", [subject]);
+    await client.query("DELETE FROM sync_mutations WHERE subject = $1", [subject]);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -289,6 +304,47 @@ app.delete("/v1/account", async (request) => {
   } finally {
     client.release();
   }
+}
+
+// Erases everything synced to the account while leaving the account itself in
+// place, so the next sync repopulates the server from whatever the device still
+// holds. This is the pre-existing behaviour of `DELETE /v1/account`, split out
+// under its own path now that that route deletes the account for real.
+app.delete("/v1/account/data", async (request) => {
+  await deleteSyncData(request.userSubject);
+  return { deleted: true };
+});
+
+// Deletes the account itself, not just its synced rows (App Store guideline
+// 5.1.1(v) — a disconnect or deactivate is explicitly not enough).
+//
+// The step order is chosen for its failure modes. The identity is removed
+// *last*, so anything that fails before it leaves the reader still signed in
+// and able to retry the whole request. Deleting the Keycloak user first would
+// strand sync rows under a subject that can no longer authenticate to retry,
+// which is the one outcome with no recovery path.
+app.delete("/v1/account", async (request, reply) => {
+  if (!identityAdminConfig.configured) {
+    // Refuse up front rather than deleting the data and silently leaving the
+    // account alive — that half-success is the exact defect being fixed here.
+    request.log.error("Account deletion is unavailable: Keycloak admin credentials are not configured");
+    return reply.code(503).send({ error: "account deletion is unavailable" });
+  }
+
+  if (request.userProvider === "apple") {
+    if (!appleConfig.configured) {
+      request.log.error("Account deletion is unavailable: Apple credentials are not configured");
+      return reply.code(503).send({ error: "account deletion is unavailable" });
+    }
+    // Apple requires the grant to be revoked when the account goes away, and
+    // the stored token is unreadable once the Keycloak user is gone — so this
+    // has to happen before either deletion below.
+    const brokerToken = await readBrokerToken(identityAdminConfig, request.userAccessToken, "apple");
+    await revokeAppleToken(appleConfig, brokerToken);
+  }
+
+  await deleteSyncData(request.userSubject);
+  await deleteIdentityUser(identityAdminConfig, request.userSubject);
   return { deleted: true };
 });
 
