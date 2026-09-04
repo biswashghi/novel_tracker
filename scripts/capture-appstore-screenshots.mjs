@@ -15,11 +15,11 @@
 //   npm run build            # dist/ must exist and be a production build
 //   node scripts/capture-appstore-screenshots.mjs [--keep-devices]
 //
-// The container app is captured from a simulator build; the library page is
-// served over loopback and captured in Safari, because the library lives in the
-// web extension and seeding it through Safari's extension UI is not scriptable.
-// The page, the CSS, and the JavaScript are the shipping ones — only the
-// storage is seeded and the extension messaging is stubbed.
+// The container app is captured from a simulator build; the library and popup
+// are served over loopback and captured in Safari, because seeding extension
+// storage and opening Safari's extension control are not scriptable. These use
+// the shipping HTML, CSS, and JavaScript — only storage, page metadata, and
+// extension messaging are stubbed to make the captures deterministic.
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -56,11 +56,13 @@ const DEVICES = [
   }
 ];
 
-// Library first, filtering second, the app screen last: Apple requires the
-// majority to show the app in use and weights the earliest ones most.
+// Library first, filtering second, saving a chapter third, and the app screen
+// last: Apple requires the majority to show the app in use and weights the
+// earliest ones most.
 const SHOTS = [
   { name: "library", url: `http://localhost:${PORT}/seed.html` },
   { name: "search", url: `http://localhost:${PORT}/capture.html?q=cultivation` },
+  { name: "popup", url: `http://localhost:${PORT}/chapter.html` },
   { name: "app", app: true }
 ];
 
@@ -137,6 +139,114 @@ location.replace("capture.html");
 </script>`;
 }
 
+function popupHarness(popupHtml) {
+  const metadata = {
+    title: "The Lantern Archivist",
+    sourceSite: "www.royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/44001/the-lantern-archivist",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/44001/the-lantern-archivist/chapter-213",
+    lastReadChapterLabel: "Chapter 213: A Door of Embers",
+    coverImageUrl: "",
+    status: "active"
+  };
+  const stub = `    <script>
+      window.browser = {
+        tabs: { query: async () => [{ id: 1, url: ${JSON.stringify(metadata.lastReadChapterUrl)} }] },
+        scripting: {
+          executeScript: async (request) => request.func
+            ? [{ result: ${JSON.stringify(metadata)} }]
+            : []
+        },
+        storage: {
+          local: {
+            get: async () => ({}),
+            set: async () => undefined
+          }
+        },
+        runtime: {
+          sendMessage: async () => ({ ok: true }),
+          openOptionsPage: async () => undefined
+        }
+      };
+    </script>
+`;
+  return popupHtml.replace("</head>", stub + "</head>");
+}
+
+function chapterPage() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Lantern Archivist — Chapter 213</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #f7f2ea;
+      color: #2b2926;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    article {
+      width: min(760px, calc(100% - 52px));
+      margin: 0 auto;
+      padding: 64px 0 180px;
+    }
+    .eyebrow {
+      color: #a55731;
+      font: 800 12px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 12px 0 6px; font-size: clamp(34px, 5vw, 58px); line-height: 1; }
+    h2 { margin: 0 0 38px; color: #7a6c61; font-size: 20px; font-weight: 400; }
+    p { font-size: 19px; line-height: 1.85; }
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(32, 27, 23, .28);
+      backdrop-filter: blur(1px);
+    }
+    .extension-popup {
+      position: fixed;
+      z-index: 2;
+      top: 22px;
+      right: 26px;
+      width: 394px;
+      height: min(730px, calc(100vh - 44px));
+      border: 0;
+      border-radius: 18px;
+      background: #f2ede5;
+      box-shadow: 0 26px 80px rgba(29, 21, 15, .35);
+    }
+    @media (max-width: 600px) {
+      article { width: calc(100% - 36px); padding-top: 42px; }
+      .extension-popup {
+        top: 12px;
+        right: 12px;
+        width: 390px;
+        max-width: calc(100vw - 24px);
+        height: min(710px, calc(100vh - 24px));
+        border-radius: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <article>
+    <div class="eyebrow">The Lantern Archivist</div>
+    <h1>Chapter 213</h1>
+    <h2>A Door of Embers</h2>
+    <p>The archive door had never opened for fire. Mira rested her palm against the warm brass seal and listened as the shelves whispered her name.</p>
+    <p>Beyond the threshold, a single lantern burned without oil, throwing long copper shadows across a ledger that had been waiting for her.</p>
+  </article>
+  <div class="scrim" aria-hidden="true"></div>
+  <iframe class="extension-popup" src="popup-frame.html" title="Novel Tracker extension popup"></iframe>
+</body>
+</html>`;
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -182,11 +292,13 @@ async function ensureDevice(device) {
     simctl(["create", device.name, device.deviceType]);
     console.log(`Created simulator ${device.name}`);
   }
-  if (!bootedDevices().includes(device.name)) {
-    simctl(["boot", device.name]);
-    // simctl reports booted well before Safari and SpringBoard are usable.
-    await new Promise((resolve) => setTimeout(resolve, 12_000));
-  }
+  // Always start from a clean UI session. In particular, an unfinished
+  // ASWebAuthenticationSession can otherwise remain above Safari and leak an
+  // authorization prompt into every subsequent App Store screenshot.
+  if (bootedDevices().includes(device.name)) simctl(["shutdown", device.name]);
+  simctl(["boot", device.name]);
+  // simctl reports booted well before Safari and SpringBoard are usable.
+  await new Promise((resolve) => setTimeout(resolve, 12_000));
 }
 
 async function capture(device, file) {
@@ -207,9 +319,12 @@ async function main() {
   if (appPath && !existsSync(appPath)) throw new Error(`NOVEL_TRACKER_APP_PATH does not exist: ${appPath}`);
 
   const optionsHtml = await readFile(path.join(distDir, "options.html"), "utf8");
+  const popupHtml = await readFile(path.join(distDir, "popup.html"), "utf8");
   const server = await startServer({
     "capture.html": captureHarness(optionsHtml),
-    "seed.html": seedPage(demoLibrary())
+    "seed.html": seedPage(demoLibrary()),
+    "chapter.html": chapterPage(),
+    "popup-frame.html": popupHarness(popupHtml)
   });
 
   try {
