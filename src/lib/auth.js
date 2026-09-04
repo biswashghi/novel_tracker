@@ -1,7 +1,7 @@
 import { getStorageLocal } from "./extension-api.js";
 import { getAuthPlatform } from "./auth-platform.js";
 import { platformFetch } from "./platform-http.js";
-import { AUTH_IDP_HINT, AUTH_ISSUER } from "./config.js";
+import { AUTH_PROVIDERS, AUTH_ISSUER } from "./config.js";
 
 export const AUTH_STORAGE_KEY = "novel-tracker:auth";
 export const AUTH_CONFIG = Object.freeze({
@@ -14,6 +14,18 @@ function storageArea() {
   const storage = getStorageLocal();
   if (!storage) throw new Error("Extension storage is unavailable");
   return storage;
+}
+
+// Google and Apple are deliberately separate accounts even for the same person
+// and the same email address, so every token record carries the provider that
+// minted it. The UI uses it to tell readers which library they're looking at,
+// and the delete flow uses it to decide whether Apple's token also has to be
+// revoked (Apple requires that on account deletion).
+function resolveProvider(providerId) {
+  if (!providerId) return AUTH_PROVIDERS[0];
+  const provider = AUTH_PROVIDERS.find((candidate) => candidate.id === providerId);
+  if (!provider) throw new Error(`Unknown sign-in provider: ${providerId}`);
+  return provider;
 }
 
 function base64Url(bytes) {
@@ -46,7 +58,7 @@ function decodeJwtPayload(token) {
 
 async function readAuth() {
   const result = await storageArea().get(AUTH_STORAGE_KEY);
-  return result[AUTH_STORAGE_KEY] || { active: null, pending: null, lastSubject: "", lastEmail: "" };
+  return result[AUTH_STORAGE_KEY] || { active: null, pending: null, lastSubject: "", lastEmail: "", lastProvider: "" };
 }
 
 async function writeAuth(auth) {
@@ -61,11 +73,14 @@ function publicAccount(auth) {
     subject: token?.subject || "",
     email: token?.email || "",
     name: token?.name || token?.email || "",
+    provider: token?.provider || "",
     expiresAt: Number(token?.expiresAt || 0),
     lastSubject: auth.lastSubject || "",
     lastEmail: auth.lastEmail || "",
+    lastProvider: auth.lastProvider || "",
     needsAccountConfirmation: Boolean(auth.pending),
-    pendingEmail: auth.pending?.email || ""
+    pendingEmail: auth.pending?.email || "",
+    pendingProvider: auth.pending?.provider || ""
   };
 }
 
@@ -96,7 +111,7 @@ async function exchangeToken(parameters) {
   return response.json();
 }
 
-function tokenRecord(tokens, previous = {}) {
+function tokenRecord(tokens, previous = {}, requestedProvider = "") {
   const claims = decodeJwtPayload(tokens.id_token || tokens.access_token);
   const expiresIn = Number(tokens.expires_in || 300);
   return {
@@ -106,7 +121,12 @@ function tokenRecord(tokens, previous = {}) {
     expiresAt: Date.now() + Math.max(0, expiresIn - 30) * 1000,
     subject: String(claims.sub || previous.subject || ""),
     email: String(claims.email || previous.email || ""),
-    name: String(claims.name || claims.preferred_username || previous.name || "")
+    name: String(claims.name || claims.preferred_username || previous.name || ""),
+    // `provider` is a Keycloak protocol mapper over the `identity_provider`
+    // session note (see scripts/configure-keycloak.sh). Falling back to the
+    // requested id keeps this correct against realms without that mapper,
+    // such as the local/e2e stack.
+    provider: String(claims.provider || previous.provider || requestedProvider || "")
   };
 }
 
@@ -122,6 +142,7 @@ async function importSafariSession(auth, platform = getAuthPlatform()) {
   }, shared);
   auth.lastSubject = auth.active.subject;
   auth.lastEmail = auth.active.email;
+  auth.lastProvider = auth.active.provider;
   await writeAuth(auth);
   return auth;
 }
@@ -134,7 +155,8 @@ export async function getAccountStatus() {
   return publicAccount(await importSafariSession(await readAuth()));
 }
 
-export async function signIn({ hasLocalData = false } = {}) {
+export async function signIn({ provider: providerId = "", hasLocalData = false } = {}) {
+  const provider = resolveProvider(providerId);
   const platform = getAuthPlatform();
   if (platform.kind === "safari-native") {
     const shared = await platform.sharedSession();
@@ -160,7 +182,7 @@ export async function signIn({ hasLocalData = false } = {}) {
     code_challenge: await sha256(verifier),
     code_challenge_method: "S256"
   };
-  if (AUTH_IDP_HINT) authorizeParams.kc_idp_hint = AUTH_IDP_HINT;
+  if (provider.idpHint) authorizeParams.kc_idp_hint = provider.idpHint;
   authorize.search = new URLSearchParams(authorizeParams).toString();
 
   const callbackUrl = new URL(await platform.authorize(authorize.toString()));
@@ -176,7 +198,7 @@ export async function signIn({ hasLocalData = false } = {}) {
     code,
     code_verifier: verifier
   });
-  return activateTokens(tokenRecord(tokenPayload), hasLocalData, platform);
+  return activateTokens(tokenRecord(tokenPayload, {}, provider.id), hasLocalData, platform);
 }
 
 async function activateTokens(tokens, hasLocalData, platform) {
@@ -186,13 +208,19 @@ async function activateTokens(tokens, hasLocalData, platform) {
   if (hasLocalData && auth.lastSubject && auth.lastSubject !== tokens.subject) {
     auth.pending = tokens;
     await writeAuth(auth);
-    return { ...publicAccount(auth), needsAccountConfirmation: true, pendingEmail: tokens.email };
+    return {
+      ...publicAccount(auth),
+      needsAccountConfirmation: true,
+      pendingEmail: tokens.email,
+      pendingProvider: tokens.provider
+    };
   }
 
   auth.active = tokens;
   auth.pending = null;
   auth.lastSubject = tokens.subject;
   auth.lastEmail = tokens.email;
+  auth.lastProvider = tokens.provider;
   await writeAuth(auth);
   await persistSafariSession(tokens, platform);
   return publicAccount(auth);
@@ -205,6 +233,7 @@ export async function confirmPendingAccount() {
   auth.pending = null;
   auth.lastSubject = auth.active.subject;
   auth.lastEmail = auth.active.email;
+  auth.lastProvider = auth.active.provider;
   await writeAuth(auth);
   await persistSafariSession(auth.active, getAuthPlatform());
   return publicAccount(auth);
@@ -257,6 +286,7 @@ async function refreshTokens(refreshToken, platform) {
     auth.active = tokenRecord(refreshed, auth.active || { refreshToken });
     auth.lastSubject = auth.active.subject;
     auth.lastEmail = auth.active.email;
+    auth.lastProvider = auth.active.provider;
     await writeAuth(auth);
     await persistSafariSession(auth.active, platform);
     return auth.active.accessToken;

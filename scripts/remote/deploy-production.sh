@@ -66,6 +66,10 @@ prepare_release() {
   set_env AUTH_URL "https://${AUTH_DOMAIN}"
   set_env KEYCLOAK_ISSUER "https://${AUTH_DOMAIN}/realms/novel-tracker"
   set_env KEYCLOAK_JWKS_URL ""
+  # Both the API and the one-shot Apple rotation container reach Keycloak over
+  # the private Compose network. This also makes the very first deployment
+  # independent of whether the public Caddy route has been installed yet.
+  set_env KEYCLOAK_ADMIN_URL "http://keycloak:8080"
   sudo chmod 0600 "$ENV_FILE"
 }
 
@@ -101,8 +105,15 @@ configure_services() {
   "$APP_DIR/scripts/configure-keycloak.sh"
   sudo install -m 0644 /tmp/novel-tracker-backup.service /etc/systemd/system/novel-tracker-backup.service
   sudo install -m 0644 /tmp/novel-tracker-backup.timer /etc/systemd/system/novel-tracker-backup.timer
+  sudo install -m 0644 /tmp/novel-tracker-apple-secret.service /etc/systemd/system/novel-tracker-apple-secret.service
+  sudo install -m 0644 /tmp/novel-tracker-apple-secret.timer /etc/systemd/system/novel-tracker-apple-secret.timer
   sudo systemctl daemon-reload
   sudo systemctl enable --now novel-tracker-backup.timer
+  # The timer's first calendar event may be weeks away. Start the oneshot now
+  # so a missing provider is created on the first deployment and an existing
+  # provider receives a fresh client secret on every later deployment.
+  sudo systemctl start novel-tracker-apple-secret.service
+  sudo systemctl enable --now novel-tracker-apple-secret.timer
 }
 
 install_route() {

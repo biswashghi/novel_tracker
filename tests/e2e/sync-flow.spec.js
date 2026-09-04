@@ -33,7 +33,7 @@ const CHAPTER_HTML = `
 async function signIn(context, optionsPage) {
   const [authPage] = await Promise.all([
     context.waitForEvent('page', { timeout: 20_000 }),
-    optionsPage.locator('#sign-in').click()
+    optionsPage.locator('.sign-in-button').first().click()
   ]);
   await authPage.waitForLoadState('domcontentloaded');
   await authPage.locator('#username').fill(E2E_USERNAME);

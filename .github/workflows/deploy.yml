@@ -6,6 +6,8 @@ on:
       - server/**
       - infra/keycloak-realm*.json
       - infra/novel-tracker-backup.*
+      - infra/novel-tracker-apple-secret.*
+      - scripts/rotate-apple-secret.mjs
       - scripts/deploy-vps.sh
       - scripts/remote/**
       - deploy/**

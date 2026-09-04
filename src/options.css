@@ -211,6 +211,14 @@ select {
   gap: 14px;
 }
 
+/* One button per configured identity provider (see lib/config.js). */
+.sign-in-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+}
+
 .account-summary {
   min-width: 0;
 

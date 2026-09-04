@@ -28,17 +28,33 @@ private let statusIconView = UIImageView()
 private let statusTitleLabel = UILabel()
 private let statusDetailLabel = UILabel()
 
-private let actionButton = UIButton(type: .system)
-private let signOutButton = UIButton(type: .system)
-
 private let setupTitleLabel = UILabel()
 private let setupStack = UIStackView()
 #endif
 
 private let extensionBundleIdentifier = "app.noveltracker.extension.Extension"
 private let issuer = "https://auth.novel.bghimire.com/realms/novel-tracker"
+private let apiBaseURL = "https://api.novel.bghimire.com"
 private let clientID = "novel-tracker-extension"
 private let callbackURL = "noveltracker://oauth/callback"
+
+/// Mirrors `AUTH_PROVIDERS` in src/lib/config.js. Both providers are brokered
+/// by Keycloak, so one authorization-code + PKCE flow serves both and only
+/// `kc_idp_hint` differs — the app and the extension sign in the same way.
+///
+/// Sign in with Apple is required by App Store guideline 4.8. Because it is
+/// brokered rather than native, the same account also works from Chrome and
+/// Firefox, where a native Apple flow would not exist.
+struct SignInProvider {
+    let id: String
+    let label: String
+    let idpHint: String
+}
+
+let signInProviders = [
+    SignInProvider(id: "google", label: "Sign in with Google", idpHint: "google"),
+    SignInProvider(id: "apple", label: "Sign in with Apple", idpHint: "apple")
+]
 
 private enum AppSessionStore {
     static let service = "app.noveltracker.auth"
@@ -88,8 +104,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
     private let titleLabel = UILabel()
     private let detailLabel = UILabel()
-    private let actionButton = UIButton(type: .system)
+    private let signInStack = UIStackView()
+    private var signInButtons: [UIButton] = []
     private let signOutButton = UIButton(type: .system)
+    private let deleteAccountButton = UIButton(type: .system)
 //    private var attemptedAutomaticSignIn = false
 #endif
 
@@ -245,27 +263,59 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         contentStack.addArrangedSubview(statusCard)
 
-        // MARK: - Sign-in button
+        // MARK: - Sign-in buttons
 
-        var buttonConfig = UIButton.Configuration.filled()
-        buttonConfig.title = "Sign in with Google"
-        buttonConfig.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
-        buttonConfig.imagePadding = 10
-        buttonConfig.cornerStyle = .large
-        buttonConfig.baseBackgroundColor = .systemIndigo
-        buttonConfig.baseForegroundColor = .white
-        buttonConfig.contentInsets = NSDirectionalEdgeInsets(
-            top: 15,
-            leading: 20,
-            bottom: 15,
-            trailing: 20
-        )
+        signInStack.axis = .vertical
+        signInStack.spacing = 12
+        signInStack.alignment = .fill
 
-        actionButton.configuration = buttonConfig
-        actionButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        actionButton.addTarget(self, action: #selector(signIn), for: .touchUpInside)
+        // One button per entry in `signInProviders`, so adding a provider means
+        // adding a line there rather than another bespoke button here.
+        signInButtons = signInProviders.enumerated().map { index, provider in
+            let button = UIButton(type: .system)
+            var config = UIButton.Configuration.filled()
+            config.title = provider.label
+            config.imagePadding = 10
+            config.cornerStyle = .large
+            config.contentInsets = NSDirectionalEdgeInsets(
+                top: 15,
+                leading: 20,
+                bottom: 15,
+                trailing: 20
+            )
 
-        contentStack.addArrangedSubview(actionButton)
+            if provider.id == "apple" {
+                // Apple requires its own mark and a black or white ground for
+                // this button; the house indigo is not permitted here.
+                config.image = UIImage(systemName: "apple.logo")
+                config.baseBackgroundColor = .label
+                config.baseForegroundColor = .systemBackground
+            } else {
+                config.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
+                config.baseBackgroundColor = .systemIndigo
+                config.baseForegroundColor = .white
+            }
+
+            button.configuration = config
+            button.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+            button.tag = index
+            button.addTarget(self, action: #selector(signInTapped(_:)), for: .touchUpInside)
+            return button
+        }
+
+        signInButtons.forEach(signInStack.addArrangedSubview)
+        contentStack.addArrangedSubview(signInStack)
+
+        // Keep this guidance short enough for compact iPhone layouts. The
+        // account-switch confirmation carries the fuller explanation only
+        // when it becomes relevant.
+        let providerNoteLabel = UILabel()
+        providerNoteLabel.text = "Use the same sign-in on each device."
+        providerNoteLabel.font = .preferredFont(forTextStyle: .footnote)
+        providerNoteLabel.textColor = .secondaryLabel
+        providerNoteLabel.textAlignment = .center
+        providerNoteLabel.numberOfLines = 0
+        signInStack.addArrangedSubview(providerNoteLabel)
 
         // MARK: - Safari setup
 
@@ -276,29 +326,52 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         setupStack.axis = .vertical
         setupStack.spacing = 14
 
+        // Novel Tracker's reading features live in the Safari extension, so a
+        // reader who stops at this screen never reaches them. Spelling the path
+        // out — through to the library and what it contains — is what App
+        // Review needed and could not find on iPad.
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "1",
                 title: "Enable the extension",
-                detail: "Open Settings → Safari → Extensions."
+                detail: "Open Settings → Apps → Safari → Extensions, then turn on Novel Tracker."
             )
         )
 
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "2",
-                title: "Turn on Novel Tracker",
-                detail: "Allow the extension to run in Safari."
+                title: "Allow your reading sites",
+                detail: "Give Novel Tracker access to the novel sites you read."
             )
         )
 
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "3",
-                title: "Start browsing",
-                detail: "Novel Tracker will use this account for cloud sync."
+                title: "Save a chapter",
+                detail: "On a chapter page, tap the extensions button in Safari's address bar, then Novel Tracker."
             )
         )
+
+        setupStack.addArrangedSubview(
+            makeSetupRow(
+                number: "4",
+                title: "Open your library",
+                detail: "Tap the archive button in the Novel Tracker popup to browse, search, sort, edit, delete, and reopen novels, and to export or import JSON backups."
+            )
+        )
+
+        var settingsConfig = UIButton.Configuration.tinted()
+        settingsConfig.title = "Open Settings"
+        settingsConfig.image = UIImage(systemName: "gear")
+        settingsConfig.imagePadding = 8
+        settingsConfig.cornerStyle = .large
+
+        let openSettingsButton = UIButton(type: .system)
+        openSettingsButton.configuration = settingsConfig
+        openSettingsButton.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
+        setupStack.addArrangedSubview(openSettingsButton)
 
         let setupContainer = UIStackView(arrangedSubviews: [
             setupTitleLabel,
@@ -309,7 +382,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         contentStack.addArrangedSubview(setupContainer)
 
-        // MARK: - Sign out
+        // MARK: - Sign out and account deletion
 
         signOutButton.setTitle("Sign Out", for: .normal)
         signOutButton.setTitleColor(.systemRed, for: .normal)
@@ -317,6 +390,20 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         signOutButton.addTarget(self, action: #selector(signOut), for: .touchUpInside)
 
         contentStack.addArrangedSubview(signOutButton)
+
+        // Account creation happens in this app on iOS, so account deletion has
+        // to be reachable here too (App Store guideline 5.1.1(v)).
+        deleteAccountButton.setTitle("Delete Account", for: .normal)
+        deleteAccountButton.setTitleColor(.systemRed, for: .normal)
+        deleteAccountButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        deleteAccountButton.addTarget(self, action: #selector(confirmDeleteAccount), for: .touchUpInside)
+
+        contentStack.addArrangedSubview(deleteAccountButton)
+    }
+
+    @objc private func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private func makeSetupRow(
@@ -378,15 +465,24 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             ?? (session?["email"] as? String)
                 .flatMap { $0.isEmpty ? nil : $0 }
 
+        let providerLabel = (session?["provider"] as? String).flatMap { id in
+            signInProviders.first { $0.id == id }?.label.replacingOccurrences(of: "Sign in with ", with: "")
+        }
+
         if signedIn {
             statusIconView.image = UIImage(systemName: "checkmark.circle.fill")
             statusIconView.tintColor = .systemGreen
 
             statusTitleLabel.text = "You're signed in"
 
-            if let identity {
+            switch (identity, providerLabel) {
+            case let (identity?, provider?):
+                statusDetailLabel.text = "Signed in as \(identity) with \(provider)"
+            case let (identity?, nil):
                 statusDetailLabel.text = "Signed in as \(identity)"
-            } else {
+            case let (nil, provider?):
+                statusDetailLabel.text = "Signed in with \(provider)"
+            default:
                 statusDetailLabel.text = "Your Novel Tracker account is ready."
             }
         } else {
@@ -402,11 +498,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             statusDetailLabel.text = message
         }
 
-        actionButton.isHidden = signedIn
+        signInStack.isHidden = signedIn
         signOutButton.isHidden = !signedIn
+        deleteAccountButton.isHidden = !signedIn
     }
-    @objc private func signIn() {
-        actionButton.isEnabled = false
+
+    private func setSignInEnabled(_ enabled: Bool) {
+        signInButtons.forEach { $0.isEnabled = enabled }
+    }
+
+    @objc private func signInTapped(_ sender: UIButton) {
+        guard signInProviders.indices.contains(sender.tag) else { return }
+        signIn(provider: signInProviders[sender.tag])
+    }
+
+    private func signIn(provider: SignInProvider) {
+        setSignInEnabled(false)
         let verifier = randomValue(byteCount: 48)
         let state = randomValue(byteCount: 24)
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URL
@@ -416,10 +523,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             .init(name: "response_type", value: "code"), .init(name: "scope", value: "openid profile email offline_access"),
             .init(name: "state", value: state), .init(name: "nonce", value: randomValue(byteCount: 24)),
             .init(name: "code_challenge", value: challenge), .init(name: "code_challenge_method", value: "S256"),
-            .init(name: "kc_idp_hint", value: "google")
+            .init(name: "kc_idp_hint", value: provider.idpHint)
         ]
         let session = ASWebAuthenticationSession(url: parts.url!, callbackURLScheme: "noveltracker") { [weak self] url, error in
-            DispatchQueue.main.async { self?.actionButton.isEnabled = true }
+            DispatchQueue.main.async { self?.setSignInEnabled(true) }
             guard let self else { return }
             if let error { return DispatchQueue.main.async { self.refreshIOSView(message: error.localizedDescription) } }
             guard let url, let values = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -427,15 +534,18 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                   let code = values.queryItems?.first(where: { $0.name == "code" })?.value else {
                 return DispatchQueue.main.async { self.refreshIOSView(message: "The authorization response could not be verified. Please try again.") }
             }
-            self.exchange(code: code, verifier: verifier)
+            self.exchange(code: code, verifier: verifier, provider: provider)
         }
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false
         authenticationSession = session
-        if !session.start() { actionButton.isEnabled = true; refreshIOSView(message: "Could not open Google sign-in.") }
+        if !session.start() {
+            setSignInEnabled(true)
+            refreshIOSView(message: "Could not open \(provider.label).")
+        }
     }
 
-    private func exchange(code: String, verifier: String) {
+    private func exchange(code: String, verifier: String, provider: SignInProvider) {
         var request = URLRequest(url: URL(string: "\(issuer)/protocol/openid-connect/token")!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
@@ -454,7 +564,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                     "accessToken": access, "refreshToken": refresh, "idToken": idToken,
                     "expiresAt": Date().timeIntervalSince1970 * 1000 + max(0, expires - 30) * 1000,
                     "subject": claims["sub"] as? String ?? "", "email": claims["email"] as? String ?? "",
-                    "name": claims["name"] as? String ?? claims["preferred_username"] as? String ?? ""
+                    "name": claims["name"] as? String ?? claims["preferred_username"] as? String ?? "",
+                    // Keycloak's `provider` claim when the mapper is present,
+                    // otherwise the button that was tapped. The extension reads
+                    // this out of the shared keychain session, and account
+                    // deletion needs it to know whether to revoke an Apple grant.
+                    "provider": claims["provider"] as? String ?? provider.id
                 ])
                 DispatchQueue.main.async { self.refreshIOSView() }
             } catch { DispatchQueue.main.async { self.refreshIOSView(message: "Sign-in failed: \(error.localizedDescription)") } }
@@ -462,6 +577,98 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     @objc private func signOut() { do { try AppSessionStore.clear(); refreshIOSView() } catch { refreshIOSView(message: error.localizedDescription) } }
+
+    // MARK: - Account deletion
+
+    /// Keycloak access tokens are short-lived (minutes), and the reader may have
+    /// left this screen open far longer than that, so the stored token is
+    /// refreshed before use rather than sent straight to a 401.
+    private func withAccessToken(_ completion: @escaping (Result<String, Error>) -> Void) {
+        guard let session = try? AppSessionStore.read(),
+              let access = session["accessToken"] as? String,
+              let refresh = session["refreshToken"] as? String else {
+            return completion(.failure(OAuthError.notSignedIn))
+        }
+
+        let expiresAt = (session["expiresAt"] as? NSNumber)?.doubleValue ?? 0
+        if Date().timeIntervalSince1970 * 1000 < expiresAt { return completion(.success(access)) }
+
+        var request = URLRequest(url: URL(string: "\(issuer)/protocol/openid-connect/token")!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = formEncoded([
+            "grant_type": "refresh_token", "client_id": clientID, "refresh_token": refresh
+        ]).data(using: .utf8)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error { return completion(.failure(error)) }
+            guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode), let data,
+                  let tokens = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let refreshed = tokens["access_token"] as? String else {
+                return completion(.failure(OAuthError.tokenExchange))
+            }
+
+            var updated = session
+            updated["accessToken"] = refreshed
+            updated["refreshToken"] = tokens["refresh_token"] as? String ?? refresh
+            let expires = (tokens["expires_in"] as? NSNumber)?.doubleValue ?? 300
+            updated["expiresAt"] = Date().timeIntervalSince1970 * 1000 + max(0, expires - 30) * 1000
+            try? AppSessionStore.write(updated)
+
+            completion(.success(refreshed))
+        }.resume()
+    }
+
+    @objc private func confirmDeleteAccount() {
+        let alert = UIAlertController(
+            title: "Delete Account?",
+            message: "This permanently deletes your Novel Tracker account and everything synced to it. The library saved in Safari on this device is not removed. This cannot be undone.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Delete Account", style: .destructive) { [weak self] _ in
+            self?.deleteAccount()
+        })
+        present(alert, animated: true)
+    }
+
+    private func deleteAccount() {
+        deleteAccountButton.isEnabled = false
+        refreshIOSView(message: "Deleting your account…")
+
+        withAccessToken { [weak self] result in
+            guard let self else { return }
+
+            func finish(_ message: String) {
+                DispatchQueue.main.async {
+                    self.deleteAccountButton.isEnabled = true
+                    self.refreshIOSView(message: message)
+                }
+            }
+
+            guard case let .success(token) = result else {
+                return finish("Could not delete your account. Please sign in again and retry.")
+            }
+
+            var request = URLRequest(url: URL(string: "\(apiBaseURL)/v1/account")!)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            URLSession.shared.dataTask(with: request) { _, response, error in
+                if let error { return finish("Could not delete your account: \(error.localizedDescription)") }
+                guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else {
+                    return finish("Could not delete your account. Please try again.")
+                }
+                // The account is gone server-side; the local session must go
+                // too, or the app would keep showing a signed-in state for it.
+                try? AppSessionStore.clear()
+                DispatchQueue.main.async {
+                    self.deleteAccountButton.isEnabled = true
+                    self.refreshIOSView(message: "Your account has been deleted.")
+                }
+            }.resume()
+        }
+    }
 #endif
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -492,7 +699,17 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 }
 
-private enum OAuthError: LocalizedError { case tokenExchange; var errorDescription: String? { "The authentication server rejected the token exchange." } }
+private enum OAuthError: LocalizedError {
+    case tokenExchange
+    case notSignedIn
+
+    var errorDescription: String? {
+        switch self {
+        case .tokenExchange: return "The authentication server rejected the token exchange."
+        case .notSignedIn: return "You are not signed in."
+        }
+    }
+}
 private func randomValue(byteCount: Int) -> String { var bytes = [UInt8](repeating: 0, count: byteCount); _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes); return Data(bytes).base64URL }
 private func formEncoded(_ values: [String: String]) -> String { var components = URLComponents(); components.queryItems = values.map(URLQueryItem.init); return components.percentEncodedQuery ?? "" }
 private func decodeJWT(_ token: String) -> [String: Any] { let parts = token.split(separator: "."); guard parts.count > 1, let data = Data(base64URLEncoded: String(parts[1])), let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }; return value }

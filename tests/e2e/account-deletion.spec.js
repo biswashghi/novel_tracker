@@ -6,8 +6,14 @@ import { test, expect, extensionUrl, mockSitePage, stubActiveTab, assertLocalSta
 
 test.beforeAll(assertLocalStackConfig);
 
-const E2E_USERNAME = 'e2e-tester';
+// This spec deletes its user for real (App Store guideline 5.1.1(v) — the
+// account itself has to go, not just its synced rows), so it cannot share
+// `e2e-tester` with the sync specs; whichever ran afterwards would fail. The
+// realm seeds this account solely to be destroyed here.
+const E2E_USERNAME = 'e2e-deletable';
 const E2E_PASSWORD = 'novel-tracker-e2e-password';
+
+const REALM_URL = process.env.NOVEL_TRACKER_REALM_URL || 'http://localhost:8793/realms/novel-tracker';
 
 const CHAPTER_URL = 'https://www.royalroad.com/fiction/12345/test-fiction/7';
 const CHAPTER_HTML = `
@@ -30,7 +36,7 @@ const CHAPTER_HTML = `
 async function signIn(context, optionsPage) {
   const [authPage] = await Promise.all([
     context.waitForEvent('page', { timeout: 20_000 }),
-    optionsPage.locator('#sign-in').click()
+    optionsPage.locator('.sign-in-button').first().click()
   ]);
   await authPage.waitForLoadState('domcontentloaded');
   await authPage.locator('#username').fill(E2E_USERNAME);
@@ -39,11 +45,33 @@ async function signIn(context, optionsPage) {
   await authPage.waitForEvent('close', { timeout: 20_000 }).catch(() => {});
 }
 
-test('deleting cloud data removes it from the API without touching the local library', async ({
+/**
+ * Direct-grant password login, used only to ask Keycloak whether the account
+ * still exists. `novel-tracker-extension` enables it in the e2e realm.
+ */
+async function passwordGrantStatus() {
+  const response = await fetch(`${REALM_URL}/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'password',
+      client_id: 'novel-tracker-extension',
+      scope: 'openid',
+      username: E2E_USERNAME,
+      password: E2E_PASSWORD
+    }).toString()
+  });
+  return response.status;
+}
+
+test('deleting the account removes the identity while the local library survives', async ({
   context,
   extensionId,
   serviceWorker
 }) => {
+  // The account must exist before the test claims to have deleted it.
+  expect(await passwordGrantStatus()).toBe(200);
+
   const sitePage = await context.newPage();
   await mockSitePage(context, CHAPTER_URL, CHAPTER_HTML);
   await sitePage.goto(CHAPTER_URL);
@@ -64,20 +92,14 @@ test('deleting cloud data removes it from the API without touching the local lib
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible();
 
   optionsPage.once('dialog', (dialog) => dialog.accept());
-  await optionsPage.locator('#delete-cloud').click();
-  await expect(optionsPage.locator('#account-title')).not.toContainText('e2e-tester', { timeout: 20_000 });
+  await optionsPage.locator('#delete-account').click();
+  await expect(optionsPage.locator('#account-title')).not.toContainText(E2E_USERNAME, { timeout: 20_000 });
 
-  // Deleting cloud data signs the device out and clears sync linkage, but
-  // per docs/operations.md it must NOT touch the local library.
+  // Deletion signs the device out and clears sync linkage, but per
+  // docs/operations.md it must NOT touch the local library.
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible();
 
-  // Signing back in re-links this device as a fresh sync account (per
-  // docs/sync-api.md, deletion is server-side; a subsequent sync just pushes
-  // the still-intact local library back up as new server state). This
-  // should complete cleanly, not surface as a sync error.
-  await signIn(context, optionsPage);
-  await optionsPage.locator('#sync-now').click();
-  await expect(optionsPage.locator('#sync-detail')).toContainText(/synced/i, { timeout: 20_000 });
-  await expect(optionsPage.locator('#sync-detail')).not.toContainText(/error/i);
-  await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toHaveCount(1);
+  // The point of the change: the identity is gone, not merely disconnected.
+  // Keycloak answers 401 once the user no longer exists.
+  await expect.poll(passwordGrantStatus, { timeout: 20_000 }).toBe(401);
 });

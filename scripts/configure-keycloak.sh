@@ -46,5 +46,32 @@ if [ -z "$MAPPER_EXISTS" ]; then
 fi
 rm -f /tmp/novel-audience-mapper.json
 
-echo "Keycloak client audience mapping is configured."
+# Which identity provider minted a token has to reach both the extension and the
+# API: the UI tells readers which library they are looking at, and account
+# deletion uses it to decide whether an Apple grant must also be revoked.
+# Keycloak tracks it as the `identity_provider` session note; this mapper
+# copies it into a `provider` claim on both token types.
+PROVIDER_MAPPER=novel-tracker-identity-provider
+printf %s '"'"'{"name":"novel-tracker-identity-provider","protocol":"openid-connect","protocolMapper":"oidc-usersessionmodel-note-mapper","consentRequired":false,"config":{"user.session.note":"identity_provider","claim.name":"provider","jsonType.label":"String","access.token.claim":"true","id.token.claim":"true"}}'"'"' >/tmp/novel-provider-mapper.json
+PROVIDER_MAPPER_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields name --format csv --noquotes | grep -Fx "$PROVIDER_MAPPER" || true)
+if [ -z "$PROVIDER_MAPPER_EXISTS" ]; then
+  "$KCADM" create "clients/$CLIENT_UUID/protocol-mappers/models" -r "$REALM" -f /tmp/novel-provider-mapper.json >/dev/null
+fi
+rm -f /tmp/novel-provider-mapper.json
+
+# Google and Apple stay separate accounts even when they carry the same email
+# address, so the realm has to tolerate duplicate emails. Keycloak only permits
+# that when email login is off, and the order matters — it rejects
+# duplicateEmailsAllowed while loginWithEmailAllowed is still true. Turning off
+# email login costs nothing here: readers only ever authenticate through an
+# identity provider, never against a Keycloak username/password form.
+#
+# Without this, a reader whose Apple email matches their Google one hits
+# Keycloak'"'"'s "account already exists" screen, which dead-ends inside the
+# extension popup.
+"$KCADM" update "realms/$REALM" -s '"'"'loginWithEmailAllowed=false'"'"'
+"$KCADM" update "realms/$REALM" -s '"'"'duplicateEmailsAllowed=true'"'"'
+
+echo "Keycloak client audience mapping, provider claim, and realm login policy are configured."
+echo "Run scripts/rotate-apple-secret.mjs to create or refresh the Apple identity provider."
 '

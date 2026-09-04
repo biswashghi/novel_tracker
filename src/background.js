@@ -15,7 +15,7 @@ import {
   signIn,
   signOut
 } from "./lib/auth.js";
-import { createSerialQueue, deleteCloudAccount, getSyncStatus, syncNow } from "./lib/sync-service.js";
+import { createSerialQueue, deleteAccount, getSyncStatus, syncNow } from "./lib/sync-service.js";
 
 const extensionApi = getExtensionApi();
 
@@ -66,7 +66,10 @@ async function handleMessage(message) {
     case "novel-tracker:account-status":
       return accountSnapshot();
     case "novel-tracker:account-sign-in": {
-      const account = await signIn({ hasLocalData: await hasLocalLibraryData() });
+      const account = await signIn({
+        provider: message.payload?.provider,
+        hasLocalData: await hasLocalLibraryData()
+      });
       if (!account.needsAccountConfirmation) await syncNow().catch(() => {});
       return accountSnapshot();
     }
@@ -81,8 +84,8 @@ async function handleMessage(message) {
       await signOut();
       await syncNow();
       return accountSnapshot();
-    case "novel-tracker:account-delete-cloud":
-      await deleteCloudAccount();
+    case "novel-tracker:account-delete":
+      await deleteAccount();
       return accountSnapshot();
     case "novel-tracker:sync-now":
       await syncNow();

@@ -36,6 +36,19 @@ services:
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:?KEYCLOAK_ISSUER is required}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-}
       KEYCLOAK_AUDIENCE: novel-tracker-api
+      # Account deletion removes the Keycloak user, not just its synced rows
+      # (App Store guideline 5.1.1(v)), which needs a service-account client
+      # holding realm-management/manage-users. KEYCLOAK_ADMIN_URL exists for the
+      # same reason KEYCLOAK_JWKS_URL does: the issuer is the address the
+      # browser used, which the API container may not be able to route to.
+      KEYCLOAK_ADMIN_URL: ${KEYCLOAK_ADMIN_URL:-}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-}
+      # Deleting a Sign in with Apple account must also revoke Apple's token.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_SERVICES_ID: ${APPLE_SERVICES_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY: ${APPLE_PRIVATE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

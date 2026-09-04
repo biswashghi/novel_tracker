@@ -70,6 +70,37 @@ Returns up to 1,000 mutations visible after the cursor plus the next cursor and
 cursor performs the initial account pull. The server returns tombstones as
 ordinary `novel.delete` mutations so clients suppress stale updates.
 
+## `DELETE /v1/account/data`
+
+Erases everything synced to the account — states, mutations, receipts, id
+mappings, and purge records — while leaving the account itself intact. The next
+sync repopulates the server from whatever the device still holds. This is what
+the endpoint below used to do, and it is the reset the integration suite uses
+between runs.
+
+## `DELETE /v1/account`
+
+Deletes the account itself. Required by App Store guideline 5.1.1(v), which
+does not accept deactivating or disconnecting as a substitute.
+
+Steps run in this order, chosen for their failure modes:
+
+1. If the access token's `provider` claim is `apple`, read the stored Apple
+   refresh token from Keycloak's `broker/apple/token` endpoint and revoke it at
+   `appleid.apple.com/auth/revoke`. Apple requires this on account deletion, and
+   the stored token becomes unreadable once the user is gone — so it goes first.
+   A token Apple already rejects (`invalid_grant`) counts as revoked.
+2. Erase the synced data, as above.
+3. Delete the Keycloak user through the admin API.
+
+The identity is removed **last** on purpose: any earlier failure leaves the
+reader still signed in and able to retry the whole request, whereas deleting the
+user first would strand rows under a subject that can no longer authenticate.
+
+The route returns `503` without touching anything when the Keycloak admin
+credentials (or, for Apple accounts, the Apple credentials) are missing, rather
+than performing a partial deletion that silently leaves the account alive.
+
 ## Lifecycle rules
 
 The API must retain accepted mutations for idempotency, retain delete
@@ -83,6 +114,30 @@ After the Keycloak container is available at the configured auth domain, add
 Google under **Identity providers** in the `novel-tracker` realm.
 Keep their client secrets in Keycloak's database/admin UI rather than in this
 repository or the Docker Compose environment.
+
+Apple is brokered the same way, as a generic OIDC provider with the alias
+`apple`, so both sign-in buttons share one PKCE flow that differs only by
+`kc_idp_hint` (see `AUTH_PROVIDERS` in `src/lib/config.js`). Because it is a
+plain web OAuth flow, it works in Chrome and Firefox too, not only on Apple
+platforms. `scripts/configure-keycloak.sh` creates it. Two details are not
+optional:
+
+- The authorization URL must carry `?response_mode=form_post`. Apple rejects
+  the request otherwise whenever `name` or `email` is in scope, and Keycloak's
+  generic OIDC provider has no field for the response mode.
+- `storeToken` and `addReadTokenRoleOnCreate` must be on, or account deletion
+  cannot read the Apple refresh token it has to revoke.
+
+Apple's client secret is an ES256 JWT that expires within six months rather
+than a fixed string (`server/apple-client-secret.js`). When it lapses, every
+Apple sign-in fails in a way that reads like a Keycloak fault, so
+`scripts/rotate-apple-secret.mjs` refreshes it on a timer.
+
+Google and Apple are deliberately **separate accounts**, even for one person
+with one email address, so each keeps its own synced library. The realm sets
+`duplicateEmailsAllowed` with `loginWithEmailAllowed` off to stop Keycloak's
+"account already exists" screen from interrupting the flow in an extension
+popup — safe here because readers only ever authenticate through a provider.
 
 The extension uses Authorization Code with PKCE. `novel-tracker-extension`
 must have an audience mapper that adds `novel-tracker-api` to access tokens.
