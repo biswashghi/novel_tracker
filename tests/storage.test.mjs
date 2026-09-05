@@ -160,7 +160,7 @@ test("autoUpdateNovelProgress skips a Patreon home page but accepts the next Pat
   assert.equal(novel.chapterHistory.length, 2);
 });
 
-test("autoUpdateNovelProgress advances Chikari novels reader routes", async () => {
+test("autoUpdateNovelProgress migrates legacy Chikari routes without duplicating the novel", async () => {
   globalThis.localStorage.clear();
 
   await upsertNovel({
@@ -176,8 +176,8 @@ test("autoUpdateNovelProgress advances Chikari novels reader routes", async () =
   const result = await autoUpdateNovelProgress({
     title: "Three Days of Happiness",
     sourceSite: "chikari.moe",
-    novelHomeUrl: "https://chikari.moe/novels/three-days-of-happiness",
-    lastReadChapterUrl: "https://chikari.moe/novels/three-days-of-happiness/2",
+    novelHomeUrl: "https://chikari.moe/series/three-days-of-happiness",
+    lastReadChapterUrl: "https://chikari.moe/series/three-days-of-happiness/2",
     lastReadChapterLabel: "Chapter 2",
     coverImageUrl: ""
   });
@@ -186,7 +186,9 @@ test("autoUpdateNovelProgress advances Chikari novels reader routes", async () =
   assert.equal(result.reason, "progress-updated");
 
   const [novel] = await getNovels();
-  assert.equal(novel.lastReadChapterUrl, "https://chikari.moe/novels/three-days-of-happiness/2");
+  assert.equal((await getNovels()).length, 1);
+  assert.equal(novel.novelHomeUrl, "https://chikari.moe/series/three-days-of-happiness");
+  assert.equal(novel.lastReadChapterUrl, "https://chikari.moe/series/three-days-of-happiness/2");
   assert.equal(novel.chapterHistory.length, 2);
 });
 

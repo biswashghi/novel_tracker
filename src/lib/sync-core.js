@@ -315,6 +315,9 @@ function normalizeIdentityUrl(value) {
   try {
     const url = new URL(value);
     url.hash = "";
+    if (url.hostname.replace(/^www\./, "") === "chikari.moe") {
+      url.pathname = url.pathname.replace(/^\/novels(?=\/)/, "/series");
+    }
     return url.toString();
   } catch {
     return String(value).trim();

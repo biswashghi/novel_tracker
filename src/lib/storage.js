@@ -219,9 +219,11 @@ function getUrlParts(url) {
       .split("/")
       .map((segment) => segment.trim().toLowerCase())
       .filter(Boolean);
+    const hostname = parsed.hostname.replace(/^www\./, "");
+    if (hostname === "chikari.moe" && segments[0] === "novels") segments[0] = "series";
 
     return {
-      hostname: parsed.hostname.replace(/^www\./, ""),
+      hostname,
       segments
     };
   } catch {

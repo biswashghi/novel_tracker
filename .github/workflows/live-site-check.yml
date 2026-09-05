@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           [[ -n "$API_DOMAIN" && -n "$AUTH_DOMAIN" ]]
           readiness="$(curl -fsS --retry 5 --retry-delay 5 "https://${API_DOMAIN}/ready")"
-          jq -e '.ok == true and (.version | length > 0) and (.commit | length == 40) and (.schema | length > 0)' <<<"$readiness"
+          jq -e '.ok == true and .apiVersion == "v1" and (.version | length > 0) and (.commit | length == 40) and (.schema | length > 0)' <<<"$readiness"
           curl -fsS --retry 5 --retry-delay 5 \
             "https://${AUTH_DOMAIN}/realms/novel-tracker/.well-known/openid-configuration" \
             | jq -e '.issuer | length > 0'
