@@ -61,7 +61,10 @@ async function waitForKeycloakRealm(timeoutMs = 120_000) {
 }
 
 if (mode === "up") {
-  await run("docker", [...composeArgs, "up", "-d", "--wait"]);
+  // Always rebuild the source-backed API image. Reusing a locally cached
+  // `novel-tracker-api:local` image can make the extension suite exercise old
+  // server behavior while appearing to test the current checkout.
+  await run("docker", [...composeArgs, "up", "-d", "--build", "--wait"]);
   console.log("Waiting for the novel-tracker realm to finish importing...");
   await waitForKeycloakRealm();
   console.log("Local e2e stack is ready: API on http://localhost:8792, Keycloak on http://localhost:8793");

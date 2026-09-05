@@ -7,4 +7,5 @@ After=docker.service
 Type=oneshot
 User=root
 WorkingDirectory=/opt/novel-tracker
+EnvironmentFile=-/etc/novel-tracker/app.env
 ExecStart=/opt/novel-tracker/scripts/backup-vps.sh

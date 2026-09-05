@@ -25,6 +25,7 @@
         "noveltracker://oauth/callback",
         "http://127.0.0.1/mozoauth2/*",
         "https://*.extensions.allizom.org/*",
+        "https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2",
         "https://*.chromiumapp.org/*",
         "*"
       ],

@@ -28,3 +28,10 @@ retained and can be exported beforehand. Deleted-novel tombstones are retained
 for up to 30 days to prevent offline devices from restoring stale records.
 
 JSON export and import occur only when explicitly initiated by the reader.
+
+On Firefox, local-only use declares no required off-device data collection. If
+a reader chooses sign-in, Firefox requests its built-in optional permissions for
+authentication information, identifying information, browsing activity,
+website activity, and website content before Novel Tracker starts the OAuth and
+synchronization flow. Denying that request leaves the reader signed out and the
+library local.

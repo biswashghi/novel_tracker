@@ -5,6 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${NOVEL_ENV_FILE:-/etc/novel-tracker/app.env}"
 COMPOSE=(sudo docker compose --project-name novel-tracker --env-file "${ENV_FILE}" -f "${ROOT_DIR}/compose.yml" -f "${ROOT_DIR}/compose.production.yml")
 
+# This entire program runs inside Keycloak's container. Its variables and
+# nested quote escapes must be evaluated there, not by this host shell.
+# shellcheck disable=SC2016,SC2026
 "${COMPOSE[@]}" exec -T keycloak sh -ec '
 KCADM=/opt/keycloak/bin/kcadm.sh
 REALM=novel-tracker
@@ -21,6 +24,16 @@ CLIENT_UUID=$("$KCADM" get clients -r "$REALM" -q clientId="$CLIENT" --fields id
 if [ -z "$CLIENT_UUID" ]; then
   echo "Could not find Keycloak client $CLIENT" >&2
   exit 1
+fi
+
+# The Chrome Web Store extension ID is public and stable. Realm imports only
+# initialize new databases; an existing production realm does not pick up a
+# later redirectUris change from infra/keycloak-realm.json. Repair the exact
+# callback on every deployment so chrome.identity.launchWebAuthFlow can finish.
+CHROME_REDIRECT=https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2
+CHROME_REDIRECT_EXISTS=$("$KCADM" get "clients/$CLIENT_UUID" -r "$REALM" --fields redirectUris --format csv --noquotes | grep -F "$CHROME_REDIRECT" || true)
+if [ -z "$CHROME_REDIRECT_EXISTS" ]; then
+  "$KCADM" update "clients/$CLIENT_UUID" -r "$REALM" -s 'redirectUris+="https://meciopmpdehijfmbgbagndgknlmbmjoa.chromiumapp.org/oauth2"'
 fi
 
 FIREFOX_REDIRECT=http://127.0.0.1/mozoauth2/*
@@ -72,6 +85,6 @@ rm -f /tmp/novel-provider-mapper.json
 "$KCADM" update "realms/$REALM" -s '"'"'loginWithEmailAllowed=false'"'"'
 "$KCADM" update "realms/$REALM" -s '"'"'duplicateEmailsAllowed=true'"'"'
 
-echo "Keycloak client audience mapping, provider claim, and realm login policy are configured."
+echo "Keycloak client redirects, audience mapping, provider claim, and realm login policy are configured."
 echo "Run scripts/rotate-apple-secret.mjs to create or refresh the Apple identity provider."
 '

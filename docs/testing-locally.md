@@ -7,6 +7,20 @@ the same Postgres + Keycloak + API services used in production
 
 ## Quick start
 
+The normal full gate is one command and always removes its test database:
+
+```bash
+npm run verify:full
+```
+
+The full gate also queries the npm advisory service, validates the exact Chrome
+and Firefox ZIP contents, and runs Firefox's AMO linter. Safari packaging and
+unsigned macOS/iOS compilation run in the PR gate on a macOS runner; on a Mac,
+perform the matching local proof with `npm run package:safari` followed by the
+two `xcodebuild` commands in `docs/release/safari.md`.
+
+For interactive debugging, use the individual steps below.
+
 ```bash
 # 1. Bring up Postgres + Keycloak (seeded with a local-only test realm/user
 #    from infra/keycloak-realm.e2e.json) + the API, and wait for the realm
@@ -51,8 +65,9 @@ If you only want the local-only specs (no sign-in/sync), `npm run build`
 - `tests/server-sync-api.test.mjs` — a plain `npm test` suite (no Playwright)
   that exercises `server/index.js` over HTTP: acknowledgements, per-item
   rejections, batch limits, and the shape of the canonical state blob. It
-  **skips itself** when the stack isn't running, so `npm test` stays green
-  without Docker; bring the stack up (step 1) to actually run it.
+  skips in the unit-only run when the stack is absent. `npm run
+  test:integration` makes that prerequisite fatal; `make staging-test` and CI
+  always use the fatal form, so a green integration gate cannot hide a skip.
 
   It authenticates headlessly with the OAuth password grant, which is why
   `infra/keycloak-realm.e2e.json` sets `directAccessGrantsEnabled: true`.
@@ -78,6 +93,7 @@ messaging to the real background service worker — is untouched.
 - Docker with Compose v2 (`docker compose ...`) for the sign-in/sync specs.
 - Chromium for Playwright: `npx playwright install chromium`, once, if it
   hasn't been downloaded before.
+- Node 22.13.x, matching `.nvmrc` and CI.
 - Firefox and Safari: Playwright cannot load unpacked WebExtensions in
   either browser, so there's no automated equivalent of this suite for them.
   Firefox has `web-ext lint` (Firefox-specific validation) wired into CI

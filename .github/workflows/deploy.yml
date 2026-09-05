@@ -1,34 +1,19 @@
 name: Novel Tracker server
 
 on:
-  pull_request:
-    paths: &server-paths
-      - server/**
-      - infra/keycloak-realm*.json
-      - infra/novel-tracker-backup.*
-      - infra/novel-tracker-apple-secret.*
-      - scripts/rotate-apple-secret.mjs
-      - scripts/deploy-vps.sh
-      - scripts/remote/**
-      - deploy/**
-      - tests/deploy-production.test.sh
-      - tests/e2e/**
-      - scripts/configure-keycloak.sh
-      - scripts/backup-vps.sh
-      - compose*.yml
-      - Dockerfile
-      - Makefile
-      - package.json
-      - package-lock.json
-      - .github/workflows/deploy.yml
   push:
     branches: [main]
-    paths: *server-paths
   workflow_dispatch:
+    inputs:
+      deploy_to_production:
+        description: Deploy the tested candidate to production
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: novel-tracker-server-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -38,16 +23,29 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm run verify:quick
+      - run: npm run audit:production
+      - run: shellcheck scripts/*.sh scripts/remote/*.sh tests/*.sh
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 .github/workflows/*.yml
       - run: node --check server/index.js
       - run: bash -n scripts/deploy-vps.sh scripts/remote/deploy-production.sh tests/deploy-production.test.sh scripts/configure-keycloak.sh scripts/backup-vps.sh
       - run: make production-validate
+      - name: Require configured staging before a production promotion
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_production == true
+        env:
+          DEPLOY_TARGET_CONFIGURED: ${{ vars.DEPLOY_TARGET_CONFIGURED }}
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+          STAGING_TARGET_CONFIGURED: ${{ vars.STAGING_TARGET_CONFIGURED }}
+        run: |
+          test "$DEPLOY_TARGET_CONFIGURED" = true
+          test "$RELEASES_ENABLED" = true
+          test "$STAGING_TARGET_CONFIGURED" = true
 
   build-candidate:
     needs: quality
@@ -55,9 +53,9 @@ jobs:
     outputs:
       image: ${{ steps.reference.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
@@ -65,7 +63,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build API candidate
         id: build
-        uses: docker/build-push-action@v6
+        if: github.event_name != 'workflow_dispatch'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: server/Dockerfile
@@ -75,20 +74,50 @@ jobs:
           tags: ${{ github.event_name != 'pull_request' && format('ghcr.io/{0}/novel-tracker-api:{1}', github.repository, github.sha) || format('novel-tracker-api:ci-{0}', github.sha) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: NOVEL_TRACKER_COMMIT=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+      - name: Resolve the previously built main candidate
+        id: existing
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          IMAGE_TAG: ghcr.io/${{ github.repository }}/novel-tracker-api:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_TAG"
+          image="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE_TAG")"
+          [[ "$image" =~ @sha256:[a-f0-9]{64}$ ]]
+          echo "image=$image" >> "$GITHUB_OUTPUT"
       - name: Resolve immutable reference
         id: reference
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
+          EXISTING_IMAGE: ${{ steps.existing.outputs.image }}
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "image=novel-tracker-api:ci-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            test -n "$EXISTING_IMAGE"
+            echo "image=$EXISTING_IMAGE" >> "$GITHUB_OUTPUT"
           else
+            test -n "$DIGEST"
             echo "image=ghcr.io/${GITHUB_REPOSITORY}/novel-tracker-api@${DIGEST}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Scan candidate image for fixable high-severity vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ steps.reference.outputs.image }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
       - name: Export pull-request image
         if: github.event_name == 'pull_request'
         run: docker save "novel-tracker-api:ci-${GITHUB_SHA}" | gzip > /tmp/novel-api-image.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: github.event_name == 'pull_request'
         with:
           name: novel-api-candidate
@@ -99,20 +128,20 @@ jobs:
     needs: build-candidate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         if: github.event_name == 'pull_request'
         with:
           name: novel-api-candidate
@@ -122,6 +151,7 @@ jobs:
       - if: github.event_name != 'pull_request'
         env:
           NOVEL_API_IMAGE: ${{ needs.build-candidate.outputs.image }}
+          NOVEL_RELEASE_SHA: ${{ github.sha }}
         run: docker pull "$NOVEL_API_IMAGE"
       - name: Run authenticated ephemeral staging
         env:
@@ -129,7 +159,7 @@ jobs:
           STAGING_NO_BUILD: "1"
           STAGING_PROJECT: novel-tracker-staging-${{ github.run_id }}
         run: make staging-test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
           name: novel-staging-diagnostics
@@ -140,13 +170,48 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  production:
+  staging:
     needs: [build-candidate, docker-staging]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET_CONFIGURED == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.STAGING_TARGET_CONFIGURED == 'true'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Configure staging SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST || secrets.HETZNER_HOST }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY || secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_SSH_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [[ -n "$VPS_KNOWN_HOSTS" ]]; then printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts; else ssh-keyscan -H "$VPS_HOST" > ~/.ssh/known_hosts; fi
+      - name: Deploy the tested digest to persistent staging
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOVEL_API_DOMAIN: ${{ vars.NOVEL_API_DOMAIN }}
+          NOVEL_API_IMAGE: ${{ needs.build-candidate.outputs.image }}
+          NOVEL_AUTH_DOMAIN: ${{ vars.NOVEL_AUTH_DOMAIN }}
+          NOVEL_RELEASE_SHA: ${{ github.sha }}
+          VPS_HOST: ${{ secrets.VPS_HOST || secrets.HETZNER_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER || secrets.HETZNER_USER }}
+        run: |
+          set -euo pipefail
+          cleanup() { ssh "$VPS_USER@$VPS_HOST" 'sudo docker logout ghcr.io' || true; }
+          trap cleanup EXIT
+          printf '%s' "$GHCR_TOKEN" | ssh "$VPS_USER@$VPS_HOST" sudo docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          ./scripts/deploy-vps.sh "$VPS_USER" "$VPS_HOST"
+
+  production:
+    needs: [build-candidate, docker-staging, staging]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_to_production == true && github.ref == 'refs/heads/main' && vars.DEPLOY_TARGET_CONFIGURED == 'true' && vars.STAGING_TARGET_CONFIGURED == 'true' && vars.RELEASES_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Configure SSH
         env:
           VPS_HOST: ${{ secrets.VPS_HOST || secrets.HETZNER_HOST }}
@@ -164,6 +229,7 @@ jobs:
           NOVEL_API_DOMAIN: ${{ vars.NOVEL_API_DOMAIN }}
           NOVEL_API_IMAGE: ${{ needs.build-candidate.outputs.image }}
           NOVEL_AUTH_DOMAIN: ${{ vars.NOVEL_AUTH_DOMAIN }}
+          NOVEL_RELEASE_SHA: ${{ github.sha }}
           VPS_HOST: ${{ secrets.VPS_HOST || secrets.HETZNER_HOST }}
           VPS_USER: ${{ secrets.VPS_USER || secrets.HETZNER_USER }}
         run: |

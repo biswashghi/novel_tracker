@@ -9,6 +9,7 @@ import {
 import { computeReadingStats } from "./lib/reading-stats.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
+import { requireFirefoxSyncDataConsent } from "./lib/firefox-data-consent.js";
 
 import { AUTH_PROVIDERS } from "./lib/config.js";
 
@@ -141,19 +142,6 @@ async function withBusy(button, operation) {
   } finally {
     button.disabled = false;
     button.classList.remove("busy");
-  }
-}
-
-async function requestFirefoxSyncConsent() {
-  const extensionApi = getExtensionApi();
-  const declared = extensionApi.runtime.getManifest()
-    ?.browser_specific_settings?.gecko?.data_collection_permissions?.optional;
-
-  if (!declared?.length || !extensionApi.permissions?.request) return;
-
-  const granted = await extensionApi.permissions.request({ data_collection: declared });
-  if (!granted) {
-    throw new Error("Cloud sync remains off because data transmission permission was not granted.");
   }
 }
 
@@ -701,7 +689,7 @@ importFileInput.addEventListener("change", async (event) => {
 ========================================================= */
 
 async function startSignIn(provider) {
-  await requestFirefoxSyncConsent();
+  await requireFirefoxSyncDataConsent();
   let snapshot = await sendMessage("novel-tracker:account-sign-in", { provider });
 
   if (snapshot.account?.needsAccountConfirmation) {

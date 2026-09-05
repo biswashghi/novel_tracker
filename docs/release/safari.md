@@ -23,8 +23,8 @@ Steps:
 
 ### Automated archive + upload (CI)
 
-`.github/workflows/release.yml`'s `publish-safari` job (macos-latest, needs
-`build-safari` + `check-secrets`) runs `scripts/publish-safari.mjs`, which
+`.github/workflows/release.yml`'s `publish-safari` job (macos-latest, after the
+protected `publish-readiness` gate) runs `scripts/publish-safari.mjs`, which
 shells out to Fastlane (`safari-app/fastlane/Fastfile`) using the
 `APP_STORE_CONNECT_*` secrets — one lane per platform. The job imports the
 Apple Distribution identity from `APPSTORE_CERTIFICATES_FILE_BASE64` and
@@ -76,13 +76,11 @@ var for `publish-safari.mjs` locally, or the workflow's `safari_platforms`
 `workflow_dispatch` input in CI) to publish just one — useful when the other
 platform's App Store Connect listing is in a blocking state.
 
-To run a lane locally: `cd safari-app && fastlane mac release` (or `fastlane
-ios release`) with `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+To run a lane locally: `cd safari-app && bundle exec fastlane mac release` (or
+`bundle exec fastlane ios release`) with `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
 and `APP_STORE_CONNECT_P8` exported in your shell — needs `fastlane`
-installed (`gem install fastlane`; if your system Ruby is too old, install a
-newer one via Homebrew (`brew install ruby`) and prepend
-`/opt/homebrew/opt/ruby/bin` and `/opt/homebrew/lib/ruby/gems/<version>/bin`
-to `PATH` first). The same signing setup from steps 2–3 above has to already
+installed through `bundle install` using the repository's locked
+`Gemfile.lock`. The same signing setup from steps 2–3 above has to already
 be in place in the persistent Xcode project for this to work
 non-interactively — `npm run package:safari` handles that automatically (see
 the scheme-sharing and app-version notes below).

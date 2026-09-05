@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-// Invoked from the build-safari job in .github/workflows/release.yml (which
-// runs on macos-latest — Fastlane/Xcode aren't available on the ubuntu
-// runner the Chrome/Firefox publish steps use). See
-// safari-app/fastlane/Fastfile for what this actually runs, and its header
-// comment for what's still unverified (the iOS lane specifically).
+// Invoked from the protected publish-safari job in
+// .github/workflows/release.yml. See safari-app/fastlane/Fastfile for the
+// platform-specific archive and upload lanes.
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -20,8 +18,8 @@ const required = [
 
 const missing = required.filter((key) => !process.env[key]);
 if (missing.length > 0) {
-  console.warn(`Skipping App Store upload; missing App Store Connect secrets: ${missing.join(', ')}`);
-  process.exit(0);
+  console.error(`Cannot publish Safari; missing App Store Connect secrets: ${missing.join(', ')}`);
+  process.exit(1);
 }
 
 const zipPath = process.argv[2];
@@ -36,17 +34,15 @@ if (!existsSync(zipPath)) {
 }
 
 if (process.platform !== 'darwin') {
-  console.warn(`Skipping App Store upload; this must run on macOS (Xcode is required), not ${process.platform}.`);
-  console.warn(`Safari package ready for App Store Connect: ${zipPath}`);
-  process.exit(0);
+  console.error(`Cannot publish Safari from ${process.platform}; macOS and Xcode are required.`);
+  process.exit(1);
 }
 
 const fastlaneDir = path.join(root, 'safari-app');
-const fastlaneCheck = spawnSync('fastlane', ['--version'], { stdio: 'ignore' });
+const fastlaneCheck = spawnSync('bundle', ['exec', 'fastlane', '--version'], { cwd: root, stdio: 'ignore' });
 if (fastlaneCheck.error || fastlaneCheck.status !== 0) {
-  console.warn('Skipping App Store upload; `fastlane` is not installed (gem install fastlane).');
-  console.warn(`Safari package ready for App Store Connect: ${zipPath}`);
-  process.exit(0);
+  console.error('The locked Fastlane toolchain is unavailable; run bundle install.');
+  process.exit(1);
 }
 
 // macOS goes to the App Store (unreleased draft, not submitted for review);
@@ -75,10 +71,10 @@ if (invalidPlatforms.length > 0) {
 let exitCode = 0;
 for (const platform of requestedPlatforms) {
   console.log(`Running fastlane ${platform} release from ${fastlaneDir} (safari-app/fastlane/Fastfile)...`);
-  const result = spawnSync('fastlane', [platform, 'release'], {
+  const result = spawnSync('bundle', ['exec', 'fastlane', platform, 'release'], {
     cwd: fastlaneDir,
     stdio: 'inherit',
-    env: process.env
+    env: { ...process.env, BUNDLE_GEMFILE: path.join(root, 'Gemfile') }
   });
 
   if (result.error) throw result.error;

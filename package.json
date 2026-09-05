@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "description": "A browser extension to track web novel reading progress across sites.",
+  "engines": {
+    "node": ">=22.13 <23"
+  },
   "dependencies": {
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.3",
     "jose": "^5.10.0",
-    "pg": "^8.13.3",
-    "sharp": "^0.33.5"
+    "pg": "^8.13.3"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -21,16 +23,33 @@
     "store:assets": "node scripts/generate-store-assets.mjs",
     "package:webstore": "node scripts/package-webstore.mjs",
     "test": "node --test",
+    "test:coverage": "node --experimental-test-coverage --test --test-coverage-lines=88 --test-coverage-branches=74 --test-coverage-functions=85",
+    "test:integration": "NOVEL_TRACKER_REQUIRE_STACK=1 node --test tests/server-sync-api.test.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:package": "playwright test tests/e2e/extension-smoke.spec.js tests/e2e/auto-progress.spec.js tests/e2e/library-flow.spec.js",
     "test:e2e:live": "playwright test --config=playwright.live.config.js",
     "test:e2e:headed": "playwright test --headed",
     "e2e:stack:up": "node scripts/e2e-stack.mjs up",
     "e2e:stack:down": "node scripts/e2e-stack.mjs down",
+    "lint": "eslint .",
+    "validate:automation": "bash -n scripts/*.sh scripts/remote/*.sh tests/*.sh && make production-validate",
+    "format:check": "prettier --check package.json '.github/workflows/*.yml' .github/dependabot.yml 'compose*.yml'",
+    "audit:production": "npm audit --omit=dev --audit-level=high",
+    "license:production": "node scripts/check-production-licenses.mjs",
+    "validate:chrome-package": "node scripts/validate-extension-package.mjs release/novel-tracker-extension-${npm_package_version}.zip chrome",
+    "validate:firefox-package": "node scripts/validate-extension-package.mjs release/novel-tracker-extension-firefox-${npm_package_version}.zip firefox",
+    "verify:quick": "npm run format:check && npm run lint && npm run validate:automation && npm run license:production && npm run test:coverage",
+    "verify:full": "npm run verify:quick && npm run audit:production && make staging-test && npm run package:webstore && npm run validate:chrome-package && make package-test && npm run package:firefox && npm exec -- web-ext lint --source-dir dist-firefox && npm run validate:firefox-package",
     "keycloak:apple": "node scripts/rotate-apple-secret.mjs",
     "store:screenshots": "node scripts/capture-appstore-screenshots.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.1",
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
+    "web-ext": "^10.6.0"
   }
 }

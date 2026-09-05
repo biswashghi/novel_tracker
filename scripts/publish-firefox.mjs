@@ -39,9 +39,10 @@ try {
     exitCode = unzipResult.status ?? 1;
   } else {
     const result = spawnSync(
-      'npx',
+      'npm',
       [
-        '-y',
+        'exec',
+        '--',
         'web-ext',
         'sign',
         '--source-dir',

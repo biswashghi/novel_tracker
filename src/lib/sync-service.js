@@ -1,7 +1,7 @@
 import { getAccessToken, getAccountStatus, signOut } from "./auth.js";
 import { platformFetch } from "./platform-http.js";
 import { getStorageLocal } from "./extension-api.js";
-import { disconnectSyncAccount, getSyncState, prepareSyncForAccount, saveSyncState } from "./storage.js";
+import { disconnectSyncAccount, prepareSyncForAccount, saveSyncState } from "./storage.js";
 import { SyncClient } from "./sync-client.js";
 import { API_BASE_URL } from "./config.js";
 

@@ -27,14 +27,17 @@ npm run package:firefox
 
 Notes:
 
-- Firefox desktop 140 and Android 142 are the minimum supported versions because
-  they provide built-in optional data-transmission consent.
+- Firefox declares no required off-device collection for local-only use. At the
+  sign-in gesture it requests the optional authentication, identifying,
+  browsing activity, website activity, and website content categories needed
+  to synchronize the library. Denial leaves the reader signed out and all data
+  local.
 - Register the exact callback returned by `identity.getRedirectURL("oauth2")`
   in Keycloak and test the signed AMO build on Android.
 
 ## One-time CI publishing setup
 
-`.github/workflows/release.yml`'s `publish` job runs
+`.github/workflows/release.yml`'s `publish-firefox` job runs
 `scripts/publish-firefox.mjs` (via `web-ext sign`) instead of the manual AMO
 submission above. It needs two secrets (Settings → Secrets and variables →
 Actions on the repo): `AMO_API_KEY` and `AMO_API_SECRET`. Unlike Chrome,

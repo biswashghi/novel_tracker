@@ -9,6 +9,7 @@ API_DOMAIN="${API_DOMAIN:-}"
 AUTH_DOMAIN="${AUTH_DOMAIN:-}"
 VERIFY_PUBLIC_DEPLOYMENT="${VERIFY_PUBLIC_DEPLOYMENT:-1}"
 API_IMAGE=""
+RELEASE_SHA=""
 PREVIOUS_IMAGE=""
 
 compose() {
@@ -32,7 +33,9 @@ validate_inputs() {
   test -s "$RELEASE_FILE"
   test -s "$ROUTE_TEMPLATE"
   API_IMAGE="$(sed -n 's/^NOVEL_API_IMAGE=//p' "$RELEASE_FILE")"
+  RELEASE_SHA="$(sed -n 's/^NOVEL_RELEASE_SHA=//p' "$RELEASE_FILE")"
   [[ "$API_IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]]
+  [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
 }
 
 acquire_lock() {
@@ -60,7 +63,13 @@ prepare_release() {
   sudo install -m 0644 /tmp/novel-keycloak-realm.json "$APP_DIR/infra/keycloak-realm.json"
   sudo install -m 0755 /tmp/novel-configure-keycloak.sh "$APP_DIR/scripts/configure-keycloak.sh"
   sudo install -m 0755 /tmp/novel-backup-vps.sh "$APP_DIR/scripts/backup-vps.sh"
+  sudo install -m 0755 /tmp/novel-verify-backup.sh "$APP_DIR/scripts/verify-backup.sh"
   sudo install -m 0755 /tmp/novel-deploy-production.sh "$APP_DIR/scripts/deploy-production.sh"
+  sudo install -m 0644 /tmp/novel-tracker-backup.service /etc/systemd/system/novel-tracker-backup.service
+  sudo install -m 0644 /tmp/novel-tracker-backup.timer /etc/systemd/system/novel-tracker-backup.timer
+  sudo install -m 0644 /tmp/novel-tracker-backup-verify.service /etc/systemd/system/novel-tracker-backup-verify.service
+  sudo install -m 0644 /tmp/novel-tracker-backup-verify.timer /etc/systemd/system/novel-tracker-backup-verify.timer
+  sudo systemctl daemon-reload
   set_env NOVEL_API_IMAGE "$API_IMAGE"
   set_env AUTH_HOST "$AUTH_DOMAIN"
   set_env AUTH_URL "https://${AUTH_DOMAIN}"
@@ -73,12 +82,33 @@ prepare_release() {
   sudo chmod 0600 "$ENV_FILE"
 }
 
+create_recovery_point() {
+  if compose ps --status running --services | grep -qx postgres; then
+    sudo systemctl start novel-tracker-backup.service
+    sudo systemctl start novel-tracker-backup-verify.service
+  else
+    echo "No existing database is running; skipping the pre-deployment recovery point."
+  fi
+}
+
 rollback_release() {
   [[ -n "$PREVIOUS_IMAGE" ]] || return 0
   echo "Rolling Novel Tracker back to ${PREVIOUS_IMAGE}." >&2
   set_env NOVEL_API_IMAGE "$PREVIOUS_IMAGE"
   compose pull api || true
   compose up -d --no-build || true
+  local attempt
+  for attempt in $(seq 1 30); do
+    # The immediately previous production image can predate /ready. Its
+    # liveness endpoint is the stable backward-compatible rollback contract.
+    if sudo docker exec shared-caddy wget -qO- "http://novel-api:3000/health" </dev/null >/dev/null 2>&1; then
+      echo "Rollback is ready on ${PREVIOUS_IMAGE}." >&2
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Rollback image failed readiness verification." >&2
+  return 1
 }
 
 deploy_release() {
@@ -89,8 +119,9 @@ deploy_release() {
 wait_for_health() {
   local attempt
   for attempt in $(seq 1 60); do
-    if sudo docker exec shared-caddy wget -qO- \
-      "http://novel-auth:8080/realms/novel-tracker/.well-known/openid-configuration" </dev/null >/dev/null; then
+    if sudo docker exec shared-caddy wget -qO- "http://novel-api:3000/ready" </dev/null >/dev/null &&
+      sudo docker exec shared-caddy wget -qO- \
+        "http://novel-auth:8080/realms/novel-tracker/.well-known/openid-configuration" </dev/null >/dev/null; then
       return 0
     fi
     if [[ "$attempt" -eq 60 ]]; then
@@ -103,12 +134,11 @@ wait_for_health() {
 
 configure_services() {
   "$APP_DIR/scripts/configure-keycloak.sh"
-  sudo install -m 0644 /tmp/novel-tracker-backup.service /etc/systemd/system/novel-tracker-backup.service
-  sudo install -m 0644 /tmp/novel-tracker-backup.timer /etc/systemd/system/novel-tracker-backup.timer
   sudo install -m 0644 /tmp/novel-tracker-apple-secret.service /etc/systemd/system/novel-tracker-apple-secret.service
   sudo install -m 0644 /tmp/novel-tracker-apple-secret.timer /etc/systemd/system/novel-tracker-apple-secret.timer
   sudo systemctl daemon-reload
   sudo systemctl enable --now novel-tracker-backup.timer
+  sudo systemctl enable --now novel-tracker-backup-verify.timer
   # The timer's first calendar event may be weeks away. Start the oneshot now
   # so a missing provider is created on the first deployment and an existing
   # provider receives a fresh client secret on every later deployment.
@@ -124,7 +154,8 @@ install_route() {
 
 verify_public() {
   if [[ "$VERIFY_PUBLIC_DEPLOYMENT" == "1" ]]; then
-    curl -fsS --retry 6 --retry-delay 5 "https://${API_DOMAIN}/health" >/dev/null &&
+    readiness="$(curl -fsS --retry 6 --retry-delay 5 "https://${API_DOMAIN}/ready")" &&
+      grep -Fq "\"commit\":\"${RELEASE_SHA}\"" <<<"$readiness" &&
       curl -fsS --retry 6 --retry-delay 5 \
         "https://${AUTH_DOMAIN}/realms/novel-tracker/.well-known/openid-configuration" >/dev/null
   fi
@@ -137,6 +168,7 @@ main() {
   validate_inputs
   acquire_lock
   prepare_release
+  if ! create_recovery_point; then return 1; fi
   if ! deploy_release; then rollback_release; return 1; fi
   if ! wait_for_health; then rollback_release; return 1; fi
   if ! configure_services; then rollback_release; return 1; fi
@@ -147,6 +179,6 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  trap 'rm -f /tmp/novel-release.env /tmp/novel-tracker.caddy.template /tmp/novel-deploy-production.sh' EXIT
+  trap 'rm -f /tmp/novel-release.env /tmp/novel-compose.yml /tmp/novel-compose.production.yml /tmp/novel-keycloak-realm.json /tmp/novel-configure-keycloak.sh /tmp/novel-backup-vps.sh /tmp/novel-verify-backup.sh /tmp/novel-deploy-production.sh /tmp/novel-tracker.caddy.template /tmp/novel-tracker-backup.service /tmp/novel-tracker-backup.timer /tmp/novel-tracker-backup-verify.service /tmp/novel-tracker-backup-verify.timer /tmp/novel-tracker-apple-secret.service /tmp/novel-tracker-apple-secret.timer' EXIT
   main "$@"
 fi

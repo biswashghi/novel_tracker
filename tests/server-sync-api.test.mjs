@@ -7,7 +7,9 @@ import assert from "node:assert/strict";
 // The e2e realm enables direct access grants so this authenticates headlessly
 // as the seeded throwaway user — production realms are untouched.
 // Skips automatically when the stack isn't running, so plain `npm test`
-// never fails without Docker.
+// never fails without Docker. CI and `make staging-test` set
+// NOVEL_TRACKER_REQUIRE_STACK=1, which turns a missing stack into a hard
+// failure so integration coverage can never be mistaken for a green run.
 
 const API_URL = process.env.NOVEL_TRACKER_API_URL || "http://localhost:8792";
 const REALM_URL =
@@ -39,7 +41,7 @@ async function fetchJson(url, options = {}, timeoutMs = 30_000) {
 
 async function apiUp() {
   try {
-    const probe = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(3_000) });
+    const probe = await fetch(`${API_URL}/ready`, { signal: AbortSignal.timeout(3_000) });
     return probe.ok;
   } catch {
     return false;
@@ -99,10 +101,21 @@ function validMutation(overrides = {}) {
 }
 
 const up = await apiUp();
+const requireStack = process.env.NOVEL_TRACKER_REQUIRE_STACK === "1";
 
 if (!up) {
-  test("server sync API integration", { skip: "local e2e stack not running — npm run e2e:stack:up" }, () => {});
+  test("server sync API integration prerequisites", { skip: !requireStack }, () => {
+    assert.fail("local e2e stack is required but unavailable — run npm run e2e:stack:up");
+  });
 } else {
+  test("readiness proves database migrations and identity configuration", async () => {
+    const response = await fetch(`${API_URL}/ready`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.match(body.schema, /^\d{4}_[a-z0-9_-]+\.sql$/);
+  });
+
   test.before(async () => {
     await authedApi("/v1/account/data", { method: "DELETE" }).catch(() => {});
   });

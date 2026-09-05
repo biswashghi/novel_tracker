@@ -212,30 +212,6 @@ function normalizeChapterHistory(history) {
   return [...seen.values()];
 }
 
-function appendChapterHistory(history, input, now) {
-  const next = normalizeChapterHistory(history);
-  const url = normalizeUrl(input.lastReadChapterUrl);
-  if (!url) {
-    return next;
-  }
-
-  const label = String(input.lastReadChapterLabel || "").trim();
-  const existingIndex = next.findIndex((entry) => entry.url === url);
-  const entry = {
-    url,
-    label,
-    readAt: now
-  };
-
-  if (existingIndex >= 0) {
-    next[existingIndex] = entry;
-    return next;
-  }
-
-  next.push(entry);
-  return next;
-}
-
 function getUrlParts(url) {
   try {
     const parsed = new URL(url);

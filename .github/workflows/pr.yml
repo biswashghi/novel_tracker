@@ -9,25 +9,142 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run test suite
-        run: npm test
+      - name: Run source and unit checks
+        run: npm run verify:quick
+
+      - name: Validate shell and workflow automation
+        run: |
+          shellcheck scripts/*.sh scripts/remote/*.sh tests/*.sh
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 .github/workflows/*.yml
+
+      - name: Audit production dependencies
+        run: npm run audit:production
+
+  build-api:
+    name: API image and vulnerability scan
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build the exact API candidate
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: server/Dockerfile
+          load: true
+          tags: novel-tracker-api:pr-${{ github.sha }}
+          build-args: NOVEL_TRACKER_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Scan the API candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: novel-tracker-api:pr-${{ github.sha }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Export exact API candidate
+        run: docker save "novel-tracker-api:pr-${GITHUB_SHA}" | gzip > /tmp/novel-api-image.tar.gz
+
+      - name: Upload API candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: novel-api-candidate-pr${{ github.event.pull_request.number }}
+          path: /tmp/novel-api-image.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  integration:
+    name: Authenticated integration
+    needs: [test, build-api, build-browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Download exact Chrome package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: chrome-package-pr${{ github.event.pull_request.number }}
+          path: candidate/chrome
+
+      - name: Download exact API candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: novel-api-candidate-pr${{ github.event.pull_request.number }}
+          path: /tmp
+
+      - name: Load exact API candidate
+        run: gunzip -c /tmp/novel-api-image.tar.gz | docker load
+
+      - name: Exercise the exact packaged Chrome candidate
+        run: make package-test PACKAGE="$(find candidate/chrome -maxdepth 1 -type f -name '*.zip')"
+
+      - name: Run clean-stack API and extension integration
+        env:
+          NOVEL_API_IMAGE: novel-tracker-api:pr-${{ github.sha }}
+          STAGING_NO_BUILD: "1"
+          STAGING_PROJECT: novel-tracker-pr-${{ github.run_id }}
+        run: make staging-test
+
+      - name: Upload integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr-integration-diagnostics-${{ github.event.pull_request.number }}
+          path: |
+            staging.log
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
 
   version:
     name: Compute PR build version
@@ -37,12 +154,12 @@ jobs:
       version_name: ${{ steps.compute.outputs.version_name }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version-file: .nvmrc
 
       - name: Compute version
         id: compute
@@ -59,59 +176,49 @@ jobs:
             echo "version_name=${base_version}-pr${{ github.event.pull_request.number }}"
           } >> "$GITHUB_OUTPUT"
 
-  build-chrome:
-    name: Chrome package
+  build-browser:
+    name: Browser packages
     needs: [test, version]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Chrome package
-        run: node scripts/package-webstore.mjs --version-override="${{ needs.version.outputs.version_override }}" --version-name="${{ needs.version.outputs.version_name }}"
+      - name: Build and validate Chrome package
+        run: |
+          node scripts/package-webstore.mjs --version-override="${{ needs.version.outputs.version_override }}" --version-name="${{ needs.version.outputs.version_name }}"
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-${{ needs.version.outputs.version_override }}.zip" chrome "${{ needs.version.outputs.version_override }}"
 
       - name: Upload Chrome artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrome-package-pr${{ github.event.pull_request.number }}
-          path: release/*.zip
+          path: release/novel-tracker-extension-[0-9]*.zip
           if-no-files-found: error
           retention-days: 14
-
-  build-firefox:
-    name: Firefox package
-    needs: [test, version]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build Firefox package
         run: node scripts/package-firefox.mjs --version-override="${{ needs.version.outputs.version_override }}"
 
+      - name: Validate Firefox manifest with AMO tooling
+        run: |
+          npm exec -- web-ext lint --source-dir dist-firefox
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-firefox-${{ needs.version.outputs.version_override }}.zip" firefox "${{ needs.version.outputs.version_override }}"
+
       - name: Upload Firefox artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: firefox-package-pr${{ github.event.pull_request.number }}
-          path: release/*.zip
+          path: release/*-firefox-*.zip
           if-no-files-found: error
           retention-days: 14
 
@@ -121,28 +228,66 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
+
+      - name: Set up locked Ruby toolchain
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Test Apple installer certificate matching
+        run: bundle exec ruby tests/apple-installer-certificate.test.rb
 
       - name: Build Safari package
         env:
           NOVEL_TRACKER_VERSION_OVERRIDE: ${{ needs.version.outputs.version_override }}
         run: npm run package:safari
 
+      - name: Compile unsigned macOS and iOS Safari apps
+        run: |
+          project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"
+          xcodebuild -project "$project" -scheme "Novel Tracker (macOS)" \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project "$project" -scheme "Novel Tracker (iOS)" \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build
+
       - name: Upload Safari artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: safari-package-pr${{ github.event.pull_request.number }}
           path: release/*.zip
           if-no-files-found: error
           retention-days: 14
+
+  gate:
+    name: PR Gate
+    if: always()
+    needs: [test, build-api, integration, build-browser, build-safari]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every validation job
+        env:
+          TESTS: ${{ needs.test.result }}
+          API: ${{ needs.build-api.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          BROWSERS: ${{ needs.build-browser.result }}
+          SAFARI: ${{ needs.build-safari.result }}
+        run: |
+          test "$TESTS" = success
+          test "$API" = success
+          test "$INTEGRATION" = success
+          test "$BROWSERS" = success
+          test "$SAFARI" = success
