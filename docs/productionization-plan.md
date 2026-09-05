@@ -17,6 +17,8 @@ the code-controlled release blockers it identified:
   have no known audit finding at the enforced severity;
 - database changes are ordered, checksummed migrations; `/ready` verifies the
   database, schema, identity configuration, version, and commit;
+- API v1 is explicit in every client and response; aggregate usage plus current
+  four-store evidence blocks deprecation while any installed client depends on it;
 - deployment requires an off-host pre-deploy backup, isolated restore proof,
   immutable-image readiness, and a health-verified rollback; restore drills
   also run weekly;
@@ -27,13 +29,12 @@ The historical findings below remain useful as rationale, but no longer
 describe the working tree. Remaining go-live items need external configuration
 or human/platform evidence and are intentionally release-blocking:
 
-1. merge this change only through a green pull request and then enforce the
-   `main` ruleset against `PR Gate`;
+1. re-enter publisher and VPS credentials as production-environment secrets,
+   create separate staging credentials, then remove the repository-wide copies;
 2. configure separate staging infrastructure and independent off-host rclone
    destinations for staging and production;
-3. run the release workflow manually as a non-publishing candidate rehearsal;
-4. complete signed Chrome/Firefox and physical macOS/iPhone/iPad checks;
-5. leave `RELEASES_ENABLED` false until those items and the scheduled readiness
+3. complete signed Chrome/Firefox and physical macOS/iPhone/iPad checks;
+4. leave `RELEASES_ENABLED` false until those items and the scheduled readiness
    alert destination are confirmed.
 
 ## Decision summary
