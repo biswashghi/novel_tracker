@@ -205,7 +205,7 @@ jobs:
           path: candidate/chrome
 
       - name: Exercise the exact packaged Chrome candidate
-        run: make package-test PACKAGE=candidate/chrome/*.zip
+        run: make package-test PACKAGE="$(find candidate/chrome -maxdepth 1 -type f -name '*.zip')"
 
       - name: Run authenticated extension E2E against Docker staging
         run: make staging-test
