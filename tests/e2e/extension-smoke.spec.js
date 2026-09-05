@@ -10,7 +10,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../..');
-const popupPath = `file://${path.join(projectRoot, 'dist', 'popup.html')}`;
+const extensionDir = process.env.NOVEL_EXTENSION_DIR
+  ? path.resolve(process.env.NOVEL_EXTENSION_DIR)
+  : path.join(projectRoot, 'dist');
+const popupPath = `file://${path.join(extensionDir, 'popup.html')}`;
 
 function pageHtml(chapterNumber, chapterTitle) {
   return `
@@ -153,9 +156,9 @@ test('content script forwards chapter progress on a new page', async () => {
   });
 
   await page.goto('https://www.royalroad.com/fiction/12345/test-fiction/7');
-  await page.addScriptTag({ path: path.join(projectRoot, 'dist', 'lib', 'parser-core.js') });
-  await page.addScriptTag({ path: path.join(projectRoot, 'dist', 'lib', 'page-metadata.js') });
-  await page.addScriptTag({ path: path.join(projectRoot, 'dist', 'content-script.js') });
+  await page.addScriptTag({ path: path.join(extensionDir, 'lib', 'parser-core.js') });
+  await page.addScriptTag({ path: path.join(extensionDir, 'lib', 'page-metadata.js') });
+  await page.addScriptTag({ path: path.join(extensionDir, 'content-script.js') });
 
   await page.evaluate(() => {
     history.pushState(null, '', 'https://www.royalroad.com/fiction/12345/test-fiction/8');
