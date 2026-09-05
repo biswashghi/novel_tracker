@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { applyMutation, createSyncState, enqueueLocalMutation } from "../src/lib/sync-core.js";
 import { SyncClient } from "../src/lib/sync-client.js";
+import {
+  API_CLIENT_PLATFORM_HEADER,
+  API_CLIENT_VERSION_HEADER,
+  API_VERSION_HEADER
+} from "../src/lib/api-version.js";
 
 /**
  * The canonical blob as it actually arrives over the wire. server/index.js
@@ -41,6 +46,30 @@ test("push adopts canonical server state and removes acknowledged local duplicat
   assert.equal(result.state.deviceId, "local-device");
   assert.equal(result.state.pendingMutations.length, 0);
   assert.equal(result.state.cursor, "1");
+});
+
+test("requests identify the API contract, extension version, and platform", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      async json() { return { mutations: [], cursor: "", hasMore: false }; }
+    };
+  };
+  const client = new SyncClient({
+    baseUrl: "https://api.test/",
+    getAccessToken: async () => "token",
+    clientIdentity: { version: "1.2.3.45", platform: "firefox" },
+    fetchImpl
+  });
+
+  await client.pull(createSyncState({ deviceId: "test", now: 1 }));
+
+  assert.equal(calls[0].url, "https://api.test/v1/sync?cursor=");
+  assert.equal(calls[0].options.headers[API_VERSION_HEADER], "1");
+  assert.equal(calls[0].options.headers[API_CLIENT_VERSION_HEADER], "1.2.3.45");
+  assert.equal(calls[0].options.headers[API_CLIENT_PLATFORM_HEADER], "firefox");
 });
 
 test("rejected mutations are dropped from pending instead of wedging sync", async () => {

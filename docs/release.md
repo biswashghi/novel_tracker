@@ -89,6 +89,12 @@ upgrade; users do not control store review and update timing.
 A failed release tag is immutable history. Fix the cause on `main`, bump to a
 new version, and publish a new tag rather than moving or rerunning the old tag.
 
+Every API-calling build must also be visible in the API usage ledger. Before
+shipping, verify the candidate sends its API version, manifest/app version, and
+platform headers and that staging records the tuple in `api_client_usage`.
+Changing an existing API contract in place is prohibited; follow the version
+lifecycle and evidence gates in [sync-api.md](sync-api.md#api-lifecycle-rules).
+
 ## One-time CI setup
 
 Configure the GitHub `production` environment with required reviewers, prevent

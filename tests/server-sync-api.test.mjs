@@ -36,7 +36,7 @@ async function fetchJson(url, options = {}, timeoutMs = 30_000) {
   } catch {
     body = null;
   }
-  return { status: response.status, ok: response.ok, body };
+  return { status: response.status, ok: response.ok, body, headers: response.headers };
 }
 
 async function apiUp() {
@@ -72,7 +72,13 @@ async function authedApi(path, options = {}) {
   const token = await getAccessToken();
   return fetchJson(`${API_URL}${path}`, {
     ...options,
-    headers: { authorization: `Bearer ${token}`, ...(options.headers || {}) }
+    headers: {
+      authorization: `Bearer ${token}`,
+      "x-novel-tracker-api-version": "1",
+      "x-novel-tracker-client-version": "1.0.2-integration",
+      "x-novel-tracker-client-platform": "integration",
+      ...(options.headers || {})
+    }
   });
 }
 
@@ -113,6 +119,7 @@ if (!up) {
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.ok, true);
+    assert.equal(body.apiVersion, "v1");
     assert.match(body.schema, /^\d{4}_[a-z0-9_-]+\.sql$/);
   });
 
@@ -131,6 +138,7 @@ if (!up) {
       body: JSON.stringify({ mutations: [mutation] })
     });
     assert.equal(result.status, 200);
+    assert.equal(result.headers.get("x-novel-tracker-api-version"), "1");
     assert.deepEqual(result.body.acknowledgedMutationIds, [mutation.mutationId]);
     assert.equal(result.body.cursor, "1");
     assert.ok(result.body.state, "a batch that applied changes must return the canonical state");
@@ -141,6 +149,15 @@ if (!up) {
     assert.ok(Array.isArray(pull.body.mutations));
     assert.ok(pull.body.mutations.some((item) => item.mutationId === mutation.mutationId));
     assert.equal(typeof pull.body.hasMore, "boolean");
+  });
+
+  test("a conflicting API version header is rejected", async () => {
+    const result = await authedApi("/v1/sync", {
+      headers: { "x-novel-tracker-api-version": "2" }
+    });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error, "API version header does not match request path");
+    assert.equal(result.headers.get("x-novel-tracker-api-version"), "1");
   });
 
   test("structurally invalid mutations are explicitly rejected, not silently skipped", async () => {

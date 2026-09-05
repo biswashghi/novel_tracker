@@ -10,6 +10,13 @@ import {
   TOMBSTONE_RETENTION_MS
 } from "../src/lib/sync-core.js";
 import { clampMutationClock } from "../src/lib/sync-policy.js";
+import {
+  API_CLIENT_PLATFORM_HEADER,
+  API_CLIENT_VERSION_HEADER,
+  API_CONTRACTS,
+  API_VERSION,
+  API_VERSION_HEADER
+} from "../src/lib/api-version.js";
 import { readAppleConfig } from "./apple-client-secret.js";
 import {
   deleteIdentityUser,
@@ -23,7 +30,8 @@ const { Pool } = pg;
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const releaseInfo = {
   version: packageJson.version,
-  commit: process.env.NOVEL_TRACKER_COMMIT || "unknown"
+  commit: process.env.NOVEL_TRACKER_COMMIT || "unknown",
+  apiVersion: API_VERSION
 };
 const database = new Pool({ connectionString: process.env.DATABASE_URL });
 const issuer = process.env.KEYCLOAK_ISSUER;
@@ -56,8 +64,59 @@ const RATE_REQUESTS_PER_WINDOW = 120;
 const PURGE_BATCH_SIZE = 100;
 const requestWindows = new Map();
 const MUTATION_TYPES = new Set(["novel.create", "novel.patch", "checkpoint.record", "novel.delete", "novel.restore"]);
+const CLIENT_PLATFORMS = new Set(["chrome", "firefox", "safari", "safari-ios-app", "integration", "unknown"]);
 
 const migrationState = await runMigrations(database);
+
+function safeClientVersion(value) {
+  const normalized = String(value || "unknown").trim().slice(0, 64);
+  return /^(?:unknown|[0-9]+(?:\.[0-9]+){1,3}(?:-[a-zA-Z0-9.-]+)?)$/.test(normalized) ? normalized : "invalid";
+}
+
+function safeClientPlatform(value) {
+  const normalized = String(value || "unknown").trim().slice(0, 32);
+  return CLIENT_PLATFORMS.has(normalized) ? normalized : "other";
+}
+
+app.addHook("onRequest", async (request, reply) => {
+  const versionMatch = request.url.match(/^\/(v[1-9][0-9]*)(?:\/|\?|$)/);
+  if (!versionMatch || !API_CONTRACTS[versionMatch[1]]) return;
+  request.apiVersion = versionMatch[1];
+  const apiVersionNumber = request.apiVersion.slice(1);
+  request.apiClientVersion = safeClientVersion(request.headers[API_CLIENT_VERSION_HEADER]);
+  request.apiClientPlatform = safeClientPlatform(request.headers[API_CLIENT_PLATFORM_HEADER]);
+  reply.header(API_VERSION_HEADER, apiVersionNumber);
+
+  const claimedVersion = request.headers[API_VERSION_HEADER];
+  if (claimedVersion && claimedVersion !== apiVersionNumber) {
+    return reply.code(400).send({ error: "API version header does not match request path" });
+  }
+});
+
+app.addHook("onResponse", async (request, reply) => {
+  if (!request.apiVersion) return;
+  request.log.info({
+    event: "api-client-request",
+    apiVersion: request.apiVersion,
+    clientVersion: request.apiClientVersion,
+    clientPlatform: request.apiClientPlatform,
+    method: request.method,
+    route: request.routeOptions?.url || request.url.split("?", 1)[0],
+    statusCode: reply.statusCode
+  }, "API client request");
+  if (!request.userSubject) return;
+  try {
+    await database.query(
+      `INSERT INTO api_client_usage (api_version, client_version, client_platform)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (api_version, client_version, client_platform)
+       DO UPDATE SET last_seen_at = now(), request_count = api_client_usage.request_count + 1`,
+      [request.apiVersion, request.apiClientVersion, request.apiClientPlatform]
+    );
+  } catch (error) {
+    request.log.error({ error, event: "api-client-usage-write-failed" }, "Could not record API client usage");
+  }
+});
 
 app.addHook("preHandler", async (request, reply) => {
   if (request.url === "/health" || request.url === "/ready") return;
@@ -123,7 +182,7 @@ async function canonicalNovelId(client, subject, state, mutation) {
   return canonicalId;
 }
 
-app.post("/v1/sync/mutations", async (request, reply) => {
+app.post(API_CONTRACTS.v1.endpoints.pushMutations.path, async (request, reply) => {
   const mutations = Array.isArray(request.body?.mutations) ? request.body.mutations : null;
   if (!mutations) return reply.code(400).send({ error: "mutations must be an array" });
   if (mutations.length > MAX_MUTATIONS_PER_BATCH) return reply.code(413).send({ error: "mutation batch is too large" });
@@ -229,7 +288,7 @@ app.post("/v1/sync/mutations", async (request, reply) => {
   }
 });
 
-app.get("/v1/sync", async (request) => {
+app.get(API_CONTRACTS.v1.endpoints.pullSync.path, async (request) => {
   const cursor = Math.max(0, Number.parseInt(request.query?.cursor || "0", 10) || 0);
   const changes = await database.query(
     "SELECT sequence, mutation FROM sync_mutations WHERE subject = $1 AND sequence > $2 ORDER BY sequence ASC LIMIT $3",
@@ -268,7 +327,7 @@ async function deleteSyncData(subject) {
 // place, so the next sync repopulates the server from whatever the device still
 // holds. This is the pre-existing behaviour of `DELETE /v1/account`, split out
 // under its own path now that that route deletes the account for real.
-app.delete("/v1/account/data", async (request) => {
+app.delete(API_CONTRACTS.v1.endpoints.deleteSyncData.path, async (request) => {
   await deleteSyncData(request.userSubject);
   return { deleted: true };
 });
@@ -281,7 +340,7 @@ app.delete("/v1/account/data", async (request) => {
 // and able to retry the whole request. Deleting the Keycloak user first would
 // strand sync rows under a subject that can no longer authenticate to retry,
 // which is the one outcome with no recovery path.
-app.delete("/v1/account", async (request, reply) => {
+app.delete(API_CONTRACTS.v1.endpoints.deleteAccount.path, async (request, reply) => {
   if (!identityAdminConfig.configured) {
     // Refuse up front rather than deleting the data and silently leaving the
     // account alive — that half-success is the exact defect being fixed here.

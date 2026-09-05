@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -35,6 +37,9 @@ jobs:
 
       - name: Run source and unit checks
         run: npm run verify:quick
+
+      - name: Prevent API contract removal or premature deprecation
+        run: npm run api:compatibility -- --base-ref="origin/${{ github.base_ref }}"
 
       - name: Validate shell and workflow automation
         run: |

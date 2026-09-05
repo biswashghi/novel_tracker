@@ -91,8 +91,30 @@ sudo /opt/novel-tracker/scripts/verify-backup.sh
 
 `/health` proves only that the process can answer. `/ready` also proves database
 connectivity, required identity configuration, the migration version, and the
-running app version/commit. Configure an external uptime monitor for readiness
-and OIDC discovery. The deployment smoke test is not continuous monitoring.
+running app version/commit and current API version. Configure an external uptime
+monitor for readiness and OIDC discovery. The deployment smoke test is not
+continuous monitoring.
+
+## API client adoption
+
+Each authenticated API request updates a privacy-safe aggregate row containing
+only API version, extension/app version, platform, first/last seen, and request
+count. Inspect adoption before any API lifecycle change:
+
+```sql
+SELECT api_version, client_platform, client_version,
+       first_seen_at, last_seen_at, request_count
+FROM api_client_usage
+ORDER BY api_version, client_platform, last_seen_at DESC;
+```
+
+Absence from a store dashboard is not enough, and absence from rotating logs is
+not evidence. Keep an old API fully supported until its ledger has had no
+traffic for 90 days **and** all four store checks confirm no known active client
+uses it. Capture the query window and store evidence in
+`docs/api-retirements/<version>.md`; `docs/api-versions.json` and PR CI enforce
+the remaining deprecation and retirement fields. See
+[the API lifecycle rules](sync-api.md#api-lifecycle-rules).
 
 ## Scaling limits
 
