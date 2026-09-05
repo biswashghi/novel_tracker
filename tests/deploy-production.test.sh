@@ -37,6 +37,8 @@ diff -u <(printf '%s\n' validate lock prepare recovery deploy health configure r
 # deployment installs, runs, and schedules it. These assertions keep a future
 # deployment refactor from silently dropping one side of that contract.
 grep -Fq 'scripts/rotate-apple-secret.mjs ./scripts/rotate-apple-secret.mjs' "$ROOT_DIR/server/Dockerfile"
+grep -Fq 'apk upgrade --no-cache' "$ROOT_DIR/server/Dockerfile"
+grep -Fq 'rm -rf /root/.npm /usr/local/lib/node_modules/npm' "$ROOT_DIR/server/Dockerfile"
 grep -Fq '!scripts/rotate-apple-secret.mjs' "$ROOT_DIR/.dockerignore"
 grep -Fq 'novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/deploy-vps.sh"
 grep -Fq 'systemctl start novel-tracker-apple-secret.service' "$ROOT_DIR/scripts/remote/deploy-production.sh"
