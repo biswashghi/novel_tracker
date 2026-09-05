@@ -52,6 +52,7 @@ staging-test:
 	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error http://127.0.0.1:$${NOVEL_API_STAGING_PORT:-8792}/ready >/dev/null || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error --retry 60 --retry-delay 2 --retry-all-errors http://127.0.0.1:$${NOVEL_AUTH_STAGING_PORT:-8793}/realms/novel-tracker/.well-known/openid-configuration >/dev/null || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run test:integration || status=$$?; fi; \
+	  if [[ $$status -eq 0 ]]; then $(STAGING_COMPOSE) exec -T postgres psql -U novel_tracker -d novel_tracker -tAc "SELECT EXISTS (SELECT 1 FROM api_client_usage WHERE api_version = 'v1' AND client_platform = 'integration')::int" | grep -qx 1 || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run build:e2e || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run test:e2e || status=$$?; fi; \
 	  if [[ $$status -ne 0 ]]; then $(STAGING_COMPOSE) logs --no-color > staging.log 2>&1 || true; fi; \

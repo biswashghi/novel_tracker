@@ -35,6 +35,7 @@ private let setupStack = UIStackView()
 private let extensionBundleIdentifier = "app.noveltracker.extension.Extension"
 private let issuer = "https://auth.novel.bghimire.com/realms/novel-tracker"
 private let apiBaseURL = "https://api.novel.bghimire.com"
+private let apiVersion = "v1"
 private let clientID = "novel-tracker-extension"
 private let callbackURL = "noveltracker://oauth/callback"
 
@@ -650,9 +651,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 return finish("Could not delete your account. Please sign in again and retry.")
             }
 
-            var request = URLRequest(url: URL(string: "\(apiBaseURL)/v1/account")!)
+            var request = URLRequest(url: URL(string: "\(apiBaseURL)/\(apiVersion)/account")!)
             request.httpMethod = "DELETE"
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue(String(apiVersion.dropFirst()), forHTTPHeaderField: "X-Novel-Tracker-API-Version")
+            request.setValue(
+                Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+                forHTTPHeaderField: "X-Novel-Tracker-Client-Version"
+            )
+            request.setValue("safari-ios-app", forHTTPHeaderField: "X-Novel-Tracker-Client-Platform")
 
             URLSession.shared.dataTask(with: request) { _, response, error in
                 if let error { return finish("Could not delete your account: \(error.localizedDescription)") }

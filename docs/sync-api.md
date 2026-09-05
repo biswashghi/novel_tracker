@@ -3,6 +3,30 @@
 All endpoints require a Keycloak access token for the `novel-tracker-api`
 audience. Requests and responses are JSON.
 
+## Version and client identity
+
+The major API version is part of every public route (`/v1/...`). A change is
+compatible with v1 only when every already-published v1 client continues to
+work without changing its request or response assumptions. Additive optional
+fields and new routes are allowed; removing or renaming fields/routes, changing
+their meaning, or making optional data required needs `/v2` while `/v1` stays
+available.
+
+New extension builds send these headers on every API request:
+
+- `X-Novel-Tracker-API-Version: 1`
+- `X-Novel-Tracker-Client-Version: <manifest/app version>`
+- `X-Novel-Tracker-Client-Platform: chrome|firefox|safari|safari-ios-app`
+
+The URL is authoritative. A conflicting API-version header is rejected with
+`400`; the header may be absent for older installed clients. API responses carry
+`X-Novel-Tracker-API-Version: 1`.
+
+The server stores only the API version, client version, platform, first/last
+seen timestamps, and aggregate request count in `api_client_usage`. It does not
+store an account or device identifier there. This durable aggregate is the
+retirement signal; ordinary container logs can rotate.
+
 ## `POST /v1/sync/mutations`
 
 Accepts `{ "mutations": NovelMutation[] }`. The server deduplicates each
@@ -107,6 +131,31 @@ The API must retain accepted mutations for idempotency, retain delete
 tombstones for 30 days, and reject non-restore mutations targeting a deleted
 or prior generation. The server must use the same `sync-core` merge rules as
 the extension; it must not replace a complete novel document.
+
+## API lifecycle rules
+
+`docs/api-versions.json` is the machine-checked lifecycle registry. An existing
+major-version route contract is append-only until that version is retired.
+Normal evolution is:
+
+1. Add the new major version alongside the old one and mark the old version
+   `supported`. Do not change the old handlers' behavior.
+2. Release clients that use the new version across Chrome, Firefox, Safari
+   macOS, and Safari iOS.
+3. Keep the old version **supported, not deprecated**, while any known client
+   still calls it. Store approval and automatic updates can take weeks.
+4. After at least 90 continuous days with no old-version request, check every
+   store's active-version/adoption evidence. Only a separate PR with owner
+   approval, all four store checks, and an evidence document under
+   `docs/api-retirements/` may mark it deprecated.
+5. Keep a deprecated version operational for at least another 30 days with
+   traffic still at zero before a separate retirement/removal PR.
+
+`npm run api:compatibility` validates the current registry and code contract.
+PR CI additionally compares it with protected `main`; it rejects deleted
+version records, removed active routes, skipped lifecycle states, or missing
+retirement evidence. A breaking change therefore ships as a new major API, not
+as an in-place edit to a route installed extensions already use.
 
 ## Identity-provider setup
 
