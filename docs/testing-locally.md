@@ -14,10 +14,9 @@ npm run verify:full
 ```
 
 The full gate also queries the npm advisory service, validates the exact Chrome
-and Firefox ZIP contents, and runs Firefox's AMO linter. Safari packaging and
-unsigned macOS/iOS compilation run in the PR gate on a macOS runner; on a Mac,
-perform the matching local proof with `npm run package:safari` followed by the
-two `xcodebuild` commands in `docs/release/safari.md`.
+and Firefox ZIP contents, runs Firefox's AMO linter, and, on macOS, packages and
+compiles both Safari targets. The protected PR gate always runs the Safari proof
+on a macOS runner.
 
 For interactive debugging, use the individual steps below.
 

@@ -40,7 +40,7 @@
     "validate:chrome-package": "node scripts/validate-extension-package.mjs release/novel-tracker-extension-${npm_package_version}.zip chrome",
     "validate:firefox-package": "node scripts/validate-extension-package.mjs release/novel-tracker-extension-firefox-${npm_package_version}.zip firefox",
     "verify:quick": "npm run format:check && npm run lint && npm run api:compatibility && npm run validate:automation && npm run license:production && npm run test:coverage",
-    "verify:full": "npm run verify:quick && npm run audit:production && make staging-test && npm run package:webstore && npm run validate:chrome-package && make package-test && npm run package:firefox && npm exec -- web-ext lint --source-dir dist-firefox && npm run validate:firefox-package",
+    "verify:full": "npm run verify:quick && npm run audit:production && make staging-test && npm run package:webstore && npm run validate:chrome-package && make package-test && npm run package:firefox && npm exec -- web-ext lint --source-dir dist-firefox && npm run validate:firefox-package && make platform-test",
     "keycloak:apple": "node scripts/rotate-apple-secret.mjs",
     "store:screenshots": "node scripts/capture-appstore-screenshots.mjs"
   },

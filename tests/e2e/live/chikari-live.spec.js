@@ -5,15 +5,28 @@ import {
   stubActiveTab
 } from '../fixtures/extension.js';
 
-const scenario = {
-  title: 'Omniscient Reader',
-  homeUrl: 'https://chikari.moe/series/omniscient-reader',
-  firstUrl: 'https://chikari.moe/series/omniscient-reader/8',
-  firstLabel: 'Chapter 8',
-  nextUrl: 'https://chikari.moe/series/omniscient-reader/9',
-  nextLabel: 'Chapter 9',
-  readerSelector: 'img[alt="Page 1"]'
-};
+const scenarios = [
+  {
+    name: 'novel',
+    title: 'A Regressor’s Tale of Cultivation',
+    homeUrl: 'https://chikari.moe/novels/a-regressors-tale-of-cultivation',
+    firstUrl: 'https://chikari.moe/novels/a-regressors-tale-of-cultivation/2',
+    firstLabel: 'Chapter 1: Regressors First Day',
+    nextUrl: 'https://chikari.moe/novels/a-regressors-tale-of-cultivation/3',
+    nextLabel: 'Chapter 2: Scattering Destiny (1)',
+    readerSelector: 'main header p'
+  },
+  {
+    name: 'series',
+    title: 'Omniscient Reader',
+    homeUrl: 'https://chikari.moe/series/omniscient-reader',
+    firstUrl: 'https://chikari.moe/series/omniscient-reader/8',
+    firstLabel: 'Chapter 8',
+    nextUrl: 'https://chikari.moe/series/omniscient-reader/9',
+    nextLabel: 'Chapter 9',
+    readerSelector: 'img[alt="Page 1"]'
+  }
+];
 
 async function waitForReader(page, scenario, url) {
   let upstreamBlocked = false;
@@ -44,40 +57,42 @@ async function readLibrary(extensionPage) {
   });
 }
 
-test('Chikari live flow saves and advances a current series', async ({
-  context,
-  extensionId,
-  serviceWorker
-}) => {
-  const sitePage = await context.newPage();
-  await waitForReader(sitePage, scenario, scenario.firstUrl);
+for (const scenario of scenarios) {
+  test(`Chikari live flow saves and advances a current ${scenario.name}`, async ({
+    context,
+    extensionId,
+    serviceWorker
+  }) => {
+    const sitePage = await context.newPage();
+    await waitForReader(sitePage, scenario, scenario.firstUrl);
 
-  const popupPage = await context.newPage();
-  await stubActiveTab(popupPage, serviceWorker, scenario.firstUrl);
-  await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
+    const popupPage = await context.newPage();
+    await stubActiveTab(popupPage, serviceWorker, scenario.firstUrl);
+    await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
 
-  await expect(popupPage.locator('#title')).toHaveValue(scenario.title, { timeout: 20_000 });
-  await expect(popupPage.locator('#home-url')).toHaveValue(scenario.homeUrl);
-  await expect(popupPage.locator('#chapter-label')).toHaveValue(scenario.firstLabel);
+    await expect(popupPage.locator('#title')).toHaveValue(scenario.title, { timeout: 20_000 });
+    await expect(popupPage.locator('#home-url')).toHaveValue(scenario.homeUrl);
+    await expect(popupPage.locator('#chapter-label')).toHaveValue(scenario.firstLabel);
 
-  await popupPage.locator('#save-button').click();
-  await expect(popupPage.locator('#status-message')).toContainText(/Added to your library|Bookmark updated/i);
+    await popupPage.locator('#save-button').click();
+    await expect(popupPage.locator('#status-message')).toContainText(/Added to your library|Bookmark updated/i);
 
-  await waitForReader(sitePage, scenario, scenario.nextUrl);
+    await waitForReader(sitePage, scenario, scenario.nextUrl);
 
-  await expect.poll(
-    async () => {
-      const novels = await readLibrary(popupPage);
-      return novels.find((novel) => novel.novelHomeUrl === scenario.homeUrl)?.lastReadChapterUrl;
-    },
-    { timeout: 30_000 }
-  ).toBe(scenario.nextUrl);
+    await expect.poll(
+      async () => {
+        const novels = await readLibrary(popupPage);
+        return novels.find((novel) => novel.novelHomeUrl === scenario.homeUrl)?.lastReadChapterUrl;
+      },
+      { timeout: 30_000 }
+    ).toBe(scenario.nextUrl);
 
-  const novels = await readLibrary(popupPage);
-  const novel = novels.find((item) => item.novelHomeUrl === scenario.homeUrl);
-  expect(novel).toBeTruthy();
-  expect(novel.title).toBe(scenario.title);
-  expect(novel.lastReadChapterLabel).toBe(scenario.nextLabel);
-  expect(novel.chapterHistory).toHaveLength(2);
-  await popupPage.close();
-});
+    const novels = await readLibrary(popupPage);
+    const novel = novels.find((item) => item.novelHomeUrl === scenario.homeUrl);
+    expect(novel).toBeTruthy();
+    expect(novel.title).toBe(scenario.title);
+    expect(novel.lastReadChapterLabel).toBe(scenario.nextLabel);
+    expect(novel.chapterHistory).toHaveLength(2);
+    await popupPage.close();
+  });
+}

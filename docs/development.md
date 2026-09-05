@@ -28,9 +28,9 @@ npm run verify:full
 
 That adds a rebuilt, disposable Postgres/Keycloak/API stack, required API
 integration, all extension browser flows, the Chrome store ZIP exercised as the
-exact artifact, and Chrome/Firefox package validation. On macOS, also run
-`bundle install && npm run package:safari` and compile both generated schemes;
-CI performs this for every pull request.
+exact artifact, Chrome/Firefox package validation, and, on macOS, Safari
+packaging plus unsigned macOS/iOS compilation. CI performs all platform checks
+for every pull request.
 
 See [testing-locally.md](testing-locally.md) for targeted commands and failure
 diagnostics. Targeted commands are iteration aids, not release evidence.
