@@ -59,8 +59,11 @@ staging-test:
 
 package-test:
 	@set -euo pipefail; \
-	  version="$$(node -p "require('./package.json').version")"; \
-	  package="release/novel-tracker-extension-$$version.zip"; \
+	  package="$(PACKAGE)"; \
+	  if [[ -z "$$package" ]]; then \
+	    version="$$(node -p "require('./package.json').version")"; \
+	    package="release/novel-tracker-extension-$$version.zip"; \
+	  fi; \
 	  test -f "$$package"; \
 	  unpacked="$$(mktemp -d "$${TMPDIR:-/tmp}/novel-tracker-package.XXXXXX")"; \
 	  cleanup() { rm -rf -- "$$unpacked"; }; \

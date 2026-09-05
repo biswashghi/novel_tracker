@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
 
       - name: Require an exact version tag on main
         if: github.event_name == 'push'
@@ -64,7 +64,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -81,8 +81,8 @@ jobs:
       - name: Audit production dependencies
         run: npm run audit:production
 
-  build-chrome:
-    name: Chrome package
+  build-browser:
+    name: Browser packages
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -92,55 +92,38 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Chrome package
+      - name: Build and validate Chrome package
         run: |
-          npm run build
           npm run package:webstore
-          node scripts/validate-extension-package.mjs release/*.zip chrome
+          version="$(node -p "require('./package.json').version")"
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-${version}.zip" chrome
 
       - name: Upload Chrome artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrome-package
-          path: release/*.zip
+          path: release/novel-tracker-extension-[0-9]*.zip
           if-no-files-found: error
           retention-days: 90
 
-  build-firefox:
-    name: Firefox package
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22.13.0
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Firefox package
+      - name: Build and validate Firefox package
         run: |
-          npm run build:firefox
           npm run package:firefox
           npm exec -- web-ext lint --source-dir dist-firefox
-          node scripts/validate-extension-package.mjs release/*.zip firefox
+          version="$(node -p "require('./package.json').version")"
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-firefox-${version}.zip" firefox
 
       - name: Upload Firefox artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: firefox-package
-          path: release/*.zip
+          path: release/*-firefox-*.zip
           if-no-files-found: error
           retention-days: 90
 
@@ -159,7 +142,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Set up locked Ruby toolchain
@@ -175,9 +158,7 @@ jobs:
         run: bundle exec ruby tests/apple-installer-certificate.test.rb
 
       - name: Build Safari package
-        run: |
-          npm run build:safari
-          npm run package:safari
+        run: npm run package:safari
 
       - name: Compile unsigned macOS and iOS Safari apps
         run: |
@@ -198,7 +179,7 @@ jobs:
 
   candidate-integration:
     name: Exercise exact candidate and authenticated stack
-    needs: [build-chrome]
+    needs: [build-browser]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -208,7 +189,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -224,11 +205,7 @@ jobs:
           path: candidate/chrome
 
       - name: Exercise the exact packaged Chrome candidate
-        run: |
-          mkdir candidate/unpacked
-          unzip -q candidate/chrome/*.zip -d candidate/unpacked
-          chmod -R a+rX candidate/unpacked
-          NOVEL_EXTENSION_DIR="$PWD/candidate/unpacked" npm run test:e2e:package
+        run: make package-test PACKAGE=candidate/chrome/*.zip
 
       - name: Run authenticated extension E2E against Docker staging
         run: make staging-test
@@ -247,7 +224,7 @@ jobs:
 
   assemble-candidate:
     name: Assemble immutable release candidate
-    needs: [build-chrome, build-firefox, build-safari, candidate-integration]
+    needs: [build-browser, build-safari, candidate-integration]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -258,7 +235,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
 
       - name: Sign in to the package registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
@@ -320,8 +297,7 @@ jobs:
       [
         validate-release,
         test,
-        build-chrome,
-        build-firefox,
+        build-browser,
         build-safari,
         candidate-integration,
         assemble-candidate,
@@ -332,16 +308,14 @@ jobs:
         env:
           IDENTITY: ${{ needs.validate-release.result }}
           TESTS: ${{ needs.test.result }}
-          CHROME: ${{ needs.build-chrome.result }}
-          FIREFOX: ${{ needs.build-firefox.result }}
+          BROWSERS: ${{ needs.build-browser.result }}
           SAFARI: ${{ needs.build-safari.result }}
           INTEGRATION: ${{ needs.candidate-integration.result }}
           CANDIDATE: ${{ needs.assemble-candidate.result }}
         run: |
           test "$IDENTITY" = success
           test "$TESTS" = success
-          test "$CHROME" = success
-          test "$FIREFOX" = success
+          test "$BROWSERS" = success
           test "$SAFARI" = success
           test "$INTEGRATION" = success
           test "$CANDIDATE" = success
@@ -405,7 +379,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
 
       - name: Download verified release candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -446,7 +420,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install locked publisher tooling
@@ -489,7 +463,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
 
       - name: Set up locked Ruby toolchain
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b

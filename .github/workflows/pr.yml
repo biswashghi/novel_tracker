@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -90,7 +90,7 @@ jobs:
 
   integration:
     name: Authenticated integration
-    needs: [test, build-api, build-chrome]
+    needs: [test, build-api, build-browser]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -100,7 +100,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -125,11 +125,7 @@ jobs:
         run: gunzip -c /tmp/novel-api-image.tar.gz | docker load
 
       - name: Exercise the exact packaged Chrome candidate
-        run: |
-          mkdir candidate/unpacked
-          unzip -q candidate/chrome/*.zip -d candidate/unpacked
-          chmod -R a+rX candidate/unpacked
-          NOVEL_EXTENSION_DIR="$PWD/candidate/unpacked" npm run test:e2e:package
+        run: make package-test PACKAGE=candidate/chrome/*.zip
 
       - name: Run clean-stack API and extension integration
         env:
@@ -163,7 +159,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
 
       - name: Compute version
         id: compute
@@ -180,8 +176,8 @@ jobs:
             echo "version_name=${base_version}-pr${{ github.event.pull_request.number }}"
           } >> "$GITHUB_OUTPUT"
 
-  build-chrome:
-    name: Chrome package
+  build-browser:
+    name: Browser packages
     needs: [test, version]
     runs-on: ubuntu-latest
     steps:
@@ -191,42 +187,24 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Chrome package
-        run: node scripts/package-webstore.mjs --version-override="${{ needs.version.outputs.version_override }}" --version-name="${{ needs.version.outputs.version_name }}"
-
-      - name: Validate Chrome package contents
-        run: node scripts/validate-extension-package.mjs release/*.zip chrome "${{ needs.version.outputs.version_override }}"
+      - name: Build and validate Chrome package
+        run: |
+          node scripts/package-webstore.mjs --version-override="${{ needs.version.outputs.version_override }}" --version-name="${{ needs.version.outputs.version_name }}"
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-${{ needs.version.outputs.version_override }}.zip" chrome "${{ needs.version.outputs.version_override }}"
 
       - name: Upload Chrome artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrome-package-pr${{ github.event.pull_request.number }}
-          path: release/*.zip
+          path: release/novel-tracker-extension-[0-9]*.zip
           if-no-files-found: error
           retention-days: 14
-
-  build-firefox:
-    name: Firefox package
-    needs: [test, version]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 22.13.0
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build Firefox package
         run: node scripts/package-firefox.mjs --version-override="${{ needs.version.outputs.version_override }}"
@@ -234,13 +212,13 @@ jobs:
       - name: Validate Firefox manifest with AMO tooling
         run: |
           npm exec -- web-ext lint --source-dir dist-firefox
-          node scripts/validate-extension-package.mjs release/*.zip firefox "${{ needs.version.outputs.version_override }}"
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-firefox-${{ needs.version.outputs.version_override }}.zip" firefox "${{ needs.version.outputs.version_override }}"
 
       - name: Upload Firefox artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: firefox-package-pr${{ github.event.pull_request.number }}
-          path: release/*.zip
+          path: release/*-firefox-*.zip
           if-no-files-found: error
           retention-days: 14
 
@@ -257,7 +235,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 22.13.0
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Set up locked Ruby toolchain
@@ -297,8 +275,7 @@ jobs:
   gate:
     name: PR Gate
     if: always()
-    needs:
-      [test, build-api, integration, build-chrome, build-firefox, build-safari]
+    needs: [test, build-api, integration, build-browser, build-safari]
     runs-on: ubuntu-latest
     steps:
       - name: Require every validation job
@@ -306,13 +283,11 @@ jobs:
           TESTS: ${{ needs.test.result }}
           API: ${{ needs.build-api.result }}
           INTEGRATION: ${{ needs.integration.result }}
-          CHROME: ${{ needs.build-chrome.result }}
-          FIREFOX: ${{ needs.build-firefox.result }}
+          BROWSERS: ${{ needs.build-browser.result }}
           SAFARI: ${{ needs.build-safari.result }}
         run: |
           test "$TESTS" = success
           test "$API" = success
           test "$INTEGRATION" = success
-          test "$CHROME" = success
-          test "$FIREFOX" = success
+          test "$BROWSERS" = success
           test "$SAFARI" = success

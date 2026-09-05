@@ -26,8 +26,9 @@ test("ephemeral staging rebuilds by default and only reuses an explicit candidat
 test("store workflows validate packages and exercise the exact Chrome ZIP", () => {
   for (const workflow of [pullRequestWorkflow, releaseWorkflow]) {
     assert.match(workflow, /validate-extension-package\.mjs/);
-    assert.match(workflow, /NOVEL_EXTENSION_DIR=.*test:e2e:package/);
+    assert.match(workflow, /make package-test PACKAGE=candidate\/chrome\/\*\.zip/);
   }
+  assert.match(makefile, /NOVEL_EXTENSION_DIR=.*test:e2e:package/);
 });
 
 test("the aggregate PR gate scans and exercises the exact API candidate", () => {
