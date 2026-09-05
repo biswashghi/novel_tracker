@@ -82,7 +82,7 @@ test("rejected mutations are dropped from pending instead of wedging sync", asyn
 
   // The old failure mode: a second sync re-sends the poison pill forever.
   let secondCalls = 0;
-  const countingFetch = async (url, options) => {
+  const countingFetch = async () => {
     secondCalls += 1;
     return { ok: true, async json() { return { acknowledgedMutationIds: [], novelIdMappings: [], cursor: "2" }; } };
   };

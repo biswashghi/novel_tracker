@@ -17,7 +17,7 @@ can be corrected.
 - Keep a per-novel chapter history trail.
 - Export and import JSON backups.
 - Work without an account and keep reading data local to the browser profile.
-- Optionally sign in with Google to synchronize through the Novel Tracker API.
+- Optionally sign in with Google or Apple to synchronize through the Novel Tracker API.
 - Resolve offline changes with deterministic HLC/remove-wins merge rules.
 
 ## Supported Site Profiles
@@ -128,9 +128,14 @@ and never touched by hand either. See [AGENTS.md](AGENTS.md) and
 [docs/release.md](docs/release.md) for the full convention and release
 process.
 
-## Manual Release Test Checklist
+## Release Readiness
 
-Before submitting a public Chrome Web Store release:
+Routine releases use the guarded process in [docs/release.md](docs/release.md):
+reviewed pull request, aggregate `PR Gate`, immutable candidate artifacts,
+persistent staging, manual production approval, and an explicit release kill
+switch. The repository version is not a release authorization.
+
+Before approving a public store release, confirm:
 
 - `npm test` passes.
 - `npm run build` succeeds.
@@ -145,14 +150,15 @@ Before submitting a public Chrome Web Store release:
 - Sign in succeeds and the account row shows the signed-in email.
 - A novel saved while signed in appears after a sign-out/sign-in round trip.
 - Signing in on a second profile converges both libraries on the same state.
-- **Delete cloud data** clears the server copy and leaves the local library intact.
+- **Delete account** removes the remote identity and synchronized data while
+  leaving the local library intact.
 - Sign out returns the account row to its signed-out state.
 - Privacy disclosure in this README matches actual behavior.
 
-## Chrome Web Store Submission
+## Initial Chrome Web Store Setup
 
 1. Register a Chrome Web Store developer account if needed.
-2. Run `npm run package:webstore`.
+2. Run `npm run package:webstore` for the first manual listing setup.
 3. Open the Chrome Developer Dashboard.
 4. Add a new item and upload the ZIP from `release/`.
 5. Fill in the Store listing:
@@ -170,20 +176,22 @@ Before submitting a public Chrome Web Store release:
    - State that local-only use remains available without signing in.
    - Do not claim analytics, ads, or sale/sharing of customer data.
 7. Upload screenshots of the popup and library page.
-8. Submit for review.
+8. Submit the initial listing for review and configure the guarded publisher in
+   [docs/release/chrome.md](docs/release/chrome.md). Routine releases then use
+   the verified workflow artifact rather than a local rebuild.
 
 ## Cross-platform and optional sync
 
 - Chrome/Edge, Firefox desktop/Android, and Safari builds share the same storage,
   parser, mutation, and merge modules.
 - Local-only operation is the default. No library data is transmitted until the
-  reader chooses **Sign in with Google**.
+  reader chooses a sign-in provider.
 - Firefox declares synchronization data categories as optional and requests
   consent at the sign-in gesture.
-- Safari is packaged as a Safari Web Extension for macOS/iOS/iPadOS. Sign in with
-  Google from the containing app before using cloud sync on iOS/iPadOS. The app
-  and extension share the session through the system Keychain. Sign in with
-  Apple is intentionally deferred.
+- Safari is packaged as a Safari Web Extension for macOS/iOS/iPadOS. Sign in
+  with Google or Apple from the containing app before using cloud sync on
+  iOS/iPadOS. The app and extension share the session through the system
+  Keychain.
 - See [platform architecture](docs/platform-architecture.md) for the shared-domain boundary, [release instructions](docs/release.md) for browser-specific build and testing steps, and [operations](docs/operations.md) for deployment, backup, and restore procedures.
 
 ## Limitations
@@ -192,4 +200,4 @@ Before submitting a public Chrome Web Store release:
 - Some sites block extension or automation-based page inspection.
 - Safari OAuth behavior still requires verification in the generated Xcode
   project on a physical iPhone/iPad before App Store submission.
-- Chrome Web Store submission must be completed manually in the Developer Dashboard.
+- Signed-store and physical-device checks remain manual release-candidate gates.

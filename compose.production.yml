@@ -15,6 +15,15 @@ services:
       - ./infra/keycloak-realm.json:/opt/keycloak/data/import/novel-tracker-realm.json:ro
   api:
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    stop_grace_period: 15s
     expose: ["3000"]
     networks:
       private:
@@ -30,4 +39,3 @@ networks:
   edge:
     external: true
     name: vps-edge
-

@@ -22,7 +22,7 @@
 // extension messaging are stubbed to make the captures deterministic.
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

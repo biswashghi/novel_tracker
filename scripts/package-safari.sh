@@ -43,6 +43,8 @@ mkdir -p "$project_dir"
 # Stage WebExtension
 # ---------------------------------------------------------------------------
 
+# JavaScript template expressions below belong to Node, not this shell.
+# shellcheck disable=SC2016
 node --input-type=module -e '
   import { cp, readFile, writeFile } from "node:fs/promises";
 
@@ -88,14 +90,15 @@ xcode_project_bundle="$generated_app_dir/Novel Tracker.xcodeproj"
 # requires a real, *shared* .xcscheme file on disk to find and build against
 # — confirmed by hand: fastlane failed with "Couldn't find specified scheme
 # ... make sure the scheme is shared" until these were generated. Uses the
-# `xcodeproj` gem (a fastlane dependency; installed here if missing) to write
+# `xcodeproj` gem (locked with the release toolchain in Gemfile.lock) to write
 # one for each app target, matching what Xcode's own "New Scheme" produces.
 
 echo "Sharing Xcode schemes for non-interactive builds..."
 
-ruby -e 'require "xcodeproj"' >/dev/null 2>&1 || gem install xcodeproj --no-document
+command -v bundle >/dev/null || { echo "Bundler is required for Safari packaging." >&2; exit 1; }
+bundle check >/dev/null || { echo "Run bundle install before Safari packaging." >&2; exit 1; }
 
-ruby -e '
+bundle exec ruby -e '
   require "xcodeproj"
 
   project_path = ARGV[0]
@@ -144,6 +147,8 @@ fi
 # Shared Keychain
 # ---------------------------------------------------------------------------
 
+# This is an Xcode build-setting token and must remain literal.
+# shellcheck disable=SC2016
 shared_keychain_group='$(AppIdentifierPrefix)app.noveltracker.shared'
 
 for target in \
@@ -287,6 +292,8 @@ echo "Declared standard-encryption-only export compliance"
 # - force Apple Developer team
 # ---------------------------------------------------------------------------
 
+# JavaScript template expressions below belong to Node, not this shell.
+# shellcheck disable=SC2016
 node --input-type=module -e '
   import { readFile, writeFile } from "node:fs/promises";
 

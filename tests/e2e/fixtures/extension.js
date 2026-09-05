@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../../..');
-export const DIST_DIR = path.join(projectRoot, 'dist');
+export const DIST_DIR = process.env.NOVEL_EXTENSION_DIR
+  ? path.resolve(process.env.NOVEL_EXTENSION_DIR)
+  : path.join(projectRoot, 'dist');
 
 /**
  * Extends Playwright's `test` with a real, packaged-extension-loading

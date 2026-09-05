@@ -5,6 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${NOVEL_ENV_FILE:-/etc/novel-tracker/app.env}"
 COMPOSE=(sudo docker compose --project-name novel-tracker --env-file "${ENV_FILE}" -f "${ROOT_DIR}/compose.yml" -f "${ROOT_DIR}/compose.production.yml")
 
+# This entire program runs inside Keycloak's container. Its variables and
+# nested quote escapes must be evaluated there, not by this host shell.
+# shellcheck disable=SC2016,SC2026
 "${COMPOSE[@]}" exec -T keycloak sh -ec '
 KCADM=/opt/keycloak/bin/kcadm.sh
 REALM=novel-tracker

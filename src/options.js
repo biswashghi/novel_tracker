@@ -9,6 +9,7 @@ import {
 import { computeReadingStats } from "./lib/reading-stats.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
+import { requireFirefoxSyncDataConsent } from "./lib/firefox-data-consent.js";
 
 import { AUTH_PROVIDERS } from "./lib/config.js";
 
@@ -688,6 +689,7 @@ importFileInput.addEventListener("change", async (event) => {
 ========================================================= */
 
 async function startSignIn(provider) {
+  await requireFirefoxSyncDataConsent();
   let snapshot = await sendMessage("novel-tracker:account-sign-in", { provider });
 
   if (snapshot.account?.needsAccountConfirmation) {

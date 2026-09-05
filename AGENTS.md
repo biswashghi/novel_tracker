@@ -16,10 +16,11 @@ release identity across all four stores:
 - `scripts/package-safari.sh` writes it into `MARKETING_VERSION`
   (`CFBundleShortVersionString`) for both the macOS and iOS Safari targets.
 
-Bump it with `npm version patch|minor|major`, never by hand — that command
-also creates the matching `vX.Y.Z` git tag, and pushing that tag
-(`git push --follow-tags`) is what triggers `.github/workflows/release.yml`.
-See [docs/release.md](docs/release.md) for the full release runbook.
+Bump it with `npm version patch|minor|major`, never by hand. For a protected
+release pull request, use `npm version patch|minor|major --no-git-tag-version`,
+merge that reviewed change, and create the matching `vX.Y.Z` tag on the merged
+`main` commit. Pushing that exact tag triggers `.github/workflows/release.yml`.
+See [docs/release.md](docs/release.md) for the full guarded release runbook.
 
 **Apple's build number** (`CURRENT_PROJECT_VERSION`) is `git rev-list
 --count HEAD` — the commit count on the current branch, patched in by

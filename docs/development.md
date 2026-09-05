@@ -3,16 +3,37 @@
 This page contains local development and testing instructions for the extension,
 including platform-specific steps for Safari on macOS and iOS.
 
-### Run tests
+### Required local gates
 
-Run the unit tests:
+Use the fast gate while iterating and before every push:
 
 ```bash
-npm test
+npm ci
+npm run verify:quick
 ```
 
-Run the e2e suite (loads the real packaged extension in Chromium): see
-[testing-locally.md](testing-locally.md) for the full local-stack runbook.
+This also fails closed if a production dependency introduces a license outside
+the reviewed permissive allowlist. Review a new license deliberately before
+changing that policy.
+
+It checks formatting, lint, shell syntax, Compose/deployment orchestration,
+unit coverage thresholds, manifests, migrations, and release-policy tests.
+
+Before a release or after auth, sync, storage, schema, packaging, or deployment
+changes, run:
+
+```bash
+npm run verify:full
+```
+
+That adds a rebuilt, disposable Postgres/Keycloak/API stack, required API
+integration, all extension browser flows, the Chrome store ZIP exercised as the
+exact artifact, and Chrome/Firefox package validation. On macOS, also run
+`bundle install && npm run package:safari` and compile both generated schemes;
+CI performs this for every pull request.
+
+See [testing-locally.md](testing-locally.md) for targeted commands and failure
+diagnostics. Targeted commands are iteration aids, not release evidence.
 
 ### Build
 
@@ -48,14 +69,15 @@ The upload package is written to `release/novel-tracker-extension-<version>.zip`
 
 ### Testing in Safari (macOS)
 
-1. Run `npm run build:safari` to generate the Safari build artifacts in `dist-safari/`.
-2. Open the Xcode project at `build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj`
+1. Run `bundle install` to install the versions locked in `Gemfile.lock`.
+2. Run `npm run package:safari` to generate the Safari project and package.
+3. Open the Xcode project at `build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj`
    (generated fresh by `npm run package:safari`/`scripts/package-safari.sh`, which
    reuses this same directory across runs so your Developer Team and signing
    settings aren't lost).
-3. In Xcode select the containing app scheme (the macOS app that bundles the
+4. In Xcode select the containing app scheme (the macOS app that bundles the
    Safari Web Extension) and run on your Mac.
-4. In Safari, enable the extension in `Safari > Settings > Extensions` (or
+5. In Safari, enable the extension in `Safari > Settings > Extensions` (or
    `Preferences > Extensions` on older macOS versions) and verify the extension
    appears and can save the active chapter.
 

@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { readFile } from "node:fs/promises";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import pg from "pg";
 import {
@@ -16,8 +17,14 @@ import {
   readIdentityAdminConfig,
   revokeAppleToken
 } from "./identity-admin.js";
+import { runMigrations } from "./migrations.js";
 
 const { Pool } = pg;
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const releaseInfo = {
+  version: packageJson.version,
+  commit: process.env.NOVEL_TRACKER_COMMIT || "unknown"
+};
 const database = new Pool({ connectionString: process.env.DATABASE_URL });
 const issuer = process.env.KEYCLOAK_ISSUER;
 const audience = process.env.KEYCLOAK_AUDIENCE;
@@ -50,59 +57,10 @@ const PURGE_BATCH_SIZE = 100;
 const requestWindows = new Map();
 const MUTATION_TYPES = new Set(["novel.create", "novel.patch", "checkpoint.record", "novel.delete", "novel.restore"]);
 
-await database.query(`
-  CREATE TABLE IF NOT EXISTS sync_states (
-    subject TEXT PRIMARY KEY,
-    state JSONB NOT NULL,
-    sequence BIGINT NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-  );
-  CREATE TABLE IF NOT EXISTS sync_mutations (
-    subject TEXT NOT NULL,
-    mutation_id TEXT NOT NULL,
-    sequence BIGINT NOT NULL,
-    mutation JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (subject, mutation_id)
-  );
-  DO $$
-  BEGIN
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_name = 'sync_mutations' AND column_name = 'mutation_id' AND data_type <> 'text'
-    ) THEN
-      ALTER TABLE sync_mutations ALTER COLUMN mutation_id TYPE TEXT USING mutation_id::text;
-    END IF;
-  END $$;
-  CREATE TABLE IF NOT EXISTS novel_id_mappings (
-    subject TEXT NOT NULL,
-    device_id TEXT NOT NULL,
-    local_novel_id TEXT NOT NULL,
-    canonical_novel_id TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (subject, device_id, local_novel_id)
-  );
-  CREATE TABLE IF NOT EXISTS sync_mutation_receipts (
-    subject TEXT NOT NULL,
-    mutation_id TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (subject, mutation_id)
-  );
-  CREATE TABLE IF NOT EXISTS purged_novel_ids (
-    subject TEXT NOT NULL,
-    canonical_novel_id TEXT NOT NULL,
-    purged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (subject, canonical_novel_id)
-  );
-  CREATE INDEX IF NOT EXISTS idx_sync_mutations_subject_sequence
-    ON sync_mutations (subject, sequence);
-  INSERT INTO sync_mutation_receipts (subject, mutation_id)
-  SELECT subject, mutation_id FROM sync_mutations
-  ON CONFLICT DO NOTHING;
-`);
+const migrationState = await runMigrations(database);
 
 app.addHook("preHandler", async (request, reply) => {
-  if (request.url === "/health") return;
+  if (request.url === "/health" || request.url === "/ready") return;
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
   if (!token || !jwks) return reply.code(401).send({ error: "unauthorized" });
   try {
@@ -348,7 +306,20 @@ app.delete("/v1/account", async (request, reply) => {
   return { deleted: true };
 });
 
-app.get("/health", async () => ({ ok: true }));
+app.get("/health", async () => ({ ok: true, ...releaseInfo }));
+
+app.get("/ready", async (_request, reply) => {
+  if (!issuer || !audience || !jwks) {
+    return reply.code(503).send({ ok: false, reason: "identity-config" });
+  }
+  try {
+    await database.query({ text: "SELECT 1", query_timeout: 2_000 });
+    return { ok: true, ...releaseInfo, schema: migrationState.latestVersion };
+  } catch (error) {
+    app.log.error(error, "Readiness database check failed");
+    return reply.code(503).send({ ok: false, reason: "database" });
+  }
+});
 
 async function purgeExpiredServerTombstones() {
   // Keyset-paginated by subject: an updated_at cursor would livelock on

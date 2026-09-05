@@ -55,7 +55,6 @@ async function generateForPlatform(platform) {
 
   for (const sourceImage of sourceImages) {
     const sourcePath = path.join(originalsDir, sourceImage);
-    const baseName = path.basename(sourceImage, path.extname(sourceImage));
 
     for (const size of sizes) {
       const index = sourceImages.indexOf(sourceImage) + 1;

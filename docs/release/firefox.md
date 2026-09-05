@@ -27,9 +27,11 @@ npm run package:firefox
 
 Notes:
 
-- AMO currently reserves the manifest `data_collection_permissions` property;
-  including it makes validation fail. Keep the required data-use declarations
-  in the AMO submission form until AMO accepts that manifest property.
+- Firefox declares no required off-device collection for local-only use. At the
+  sign-in gesture it requests the optional authentication, identifying,
+  browsing activity, website activity, and website content categories needed
+  to synchronize the library. Denial leaves the reader signed out and all data
+  local.
 - Register the exact callback returned by `identity.getRedirectURL("oauth2")`
   in Keycloak and test the signed AMO build on Android.
 

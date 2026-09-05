@@ -1,4 +1,4 @@
-import { test, expect, extensionUrl, mockSitePage, stubActiveTab } from './fixtures/extension.js';
+import { test, expect, extensionUrl, stubActiveTab } from './fixtures/extension.js';
 
 const HOME_URL = 'https://www.royalroad.com/fiction/12345/test-fiction';
 const CHAPTER_7_URL = `${HOME_URL}/7`;

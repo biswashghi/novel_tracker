@@ -4,6 +4,8 @@ dist-safari/
 release/**
 !docs/release/
 node_modules/
+vendor/bundle/
+.bundle/
 *.log
 .DS_Store
 build/

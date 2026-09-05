@@ -26,23 +26,46 @@ often. See [AGENTS.md](../AGENTS.md) for the fuller rationale.
 
 ## Cutting a release
 
-Every build/package script reads its version from `package.json`, and
-`.github/workflows/release.yml` triggers on `v*`/`*.*.*` tags, so bumping the
-version and pushing the tag is the one step that drives everything else:
+Public releases are never cut from an unreviewed local commit. Prepare the
+version on a release branch:
 
 ```bash
-npm version patch   # or: minor | major
-git push --follow-tags
+npm version patch --no-git-tag-version   # or: minor | major
+npm run verify:full
 ```
 
-That's the single source of truth for the version — don't hand-edit
-`package.json`'s version separately from tagging a release.
+Commit `package.json` and `package-lock.json`, open a pull request, and wait for
+the required `PR Gate`. After that pull request is merged, update local `main`,
+confirm the intended version, and tag that exact merged commit:
 
-Pushing the tag runs `.github/workflows/release.yml`'s test and authenticated
-staging checks, then builds and uploads Chrome, Firefox, and Safari packages.
-Each store publishes independently, so a packaging or credential failure for
-one store does not block the others. To dry-run packaging without publishing, use
-`workflow_dispatch` with `publish_to_stores` left `false`.
+```bash
+git switch main
+git pull --ff-only
+version="$(node -p "require('./package.json').version")"
+git tag "v${version}"
+git push origin "v${version}"
+```
+
+The workflow rejects a tag unless it exactly matches `package.json` and points
+to a commit reachable from `main`. Never move a failed tag; fix forward, bump
+again through a pull request, and create a new tag.
+
+The tag run performs source/coverage/security gates, builds all platforms once,
+tests the exact Chrome ZIP, runs authenticated clean-stack integration, compiles
+both Safari targets, and assembles `release-candidate` with a manifest tying all
+three ZIP checksums to the version and Git commit. Publishers download and
+re-verify that same candidate; they never rebuild it.
+
+Public publishing additionally requires all of the following:
+
+- repository variable `RELEASES_ENABLED=true`;
+- every release gate green;
+- the complete credential set for all stores;
+- approval in the protected `production` environment.
+
+Keep `RELEASES_ENABLED` absent or false while the release system is being
+commissioned. A manual `workflow_dispatch` builds and validates a candidate but
+cannot publish it, which is the safe dry run.
 
 ## Backend and store rollout compatibility
 
@@ -68,11 +91,12 @@ new version, and publish a new tag rather than moving or rerunning the old tag.
 
 ## One-time CI setup
 
-The `publish-chrome`, `publish-firefox`, and `publish-safari` jobs in
-`release.yml` each skip themselves automatically (via the `check-secrets`
-job) if that store's secrets aren't configured on the repo. A given store's
-publish step is a no-op until its secrets exist.
-Add them once under Settings → Secrets and variables → Actions:
+Configure the GitHub `production` environment with required reviewers, prevent
+self-review when another maintainer is available, and restrict deployment to
+`main` and protected release tags. Store credentials belong in that
+environment, not as broadly available repository secrets. The protected
+readiness job fails before any publishing if even one required store value is
+incomplete. Add these values under Settings → Environments → production:
 
 | Store | Secrets | One-time setup |
 | --- | --- | --- |

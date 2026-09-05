@@ -2,14 +2,25 @@
 
 ## Deploy
 
-The provider-neutral shared VPS platform must be bootstrapped once before the app
-deploy runs. A push to `main` affecting the service builds an immutable API image,
-runs the authenticated extension suite against an ephemeral Docker staging stack,
-and invokes `scripts/deploy-vps.sh` with that exact digest. Deployment updates only the `novel-tracker`
+The provider-neutral shared VPS platform must be bootstrapped once on separate
+staging and production hosts before deployment. Every push to `main` builds and
+tests an immutable API candidate. When `STAGING_TARGET_CONFIGURED=true`, that
+exact digest is then deployed automatically through the GitHub `staging`
+environment. Staging has its own host, DNS, database, Keycloak realm, OAuth
+clients, secrets, and off-host backup target; it must never share production
+state.
+
+Production deployment requires a manual `workflow_dispatch` with
+`deploy_to_production=true`, both target-configured variables,
+`RELEASES_ENABLED=true`, a successful redeployment of the existing main-build
+digest to persistent staging, and approval in the protected GitHub `production`
+environment. The manual run resolves the already-built digest by commit tag and
+does not rebuild it. Deployment updates only the `novel-tracker`
 Compose project and `/opt/shared-caddy/apps/novel-tracker.caddy`; it never recreates
 the proxy. It waits for Keycloak, configures the API audience mapper, repairs the
 known Chrome, Firefox, and Safari extension callbacks, installs the nightly backup
-timer, and verifies the local and public health endpoints.
+and restore-verification timers, and verifies local/public readiness plus the
+expected Git commit reported by the running image.
 
 The local `scripts/deploy-vps.sh` is limited to validation and upload. The
 complete VPS sequence is readable in `scripts/remote/deploy-production.sh`,
@@ -22,14 +33,30 @@ volume remains explicitly named `infra_postgres-data`. Do not rename that volume
 it contains both synchronized novel state and Keycloak identity data. The first new
 deployment shuts down the old `infra` project without `--volumes` before starting
 the named project, preventing concurrent PostgreSQL access to that volume.
-Production uses `compose.yml` with `compose.production.yml`. Scripts read secrets directly from root-owned
-`/etc/novel-tracker/app.env`; they no longer copy the file into the Git checkout.
+Both remote environments use `compose.yml` with `compose.production.yml` on
+their respective hosts. Scripts read secrets directly from root-owned
+`/etc/novel-tracker/app.env`; they never copy the file into the Git checkout.
+
+Configure the `staging` GitHub environment with the same variable/secret names
+used by `production` (`NOVEL_API_DOMAIN`, `NOVEL_AUTH_DOMAIN`, `VPS_HOST`,
+`VPS_USER`, `VPS_SSH_KEY`, and preferably pinned `VPS_KNOWN_HOSTS`), but with
+staging-only values. Set `STAGING_TARGET_CONFIGURED=true` only after its host and
+off-host restore proof work. Keep `RELEASES_ENABLED` absent until all release
+readiness evidence is complete.
 
 ## Backups
 
 `novel-tracker-backup.timer` creates a PostgreSQL custom-format backup every
-night under `/var/backups/novel-tracker`. Files are mode `0600` and backups
-older than 14 days are deleted.
+night under `/var/backups/novel-tracker`. Each dump has a SHA-256 sidecar,
+files are mode `0600`, and backups older than 14 days are deleted. Production
+backups require `NOVEL_BACKUP_RCLONE_REMOTE` in
+`/etc/novel-tracker/app.env`; it must name storage in a different provider or
+failure domain. `rclone` and its restricted configuration must be installed on
+the VPS. Set `NOVEL_BACKUP_REQUIRE_OFFSITE=0` only for local recovery testing.
+
+Every deployment of an existing database blocks until a fresh backup is copied
+off-host and restored successfully into an isolated PostgreSQL container.
+`novel-tracker-backup-verify.timer` repeats the restore drill weekly.
 
 Run and inspect a backup manually:
 
@@ -40,31 +67,32 @@ sudo systemctl status novel-tracker-backup.service --no-pager
 sudo ls -lh /var/backups/novel-tracker
 ```
 
-Copy one backup off the VPS regularly. A backup kept only on the same VPS is
-not sufficient disaster recovery.
+Inspect the most recent restore drill with:
+
+```bash
+sudo systemctl status novel-tracker-backup-verify.service --no-pager
+sudo journalctl -u novel-tracker-backup-verify.service --since '8 days ago'
+```
 
 ## Restore drill
 
-Use a disposable PostgreSQL container or staging deployment. Do not test a
-restore over production data.
+The checked-in verifier always uses a disposable PostgreSQL container and never
+restores over production data:
 
 ```bash
-docker run --name novel-restore-test -e POSTGRES_PASSWORD=test-password -d postgres:17-alpine
-docker cp novel-tracker-YYYYMMDDTHHMMSSZ.dump novel-restore-test:/tmp/backup.dump
-docker exec novel-restore-test createdb -U postgres novel_tracker_restore
-docker exec novel-restore-test pg_restore -U postgres -d novel_tracker_restore --no-owner /tmp/backup.dump
-docker exec novel-restore-test psql -U postgres -d novel_tracker_restore -c 'select count(*) from sync_states;'
-docker stop novel-restore-test
-docker rm novel-restore-test
+sudo /opt/novel-tracker/scripts/verify-backup.sh
 ```
 
 ## Health checks
 
-- API: `https://api.novel.bghimire.com/health`
+- API liveness: `https://api.novel.bghimire.com/health`
+- API readiness: `https://api.novel.bghimire.com/ready`
 - OIDC discovery: `https://auth.novel.bghimire.com/realms/novel-tracker/.well-known/openid-configuration`
 
-Configure an external uptime monitor for both endpoints. The deployment smoke
-test is not a substitute for continuous monitoring.
+`/health` proves only that the process can answer. `/ready` also proves database
+connectivity, required identity configuration, the migration version, and the
+running app version/commit. Configure an external uptime monitor for readiness
+and OIDC discovery. The deployment smoke test is not continuous monitoring.
 
 ## Scaling limits
 
@@ -76,7 +104,10 @@ in-memory `Map` keyed by subject (120 requests/minute). Running more than one
 API container multiplies the effective limit by the container count; horizontal
 scaling needs a shared store or a gateway-level limiter instead.
 
-**Schema.** `sync_mutations` carries `idx_sync_mutations_subject_sequence`,
+**Schema.** Ordered SQL files in `server/migrations/` are checksummed in the
+`schema_migrations` table and run under an advisory lock. Never edit an applied
+migration; add the next numbered file and use expand/migrate/contract changes.
+`sync_mutations` carries `idx_sync_mutations_subject_sequence`,
 which serves the pull query (`WHERE subject = $1 AND sequence > $2 ORDER BY
 sequence`). It is created by the bootstrap DDL, so a redeploy is enough to add
 it to an existing database. There is deliberately no index on
