@@ -108,12 +108,12 @@ FROM api_client_usage
 ORDER BY api_version, client_platform, last_seen_at DESC;
 ```
 
-Absence from a store dashboard is not enough, and absence from rotating logs is
-not evidence. Keep an old API fully supported until its ledger has had no
-traffic for 90 days **and** all four store checks confirm no known active client
-uses it. Capture the query window and store evidence in
-`docs/api-retirements/<version>.md`; `docs/api-versions.json` and PR CI enforce
-the remaining deprecation and retirement fields. See
+Absence from a store dashboard or rotating logs is not evidence. Keep an old API
+fully supported until every known installation has upgraded or been removed,
+then require seven quiet ledger days and current checks for all four distribution
+channels. Capture the installation confirmations, query window, and distribution
+evidence in `docs/api-retirements/<version>.md`; one owner-approved PR retires
+the handler with no separate deprecated phase. See
 [the API lifecycle rules](sync-api.md#api-lifecycle-rules).
 
 ## Scaling limits

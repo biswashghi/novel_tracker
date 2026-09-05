@@ -6,12 +6,11 @@ import path from "node:path";
 import { API_CONTRACTS, API_VERSION } from "../src/lib/api-version.js";
 
 const registryPath = "docs/api-versions.json";
-const allowedStatuses = new Set(["current", "supported", "deprecated", "retired"]);
+const allowedStatuses = new Set(["current", "supported", "retired"]);
 const requiredStores = new Set(["chrome", "firefox", "safari-macos", "safari-ios"]);
 const allowedTransitions = {
   current: new Set(["current", "supported"]),
-  supported: new Set(["supported", "deprecated"]),
-  deprecated: new Set(["deprecated", "retired"]),
+  supported: new Set(["supported", "retired"]),
   retired: new Set(["retired"])
 };
 
@@ -43,8 +42,7 @@ export function readRegistry(text, source) {
       assert.match(route, /^(GET|POST|PUT|PATCH|DELETE) \/v[1-9][0-9]*(?:\/[^ ?]+)*$/, `${source}: invalid route ${route}`);
       assert.ok(route.includes(`/${id}/`) || route.endsWith(`/${id}`), `${source}: ${route} does not belong to ${id}`);
     }
-    if (entry.status === "deprecated" || entry.status === "retired") validateDeprecation(id, entry.deprecation, source);
-    if (entry.status === "retired") validateRetirement(id, entry.retirement, entry.deprecation, source);
+    if (entry.status === "retired") validateRetirement(id, entry.retirement, source);
   }
   return registry;
 }
@@ -55,13 +53,13 @@ function validDate(value, label) {
   return timestamp;
 }
 
-function validateDeprecation(id, evidence, source) {
-  assert.ok(evidence && typeof evidence === "object", `${source}: ${id} needs deprecation evidence`);
-  assert.equal(evidence.allKnownClientsRetired, true, `${source}: ${id} cannot be deprecated while a known client uses it`);
-  assert.ok(evidence.approvedBy, `${source}: ${id} deprecation needs explicit owner approval`);
-  const approvedAt = validDate(evidence.approvedAt, `${source}: ${id} approvedAt`);
+function validateRetirement(id, evidence, source) {
+  assert.ok(evidence && typeof evidence === "object", `${source}: ${id} needs retirement evidence`);
+  assert.equal(evidence.allKnownInstallationsMoved, true, `${source}: ${id} cannot be retired while a known installation uses it`);
+  assert.ok(evidence.approvedBy, `${source}: ${id} retirement needs explicit owner approval`);
+  const retiredAt = validDate(evidence.retiredAt, `${source}: ${id} retiredAt`);
   const zeroTrafficSince = validDate(evidence.zeroTrafficSince, `${source}: ${id} zeroTrafficSince`);
-  assert.ok(approvedAt - zeroTrafficSince >= 90 * 24 * 60 * 60 * 1000, `${source}: ${id} needs 90 days of zero observed traffic`);
+  assert.ok(retiredAt - zeroTrafficSince >= 7 * 24 * 60 * 60 * 1000, `${source}: ${id} needs seven days of zero observed traffic`);
   assert.match(evidence.evidenceDocument || "", /^docs\/api-retirements\/[a-zA-Z0-9._-]+\.md$/, `${source}: ${id} needs a retirement evidence document`);
   assert.ok(existsSync(evidence.evidenceDocument), `${source}: missing ${evidence.evidenceDocument}`);
   assert.ok(Array.isArray(evidence.storeChecks), `${source}: ${id} needs store rollout checks`);
@@ -70,19 +68,10 @@ function validateDeprecation(id, evidence, source) {
     assert.ok(requiredStores.has(check.store), `${source}: ${id} has an unknown store check`);
     assert.equal(check.noKnownActiveClientUsesApi, true, `${source}: ${id} is still used in ${check.store}`);
     const checkedAt = validDate(check.checkedAt, `${source}: ${id} ${check.store} checkedAt`);
-    assert.ok(checkedAt <= approvedAt && approvedAt - checkedAt <= 7 * 24 * 60 * 60 * 1000, `${source}: ${id} store checks must be within seven days before approval`);
+    assert.ok(checkedAt <= retiredAt && retiredAt - checkedAt <= 7 * 24 * 60 * 60 * 1000, `${source}: ${id} store checks must be within seven days before retirement`);
     stores.add(check.store);
   }
   assert.deepEqual(stores, requiredStores, `${source}: ${id} must be checked in every store`);
-}
-
-function validateRetirement(id, evidence, deprecation, source) {
-  assert.ok(evidence && typeof evidence === "object", `${source}: ${id} needs retirement evidence`);
-  assert.ok(evidence.approvedBy, `${source}: ${id} retirement needs explicit owner approval`);
-  const retiredAt = validDate(evidence.retiredAt, `${source}: ${id} retiredAt`);
-  const deprecatedAt = validDate(deprecation.approvedAt, `${source}: ${id} deprecatedAt`);
-  assert.ok(retiredAt - deprecatedAt >= 30 * 24 * 60 * 60 * 1000, `${source}: ${id} must remain deprecated for at least 30 days before retirement`);
-  assert.equal(evidence.zeroTrafficContinued, true, `${source}: ${id} traffic must remain at zero through retirement`);
 }
 
 function expectedRoutes(contract) {
@@ -94,11 +83,10 @@ export function compareWithBase(current, base, source) {
     const next = current.versions[id];
     assert.ok(next, `${id} was deleted from the API registry; version records are permanent`);
     assert.ok(allowedTransitions[previous.status].has(next.status), `${id} cannot transition from ${previous.status} to ${next.status}`);
-    if (previous.status !== "retired") {
-      const nextRoutes = new Set(next.routes);
-      for (const route of previous.routes) {
-        assert.ok(nextRoutes.has(route), `${id} removed compatible route ${route}; add a new API major version instead`);
-      }
+    assert.equal(next.introducedInClient, previous.introducedInClient, `${id} changed its first client version`);
+    const nextRoutes = new Set(next.routes);
+    for (const route of previous.routes) {
+      assert.ok(nextRoutes.has(route), `${id} removed compatible route ${route}; add a new API major version instead`);
     }
   }
   process.stdout.write(`API compatibility preserved against ${source}.\n`);

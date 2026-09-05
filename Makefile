@@ -20,7 +20,7 @@ STAGING_PROJECT ?= novel-tracker-staging
 STAGING_COMPOSE = $(NOVEL_ENV) docker compose -p $(STAGING_PROJECT) -f compose.yml -f compose.staging.yml
 PRODUCTION_COMPOSE = $(NOVEL_ENV) docker compose -p novel-tracker -f compose.yml -f compose.production.yml
 
-.PHONY: local-up local-test local-down local-reset docker-build staging-test package-test production-validate deployment-test
+.PHONY: local-up local-test local-down local-reset docker-build staging-test package-test safari-test platform-test production-validate deployment-test
 
 local-up:
 	$(LOCAL_COMPOSE) up -d --build --wait
@@ -72,6 +72,19 @@ package-test:
 	  unzip -q "$$package" -d "$$unpacked"; \
 	  chmod -R a+rX "$$unpacked"; \
 	  NOVEL_EXTENSION_DIR="$$unpacked" npm run test:e2e:package
+
+safari-test:
+	npm run package:safari
+	project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"; \
+	  xcodebuild -project "$$project" -scheme "Novel Tracker (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build; \
+	  xcodebuild -project "$$project" -scheme "Novel Tracker (iOS)" -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+platform-test:
+ifeq ($(shell uname -s),Darwin)
+	$(MAKE) safari-test
+else
+	@echo "Safari compile check requires macOS; the protected PR gate runs it."
+endif
 
 production-validate:
 	$(PRODUCTION_COMPOSE) config --quiet

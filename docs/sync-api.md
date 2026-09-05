@@ -144,16 +144,18 @@ Normal evolution is:
    macOS, and Safari iOS.
 3. Keep the old version **supported, not deprecated**, while any known client
    still calls it. Store approval and automatic updates can take weeks.
-4. After at least 90 continuous days with no old-version request, check every
-   store's active-version/adoption evidence. Only a separate PR with owner
-   approval, all four store checks, and an evidence document under
-   `docs/api-retirements/` may mark it deprecated.
-5. Keep a deprecated version operational for at least another 30 days with
-   traffic still at zero before a separate retirement/removal PR.
+4. Once every known installed copy has upgraded or been removed, observe seven
+   continuous days with no old-version request. Recheck all four distribution
+   channels, record the installation confirmations and ledger window under
+   `docs/api-retirements/`, and retire the old code in one owner-approved PR.
+
+There is no idle `deprecated` phase or compatibility fallback after retirement.
+For this small user base, direct confirmation from every known installation is
+required; aggregate traffic alone cannot prove that a dormant copy is gone.
 
 `npm run api:compatibility` validates the current registry and code contract.
 PR CI additionally compares it with protected `main`; it rejects deleted
-version records, removed active routes, skipped lifecycle states, or missing
+version records, removed active routes, a skipped `supported` phase, or missing
 retirement evidence. A breaking change therefore ships as a new major API, not
 as an in-place edit to a route installed extensions already use.
 

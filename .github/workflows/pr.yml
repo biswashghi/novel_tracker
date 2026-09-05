@@ -38,7 +38,7 @@ jobs:
       - name: Run source and unit checks
         run: npm run verify:quick
 
-      - name: Prevent API contract removal or premature deprecation
+      - name: Prevent API contract removal or unsafe retirement
         run: npm run api:compatibility -- --base-ref="origin/${{ github.base_ref }}"
 
       - name: Validate shell and workflow automation
@@ -255,19 +255,10 @@ jobs:
       - name: Test Apple installer certificate matching
         run: bundle exec ruby tests/apple-installer-certificate.test.rb
 
-      - name: Build Safari package
+      - name: Package and compile Safari apps
         env:
           NOVEL_TRACKER_VERSION_OVERRIDE: ${{ needs.version.outputs.version_override }}
-        run: npm run package:safari
-
-      - name: Compile unsigned macOS and iOS Safari apps
-        run: |
-          project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"
-          xcodebuild -project "$project" -scheme "Novel Tracker (macOS)" \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO build
-          xcodebuild -project "$project" -scheme "Novel Tracker (iOS)" \
-            -configuration Debug -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build
+        run: make safari-test
 
       - name: Upload Safari artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

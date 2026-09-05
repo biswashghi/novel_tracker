@@ -17,8 +17,8 @@ the code-controlled release blockers it identified:
   have no known audit finding at the enforced severity;
 - database changes are ordered, checksummed migrations; `/ready` verifies the
   database, schema, identity configuration, version, and commit;
-- API v1 is explicit in every client and response; aggregate usage plus current
-  four-store evidence blocks deprecation while any installed client depends on it;
+- API v1 is explicit in every client and response; old versions remain supported
+  until every known installation has moved, then retire through one evidence gate;
 - deployment requires an off-host pre-deploy backup, isolated restore proof,
   immutable-image readiness, and a health-verified rollback; restore drills
   also run weekly;
