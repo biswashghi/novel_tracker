@@ -174,6 +174,16 @@ separate libraries; the realm sets `duplicateEmailsAllowed` with
 `loginWithEmailAllowed` off so a shared email address does not interrupt the
 flow with Keycloak's "account already exists" screen.
 
+Keycloak's generic OIDC broker only accepts a GET callback, but Apple sends a
+cross-site POST when `name` or `email` is requested. Production therefore
+mounts the version-pinned, checksum-verified
+[`klausbetz/apple-identity-provider-keycloak` 1.14.0](https://github.com/klausbetz/apple-identity-provider-keycloak/releases/tag/1.14.0)
+JAR into the official Keycloak 26.1.5 image. Deployment downloads and verifies
+the JAR before Compose starts; `rotate-apple-secret.mjs` refuses to configure
+Apple until Keycloak exposes the `apple` provider factory. The JAR uses internal
+Keycloak SPIs, so any Keycloak upgrade must be paired with a compatible Apple
+provider release and an end-to-end Apple and Google sign-in test.
+
 `/etc/novel-tracker/app.env` must carry:
 
 | Variable | Purpose |
@@ -191,7 +201,23 @@ than a fixed string, and when it lapses every Apple sign-in fails in a way that
 looks like a Keycloak broker fault rather than an expiry.
 Production deployment runs `scripts/rotate-apple-secret.mjs` once immediately:
 the first run creates the `apple` identity provider, while later deployments
-refresh its client secret. `novel-tracker-apple-secret.timer` runs the same
+refresh its client secret. Keycloak 26.1.5 cannot change an existing identity
+provider's type via PUT, so the first deployment with the JAR deletes and
+recreates the generic-OIDC `apple` instance under the same alias. This is a
+complete migration: the old generic configuration and provider mappers are
+discarded, and the new instance is populated from `APPLE_*`. There are no
+active Apple accounts linked to the old instance. It does not restore the
+generic provider if creation fails; fix the error and rerun the one-shot
+service to create the Apple provider.
+`novel-tracker-apple-secret.timer` runs the same
 one-shot container monthly so the secret cannot reach Apple's expiry ceiling.
 Run `npm run keycloak:apple` from a complete repository checkout after changing
 any `APPLE_*` value when an out-of-band refresh is needed.
+
+After deploying to staging, confirm the Apple provider factory is available and
+the `apple` instance has `providerId=apple`. A POST to
+`/realms/novel-tracker/broker/apple/endpoint` with an invalid `state` should
+no longer return 405. That callback check only verifies the adapter is loaded;
+with an Apple Services ID whose return URL points at staging, test first and
+repeat sign-in, private-relay addresses, Google sign-in, and deletion of an
+Apple-created account (including grant revocation) before promoting to prod.
