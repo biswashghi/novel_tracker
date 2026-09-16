@@ -62,6 +62,10 @@ prepare_release() {
   sudo install -m 0644 /tmp/novel-compose.production.yml "$APP_DIR/compose.production.yml"
   sudo install -m 0644 /tmp/novel-keycloak-realm.json "$APP_DIR/infra/keycloak-realm.json"
   sudo install -m 0755 /tmp/novel-configure-keycloak.sh "$APP_DIR/scripts/configure-keycloak.sh"
+  sudo install -m 0755 /tmp/novel-install-keycloak-apple-provider.sh "$APP_DIR/scripts/install-keycloak-apple-provider.sh"
+  # Install and verify the trusted JAR before Compose can mount it into
+  # Keycloak. A missing or altered artifact aborts the deployment here.
+  sudo "$APP_DIR/scripts/install-keycloak-apple-provider.sh" "$APP_DIR/providers"
   sudo install -m 0755 /tmp/novel-backup-vps.sh "$APP_DIR/scripts/backup-vps.sh"
   sudo install -m 0755 /tmp/novel-verify-backup.sh "$APP_DIR/scripts/verify-backup.sh"
   sudo install -m 0755 /tmp/novel-deploy-production.sh "$APP_DIR/scripts/deploy-production.sh"
@@ -179,6 +183,6 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  trap 'rm -f /tmp/novel-release.env /tmp/novel-compose.yml /tmp/novel-compose.production.yml /tmp/novel-keycloak-realm.json /tmp/novel-configure-keycloak.sh /tmp/novel-backup-vps.sh /tmp/novel-verify-backup.sh /tmp/novel-deploy-production.sh /tmp/novel-tracker.caddy.template /tmp/novel-tracker-backup.service /tmp/novel-tracker-backup.timer /tmp/novel-tracker-backup-verify.service /tmp/novel-tracker-backup-verify.timer /tmp/novel-tracker-apple-secret.service /tmp/novel-tracker-apple-secret.timer' EXIT
+  trap 'rm -f /tmp/novel-release.env /tmp/novel-compose.yml /tmp/novel-compose.production.yml /tmp/novel-keycloak-realm.json /tmp/novel-configure-keycloak.sh /tmp/novel-install-keycloak-apple-provider.sh /tmp/novel-backup-vps.sh /tmp/novel-verify-backup.sh /tmp/novel-deploy-production.sh /tmp/novel-tracker.caddy.template /tmp/novel-tracker-backup.service /tmp/novel-tracker-backup.timer /tmp/novel-tracker-backup-verify.service /tmp/novel-tracker-backup-verify.timer /tmp/novel-tracker-apple-secret.service /tmp/novel-tracker-apple-secret.timer' EXIT
   main "$@"
 fi

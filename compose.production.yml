@@ -13,6 +13,7 @@ services:
         aliases: [novel-auth]
     volumes:
       - ./infra/keycloak-realm.json:/opt/keycloak/data/import/novel-tracker-realm.json:ro
+      - ./providers/apple-identity-provider-1.14.0.jar:/opt/keycloak/providers/apple-identity-provider-1.14.0.jar:ro
   api:
     restart: unless-stopped
     init: true
