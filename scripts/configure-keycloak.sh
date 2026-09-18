@@ -88,3 +88,28 @@ rm -f /tmp/novel-provider-mapper.json
 echo "Keycloak client redirects, audience mapping, provider claim, and realm login policy are configured."
 echo "Run scripts/rotate-apple-secret.mjs to create or refresh the Apple identity provider."
 '
+
+# Apple supplies names only on the first authorization. A retry after a failed
+# callback can therefore have a verified email but no name. Keep names when
+# supplied, but do not send readers to Keycloak's profile-completion form.
+# Read/modify/write preserves custom attributes, validation and permissions.
+# Quoted variables below are evaluated inside their respective containers.
+# shellcheck disable=SC2016
+"${COMPOSE[@]}" exec -T keycloak /opt/keycloak/bin/kcadm.sh get users/profile -r novel-tracker |
+  "${COMPOSE[@]}" exec -T api node -e '
+    const fs = require("node:fs");
+    const profile = JSON.parse(fs.readFileSync(0, "utf8"));
+    for (const name of ["firstName", "lastName"]) {
+      const attribute = profile.attributes.find(attribute => attribute.name === name);
+      if (!attribute) throw new Error(`Missing Keycloak profile attribute: ${name}`);
+      delete attribute.required;
+    }
+    process.stdout.write(JSON.stringify(profile));
+  ' |
+  "${COMPOSE[@]}" exec -T keycloak sh -ec '
+    profile=$(mktemp)
+    trap '\''rm -f "$profile"'\'' EXIT
+    cat >"$profile"
+    /opt/keycloak/bin/kcadm.sh update users/profile -r novel-tracker -f "$profile"
+  '
+echo "Optional profile names configured for uninterrupted social sign-in."

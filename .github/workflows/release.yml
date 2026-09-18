@@ -157,17 +157,8 @@ jobs:
       - name: Test Apple installer certificate matching
         run: bundle exec ruby tests/apple-installer-certificate.test.rb
 
-      - name: Build Safari package
-        run: npm run package:safari
-
-      - name: Compile unsigned macOS and iOS Safari apps
-        run: |
-          project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"
-          xcodebuild -project "$project" -scheme "Novel Tracker (macOS)" \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO build
-          xcodebuild -project "$project" -scheme "Novel Tracker (iOS)" \
-            -configuration Debug -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build
+      - name: Package and compile Safari apps
+        run: make safari-test
 
       - name: Upload Safari artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
