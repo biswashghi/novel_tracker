@@ -2,20 +2,18 @@
 
 ## Deploy
 
-The provider-neutral shared VPS platform must be bootstrapped once on separate
-staging and production hosts before deployment. Every push to `main` builds and
-tests an immutable API candidate. When `STAGING_TARGET_CONFIGURED=true`, that
-exact digest is then deployed automatically through the GitHub `staging`
-environment. Staging has its own host, DNS, database, Keycloak realm, OAuth
-clients, secrets, and off-host backup target; it must never share production
-state.
+Every push to `main` builds an immutable API image, scans it, and runs the API
+contract tests (`make api-test`) against it on a clean Postgres + Keycloak
+stack. That is the regression gate: `tests/server-sync-api.test.mjs` exercises
+every registered API version, and `npm run api:compatibility` (in
+`verify:quick`) refuses to drop or break a version that installed clients
+still use — see [sync-api.md](sync-api.md#api-lifecycle-rules).
 
-Production deployment requires a manual `workflow_dispatch` with
-`deploy_to_production=true`, both target-configured variables,
-`RELEASES_ENABLED=true`, a successful redeployment of the existing main-build
-digest to persistent staging, and approval in the protected GitHub `production`
-environment. The manual run resolves the already-built digest by commit tag and
-does not rebuild it. Deployment updates only the `novel-tracker`
+Production deploys only on a manual run of the *Novel Tracker API* workflow
+(Actions → *Run workflow* on `main`), approved through the `production`
+GitHub environment. The run refuses to deploy a commit whose push build did
+not succeed, resolves that push's image digest, and never rebuilds.
+Deployment updates only the `novel-tracker`
 Compose project and `/opt/shared-caddy/apps/novel-tracker.caddy`; it never recreates
 the proxy. It waits for Keycloak, configures the API audience mapper, repairs the
 known Chrome, Firefox, and Safari extension callbacks, installs the nightly backup
@@ -28,21 +26,12 @@ with routing in `deploy/novel-tracker.caddy.template`.
 `make deployment-test` exercises both successful orchestration and rollback
 after failed public verification.
 
-The Compose project name changed from the implicit `infra` name, but the Postgres
-volume remains explicitly named `infra_postgres-data`. Do not rename that volume:
-it contains both synchronized novel state and Keycloak identity data. The first new
-deployment shuts down the old `infra` project without `--volumes` before starting
-the named project, preventing concurrent PostgreSQL access to that volume.
+The Postgres volume is explicitly named `infra_postgres-data` (a holdover from
+the original Compose project name). Do not rename it: it contains both
+synchronized novel state and Keycloak identity data.
 Both remote environments use `compose.yml` with `compose.production.yml` on
 their respective hosts. Scripts read secrets directly from root-owned
 `/etc/novel-tracker/app.env`; they never copy the file into the Git checkout.
-
-Configure the `staging` GitHub environment with the same variable/secret names
-used by `production` (`NOVEL_API_DOMAIN`, `NOVEL_AUTH_DOMAIN`, `VPS_HOST`,
-`VPS_USER`, `VPS_SSH_KEY`, and preferably pinned `VPS_KNOWN_HOSTS`), but with
-staging-only values. Set `STAGING_TARGET_CONFIGURED=true` only after its host and
-off-host restore proof work. Keep `RELEASES_ENABLED` absent until all release
-readiness evidence is complete.
 
 ## Backups
 

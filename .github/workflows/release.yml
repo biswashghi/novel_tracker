@@ -1,536 +1,268 @@
-name: Release automation
+name: Store release
+
+# Publishes to every store whenever main carries a package.json version that
+# has no `v<version>` tag yet — i.e. after a version bump is merged. The tag
+# is created last, once every store accepted the build, so a failed publish
+# is fixed by merging a fix; the same version simply runs again.
+#
+# What a run submits: Chrome Web Store and Firefox AMO reviews (Chrome's is
+# usually minutes), the iOS app to TestFlight, and the macOS app as an
+# unsubmitted App Store draft. Publishing waits for approval of the
+# `production` environment.
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*.*.*"
-
-permissions:
-  contents: read
-  packages: read
+    branches: [main]
 
 concurrency:
   group: store-release
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
-  validate-release:
-    name: Validate release identity
+  version:
+    name: Detect an unreleased version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      unreleased: ${{ steps.detect.outputs.unreleased }}
     steps:
-      - name: Check out repository with full history
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: .nvmrc
-
-      - name: Require an exact version tag on main
-        if: github.event_name == 'push'
-        shell: bash
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - id: detect
         run: |
           set -euo pipefail
-          package_version="$(node -p "require('./package.json').version")"
-          expected_tag="v${package_version}"
-          actual_tag="${GITHUB_REF_NAME}"
-          [[ "$actual_tag" == "$expected_tag" ]] || {
-            echo "Tag ${actual_tag} does not match package.json version ${package_version}." >&2
-            exit 1
-          }
-          git fetch origin main --no-tags
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
-            echo "Release commit ${GITHUB_SHA} is not reachable from main." >&2
-            exit 1
-          }
-
-      - name: Restrict non-publishing rehearsals to main
-        if: github.event_name == 'workflow_dispatch'
-        run: test "$GITHUB_REF" = refs/heads/main
-
-  test:
-    name: Test
-    needs: validate-release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run source and unit checks
-        run: npm run verify:quick
-
-      - name: Validate shell and workflow automation
-        run: |
-          shellcheck scripts/*.sh scripts/remote/*.sh tests/*.sh
-          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 .github/workflows/*.yml
-
-      - name: Audit production dependencies
-        run: npm run audit:production
+          version="$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/v${version}" >/dev/null; then
+            echo "v${version} is already released."
+            unreleased=false
+          else
+            unreleased=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "unreleased=$unreleased" >> "$GITHUB_OUTPUT"
 
   build-browser:
     name: Browser packages
-    needs: test
+    needs: version
+    if: needs.version.outputs.unreleased == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and validate Chrome package
+      - run: npm ci
+      - name: Build and validate the Chrome package
         run: |
           npm run package:webstore
-          version="$(node -p "require('./package.json').version")"
-          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-${version}.zip" chrome
-
-      - name: Upload Chrome artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-${{ needs.version.outputs.version }}.zip" chrome
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrome-package
           path: release/novel-tracker-extension-[0-9]*.zip
           if-no-files-found: error
-          retention-days: 90
-
-      - name: Build and validate Firefox package
+      - name: Build and validate the Firefox package
         run: |
           npm run package:firefox
           npm exec -- web-ext lint --source-dir dist-firefox
-          version="$(node -p "require('./package.json').version")"
-          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-firefox-${version}.zip" firefox
-
-      - name: Upload Firefox artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+          node scripts/validate-extension-package.mjs "release/novel-tracker-extension-firefox-${{ needs.version.outputs.version }}.zip" firefox
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: firefox-package
           path: release/*-firefox-*.zip
           if-no-files-found: error
-          retention-days: 90
 
   build-safari:
     name: Safari package
-    needs: test
+    needs: version
+    if: needs.version.outputs.unreleased == 'true'
     runs-on: macos-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          # Apple's build number is the full commit count, not the count
-          # of the default one-commit shallow checkout.
+          # Apple's build number is the full commit count.
           fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Set up locked Ruby toolchain
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
         with:
           ruby-version: "3.3"
           bundler-cache: true
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Test Apple installer certificate matching
-        run: bundle exec ruby tests/apple-installer-certificate.test.rb
-
-      - name: Package and compile Safari apps
+      - run: npm ci
+      - run: bundle exec ruby tests/apple-installer-certificate.test.rb
+      - name: Package and compile the Safari apps
         run: make safari-test
-
-      - name: Upload Safari artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: safari-package
           path: release/*.zip
           if-no-files-found: error
-          retention-days: 90
 
-  candidate-integration:
-    name: Exercise exact candidate and authenticated stack
-    needs: [build-browser]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Download exact Chrome package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: chrome-package
-          path: candidate/chrome
-
-      - name: Exercise the exact packaged Chrome candidate
-        run: make package-test PACKAGE="$(find candidate/chrome -maxdepth 1 -type f -name '*.zip')"
-
-      - name: Run authenticated extension E2E against Docker staging
-        run: make staging-test
-
-      - name: Upload integration diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: release-integration-diagnostics
-          path: |
-            staging.log
-            playwright-report/
-            test-results/
-          if-no-files-found: ignore
-          retention-days: 90
-
-  assemble-candidate:
-    name: Assemble immutable release candidate
-    needs: [build-browser, build-safari, candidate-integration]
+  candidate:
+    name: Bind packages to this commit
+    needs: [build-browser, build-safari]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
-
-      - name: Sign in to the package registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bind the API image built for this commit
-        env:
-          API_IMAGE_TAG: ghcr.io/${{ github.repository }}/novel-tracker-api:${{ github.sha }}
-        run: |
-          set -euo pipefail
-          for attempt in {1..30}; do
-            if docker pull "$API_IMAGE_TAG"; then break; fi
-            [[ "$attempt" -lt 30 ]] || exit 1
-            sleep 10
-          done
-          api_image="$(docker inspect --format '{{index .RepoDigests 0}}' "$API_IMAGE_TAG")"
-          [[ "$api_image" =~ @sha256:[a-f0-9]{64}$ ]]
-          echo "NOVEL_API_IMAGE=$api_image" >> "$GITHUB_ENV"
-
-      - name: Download Chrome package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: chrome-package
           path: candidate/chrome
-
-      - name: Download Firefox package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: firefox-package
           path: candidate/firefox
-
-      - name: Download Safari package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: safari-package
           path: candidate/safari
-
-      - name: Bind packages to this version and commit
-        run: node scripts/release-manifest.mjs create candidate/release-manifest.json candidate/chrome/*.zip candidate/firefox/*.zip candidate/safari/*.zip
-
-      - name: Verify candidate before promotion
-        run: node scripts/release-manifest.mjs verify candidate/release-manifest.json
-
-      - name: Upload complete release candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - run: node scripts/release-manifest.mjs create candidate/release-manifest.json candidate/chrome/*.zip candidate/firefox/*.zip candidate/safari/*.zip
+      - run: node scripts/release-manifest.mjs verify candidate/release-manifest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-candidate
           path: candidate
           if-no-files-found: error
-          retention-days: 90
 
-  release-gate:
-    name: Release Gate
-    if: always()
-    needs:
-      [
-        validate-release,
-        test,
-        build-browser,
-        build-safari,
-        candidate-integration,
-        assemble-candidate,
-      ]
+  approve:
+    name: Approve store publishing
+    needs: [version, candidate]
     runs-on: ubuntu-latest
-    steps:
-      - name: Require identity, tests, and every package
-        env:
-          IDENTITY: ${{ needs.validate-release.result }}
-          TESTS: ${{ needs.test.result }}
-          BROWSERS: ${{ needs.build-browser.result }}
-          SAFARI: ${{ needs.build-safari.result }}
-          INTEGRATION: ${{ needs.candidate-integration.result }}
-          CANDIDATE: ${{ needs.assemble-candidate.result }}
-        run: |
-          test "$IDENTITY" = success
-          test "$TESTS" = success
-          test "$BROWSERS" = success
-          test "$SAFARI" = success
-          test "$INTEGRATION" = success
-          test "$CANDIDATE" = success
-
-  publish-readiness:
-    name: Approve release and require every store credential
-    needs: release-gate
-    if: ${{ startsWith(github.ref, 'refs/tags/v') && vars.RELEASES_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
+    # One environment approval releases all three publishers below.
     environment: production
     steps:
-      - name: Fail closed unless every publisher is configured
-        env:
-          CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
-          CHROME_WEB_STORE_CLIENT_ID: ${{ secrets.CHROME_WEB_STORE_CLIENT_ID }}
-          CHROME_WEB_STORE_CLIENT_SECRET: ${{ secrets.CHROME_WEB_STORE_CLIENT_SECRET }}
-          CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
-          AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
-          AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
-          APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
-          APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
-          APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
-          APPSTORE_INSTALLER_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD }}
-        run: |
-          required=(
-            CHROME_WEB_STORE_EXTENSION_ID
-            CHROME_WEB_STORE_CLIENT_ID
-            CHROME_WEB_STORE_CLIENT_SECRET
-            CHROME_WEB_STORE_REFRESH_TOKEN
-            AMO_API_KEY
-            AMO_API_SECRET
-            APP_STORE_CONNECT_KEY_ID
-            APP_STORE_CONNECT_ISSUER_ID
-            APP_STORE_CONNECT_P8
-            APPSTORE_CERTIFICATES_FILE_BASE64
-            APPSTORE_CERTIFICATES_PASSWORD
-            APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64
-          )
-          for variable_name in "${required[@]}"; do
-            [[ -n "${!variable_name}" ]] || {
-              echo "Required production secret ${variable_name} is missing." >&2
-              exit 1
-            }
-          done
+      - run: echo "Publishing ${{ needs.version.outputs.version }} from ${{ github.sha }}"
 
-  # The protected readiness job checks the complete credential set before any
-  # store receives an artifact, reducing the chance of a partial release.
   publish-chrome:
     name: Publish to Chrome Web Store
-    needs: publish-readiness
-    if: ${{ needs.publish-readiness.result == 'success' }}
+    needs: approve
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
-
-      - name: Download verified release candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-candidate
           path: release-candidate
-
-      - name: Verify candidate identity and checksums
-        run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
-
-      - name: Resolve Chrome ZIP path
-        id: release
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHROME_ZIP=$(find release-candidate/chrome -name '*.zip' -print -quit)
-          [[ -n "$CHROME_ZIP" ]] || { echo 'Chrome ZIP not found'; exit 1; }
-          echo "chrome_zip=$CHROME_ZIP" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to Chrome Web Store
-        env:
+      - run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
+      - env:
           CHROME_WEB_STORE_EXTENSION_ID: ${{ secrets.CHROME_WEB_STORE_EXTENSION_ID }}
           CHROME_WEB_STORE_CLIENT_ID: ${{ secrets.CHROME_WEB_STORE_CLIENT_ID }}
           CHROME_WEB_STORE_CLIENT_SECRET: ${{ secrets.CHROME_WEB_STORE_CLIENT_SECRET }}
           CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
-        run: node scripts/publish-chrome.mjs "${{ steps.release.outputs.chrome_zip }}"
+        run: node scripts/publish-chrome.mjs release-candidate/chrome/*.zip
 
   publish-firefox:
     name: Publish to Firefox AMO
-    needs: publish-readiness
-    if: ${{ needs.publish-readiness.result == 'success' }}
+    needs: approve
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
           cache: npm
-
-      - name: Install locked publisher tooling
-        run: npm ci
-
-      - name: Download verified release candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-candidate
           path: release-candidate
-
-      - name: Verify candidate identity and checksums
-        run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
-
-      - name: Resolve Firefox ZIP path
-        id: release
-        shell: bash
-        run: |
-          set -euo pipefail
-          FIREFOX_ZIP=$(find release-candidate/firefox -name '*.zip' -print -quit)
-          [[ -n "$FIREFOX_ZIP" ]] || { echo 'Firefox ZIP not found'; exit 1; }
-          echo "firefox_zip=$FIREFOX_ZIP" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to Firefox AMO
-        env:
+      - run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
+      - env:
           AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
           AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
-        run: node scripts/publish-firefox.mjs "${{ steps.release.outputs.firefox_zip }}"
+        run: node scripts/publish-firefox.mjs release-candidate/firefox/*.zip
 
   publish-safari:
     name: Publish to App Store Connect
-    needs: publish-readiness
-    if: ${{ needs.publish-readiness.result == 'success' }}
+    needs: approve
     runs-on: macos-latest
-    environment: production
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
-
-      - name: Set up locked Ruby toolchain
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
+      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b
         with:
           ruby-version: "3.3"
           bundler-cache: true
-
       - name: Import Apple distribution certificates
-        shell: bash
         env:
           APPSTORE_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64 }}
         run: |
           set -euo pipefail
-
-          distribution_certificate_path="$RUNNER_TEMP/novel-tracker-distribution.p12"
-          installer_certificate_path="$RUNNER_TEMP/novel-tracker-installer-distribution.p12"
           keychain_path="$RUNNER_TEMP/novel-tracker-signing.keychain-db"
-
-          printf '%s' "$APPSTORE_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$distribution_certificate_path"
-          printf '%s' "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$installer_certificate_path"
+          printf '%s' "$APPSTORE_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/novel-tracker-distribution.p12"
+          # The macOS lane combines the installer key with its Apple
+          # certificate itself; only the distribution identity is imported.
+          printf '%s' "$APPSTORE_INSTALLER_CERTIFICATES_FILE_BASE64" | base64 --decode -o "$RUNNER_TEMP/novel-tracker-installer-distribution.p12"
           security create-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
           security set-keychain-settings -lut 21600 "$keychain_path"
           security unlock-keychain -p "$APPSTORE_CERTIFICATES_PASSWORD" "$keychain_path"
-          security import "$distribution_certificate_path" \
-            -P "$APPSTORE_CERTIFICATES_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$keychain_path"
-          # The macOS lane combines the staged installer key with its
-          # matching Apple certificate before importing the complete identity.
+          security import "$RUNNER_TEMP/novel-tracker-distribution.p12" -P "$APPSTORE_CERTIFICATES_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
           security list-keychains -d user -s "$keychain_path"
-          security find-identity -v -p codesigning "$keychain_path" | tee "$RUNNER_TEMP/codesigning-identities.txt"
-          grep -Eq '1 valid identities found|Apple Distribution' "$RUNNER_TEMP/codesigning-identities.txt"
-
-          # Certificate display names vary between Apple's portal, Xcode,
-          # and Keychain Access. Print only the non-secret certificate
-          # subjects for diagnostics; xcodebuild's App Store export is the
-          # authoritative validation of the installer certificate class.
-          security find-certificate -a -p "$keychain_path" \
-            | openssl crl2pkcs7 -nocrl -certfile /dev/stdin \
-            | openssl pkcs7 -print_certs -noout
-
-      - name: Download verified release candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+          security find-identity -v -p codesigning "$keychain_path" | grep -Eq '1 valid identities found|Apple Distribution'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-candidate
           path: release-candidate
-
-      - name: Verify candidate identity and checksums
-        run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
-
-      - name: Restore the checksum-bound Safari Xcode project
-        id: release
-        shell: bash
+      - run: node scripts/release-manifest.mjs verify release-candidate/release-manifest.json
+      - name: Unpack the verified Xcode project
         run: |
           set -euo pipefail
-          SAFARI_ZIP=$(find release-candidate/safari -name '*.zip' -print -quit)
-          [[ -n "$SAFARI_ZIP" ]] || { echo 'Safari ZIP not found'; exit 1; }
           mkdir -p build/safari-xcode
-          unzip -q "$SAFARI_ZIP" -d build/safari-xcode
+          unzip -q release-candidate/safari/*.zip -d build/safari-xcode
           test -f 'build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj/project.pbxproj'
-          echo "safari_zip=$SAFARI_ZIP" >> "$GITHUB_OUTPUT"
-
-      - name: Publish Safari archive to App Store Connect
+      - name: Upload to TestFlight and the App Store
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_P8: ${{ secrets.APP_STORE_CONNECT_P8 }}
-          # Fastlane defaults to login.keychain-db, but the imported identity
-          # intentionally lives in the job's disposable keychain.
           NOVEL_TRACKER_KEYCHAIN_PATH: ${{ runner.temp }}/novel-tracker-signing.keychain-db
           NOVEL_TRACKER_KEYCHAIN_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           NOVEL_TRACKER_INSTALLER_P12_PATH: ${{ runner.temp }}/novel-tracker-installer-distribution.p12
           NOVEL_TRACKER_INSTALLER_P12_PASSWORD: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATES_PASSWORD || secrets.APPSTORE_CERTIFICATES_PASSWORD }}
           NOVEL_TRACKER_SAFARI_PLATFORMS: mac,ios
-        run: node scripts/publish-safari.mjs "${{ steps.release.outputs.safari_zip }}"
+        run: node scripts/publish-safari.mjs release-candidate/safari/*.zip
+
+  tag:
+    name: Tag the released version
+    needs: [version, publish-chrome, publish-firefox, publish-safari]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-candidate
+          path: release-candidate
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git tag "v${VERSION}" "$GITHUB_SHA"
+          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" --title "Novel Tracker ${VERSION}" --generate-notes \
+            release-candidate/release-manifest.json release-candidate/*/*.zip

@@ -1,37 +1,22 @@
 # Archives and uploads the Safari containing apps produced by
-# `npm run package:safari` (scripts/package-safari.sh) to App Store Connect —
-# macOS to the App Store (unreleased draft, not submitted for review), iOS to
-# TestFlight — using the same APP_STORE_CONNECT_* secrets already wired into
-# .github/workflows/release.yml's build-safari job.
+# `npm run package:safari` (scripts/package-safari.sh) to App Store Connect:
+# macOS to the App Store as an unreleased draft (not submitted for review),
+# iOS to TestFlight. Run by scripts/publish-safari.mjs from
+# .github/workflows/release.yml.
 #
-# This closes the gap scripts/publish-safari.mjs used to leave open (it only
-# checked the packaged zip existed and printed a reminder that an Xcode
-# archive/export/upload step was still needed). It cannot close the *entire*
-# gap: Apple's one-time account setup (Developer Program agreement, the
-# initial App Store Connect listing, tax/banking) has to happen once by hand
-# before this lane's upload has anywhere to land. From then on, this lane is
-# what a release build runs.
+# Two constraints shape the lanes:
+# - `xcrun safari-web-extension-converter` writes no .xcscheme files, so
+#   scripts/package-safari.sh generates shared schemes for both app targets;
+#   non-interactive `build_app` cannot see Xcode's implicit ones.
+# - CI installs only an Apple Distribution identity. Each lane creates or
+#   repairs its own Fastlane-managed App Store profiles against it and
+#   switches the Release targets to manual signing, because Apple rejects
+#   Xcode-managed profiles when a project requests manual management.
 #
-# Verified against real signed Xcode projects and real App Store Connect
-# credentials, both locally and in CI (macos-latest):
-# - `build_app` initially failed with "Couldn't find specified scheme ...
-#   make sure the scheme is shared" — `xcrun safari-web-extension-converter`
-#   doesn't persist any .xcscheme files, only an implicit one Xcode
-#   synthesizes on the fly that non-interactive builds can't see.
-#   scripts/package-safari.sh now generates real, shared scheme files for
-#   both app targets to fix this.
-# - CI imports an Apple Distribution identity before these lanes run.
-#   Automatic signing still asks for Development identities/profiles during
-#   archive on a clean runner, so each lane creates or repairs its own
-#   Fastlane-managed App Store profiles against that installed distribution
-#   certificate, then switches the Release targets to manual signing. This
-#   deliberately avoids Xcode-managed profiles: Apple rejects those when a
-#   project explicitly requests manual profile management.
-# - iOS lane confirmed working end-to-end for real (a real TestFlight
-#   upload). macOS lane confirmed through archive/export/signing; the
-#   upload itself can still be blocked independently by App Store Connect
-#   account state (e.g. an existing version sitting on unresolved review
-#   feedback) — that's Apple's process, not something this lane can bypass.
+# Apple's one-time account setup (Developer Program agreement, the App Store
+# Connect listing, tax/banking) must exist before the upload has anywhere to
+# land, and an existing version sitting on unresolved review feedback blocks
+# the macOS upload independently of anything here.
 
 require "base64"
 require "open3"

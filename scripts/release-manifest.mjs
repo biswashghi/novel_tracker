@@ -51,9 +51,6 @@ function validateShape(manifest) {
   if (manifest.commit !== expectedCommit) {
     throw new Error(`Manifest commit ${manifest.commit} does not match checked-out commit ${expectedCommit}.`);
   }
-  if (!/^ghcr\.io\/[a-z0-9._/-]+\/novel-tracker-api@sha256:[a-f0-9]{64}$/.test(manifest.apiImage || '')) {
-    throw new Error('Release manifest must bind an immutable Novel Tracker API image.');
-  }
   if (manifest.appleBuildNumber !== expectedAppleBuild) {
     throw new Error(`Manifest Apple build ${manifest.appleBuildNumber} does not match ${expectedAppleBuild}.`);
   }
@@ -97,7 +94,6 @@ if (mode === 'create') {
     schemaVersion: 1,
     version: packageJson.version,
     commit: expectedCommit,
-    apiImage: process.env.NOVEL_API_IMAGE || '',
     appleBuildNumber: expectedAppleBuild,
     schemaMigration: {
       version: currentMigration.version,

@@ -71,10 +71,9 @@ preventing an accidental build-number reset to `1`.
   (internal testers only by default), matching how this app has been
   distributed on iOS so far. Verified working end-to-end for real.
 
-Both run by default; set `NOVEL_TRACKER_SAFARI_PLATFORMS=mac` or `=ios` (env
-var for `publish-safari.mjs` locally, or the workflow's `safari_platforms`
-`workflow_dispatch` input in CI) to publish just one — useful when the other
-platform's App Store Connect listing is in a blocking state.
+Both run by default; set `NOVEL_TRACKER_SAFARI_PLATFORMS=mac` or `=ios` for
+`publish-safari.mjs` to publish just one — useful when the other platform's
+App Store Connect listing is in a blocking state.
 
 To run a lane locally: `cd safari-app && bundle exec fastlane mac release` (or
 `bundle exec fastlane ios release`) with `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,

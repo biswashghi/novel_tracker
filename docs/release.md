@@ -26,46 +26,38 @@ often. See [AGENTS.md](../AGENTS.md) for the fuller rationale.
 
 ## Cutting a release
 
-Public releases are never cut from an unreviewed local commit. Prepare the
-version on a release branch:
+A release is a version bump merged to `main`. Bump it in the pull request
+that carries the change (or in its own pull request when batching):
 
 ```bash
 npm version patch --no-git-tag-version   # or: minor | major
-npm run verify:full
 ```
 
-Commit `package.json` and `package-lock.json`, open a pull request, and wait for
-the required `PR Gate`. After that pull request is merged, update local `main`,
-confirm the intended version, and tag that exact merged commit:
+Commit `package.json` and `package-lock.json` with the rest of the change and
+merge through the usual `PR Gate`. Nothing else is run by hand: `.github/
+workflows/release.yml` runs on every push to `main`, does nothing while the
+version already has a `v<version>` tag, and otherwise:
 
-```bash
-git switch main
-git pull --ff-only
-version="$(node -p "require('./package.json').version")"
-git tag "v${version}"
-git push origin "v${version}"
-```
+1. builds and validates the Chrome, Firefox, and Safari packages;
+2. binds all three ZIPs to the version and commit in `release-manifest.json`;
+3. waits for approval of the `production` GitHub environment (Actions → the
+   run → *Review deployments*) — one approval covers every store;
+4. publishes: Chrome Web Store review (usually minutes), Firefox AMO review,
+   iOS to TestFlight, macOS as an unsubmitted App Store draft;
+5. creates the `v<version>` tag and a GitHub Release holding the manifest and
+   the three ZIPs.
 
-The workflow rejects a tag unless it exactly matches `package.json` and points
-to a commit reachable from `main`. Never move a failed tag; fix forward, bump
-again through a pull request, and create a new tag.
+The tag is created **last**. If a publish step fails, no tag exists, so the fix
+is an ordinary pull request to `main` — the same version runs again on merge.
+Only if a store already accepted the version (and would now refuse it as a
+duplicate) does the fix need another bump.
 
-The tag run performs source/coverage/security gates, builds all platforms once,
-tests the exact Chrome ZIP, runs authenticated clean-stack integration, compiles
-both Safari targets, and assembles `release-candidate` with a manifest tying all
-three ZIP checksums to the version and Git commit. Publishers download and
-re-verify that same candidate; they never rebuild it.
+Every store submission is the same commit and the same `package.json`
+version. There is no separate beta channel: a bump made only to get an iOS
+build to TestFlight also submits Chrome and Firefox builds.
 
-Public publishing additionally requires all of the following:
-
-- repository variable `RELEASES_ENABLED=true`;
-- every release gate green;
-- the complete credential set for all stores;
-- approval in the protected `production` environment.
-
-Keep `RELEASES_ENABLED` absent or false while the release system is being
-commissioned. A manual `workflow_dispatch` builds and validates a candidate but
-cannot publish it, which is the safe dry run.
+The API server is deployed independently; see
+[operations.md](operations.md#deploy).
 
 ## Backend and store rollout compatibility
 
@@ -86,8 +78,7 @@ If the client has to ship first, it must support both the old and new server
 behavior. Do not use a server deployment to force an immediate store-client
 upgrade; users do not control store review and update timing.
 
-A failed release tag is immutable history. Fix the cause on `main`, bump to a
-new version, and publish a new tag rather than moving or rerunning the old tag.
+Released tags are never moved or deleted.
 
 Every API-calling build must also be visible in the API usage ledger. Before
 shipping, verify the candidate sends its API version, manifest/app version, and
@@ -97,12 +88,9 @@ lifecycle and evidence gates in [sync-api.md](sync-api.md#api-lifecycle-rules).
 
 ## One-time CI setup
 
-Configure the GitHub `production` environment with required reviewers, prevent
-self-review when another maintainer is available, and restrict deployment to
-`main` and protected release tags. Store credentials belong in that
-environment, not as broadly available repository secrets. The protected
-readiness job fails before any publishing if even one required store value is
-incomplete. Add these values under Settings → Environments → production:
+The `production` GitHub environment needs a required reviewer and a deployment
+policy allowing `main`. Store credentials are repository secrets; each
+publisher script exits before contacting its store if any are missing.
 
 | Store | Secrets | One-time setup |
 | --- | --- | --- |

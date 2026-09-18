@@ -51,12 +51,6 @@ acquire_lock() {
 prepare_release() {
   PREVIOUS_IMAGE="$(sudo sed -n 's/^NOVEL_API_IMAGE=//p' "$ENV_FILE" 2>/dev/null || true)"
 
-  # Stop the legacy implicit infra project without removing its volumes.
-  if sudo docker ps -aq --filter label=com.docker.compose.project=infra | grep -q .; then
-    sudo docker ps -aq --filter label=com.docker.compose.project=infra |
-      while read -r container_id; do sudo docker rm -f "$container_id" >/dev/null; done
-  fi
-
   sudo install -d -m 0755 "$APP_DIR" "$APP_DIR/infra" "$APP_DIR/scripts"
   sudo install -m 0644 /tmp/novel-compose.yml "$APP_DIR/compose.yml"
   sudo install -m 0644 /tmp/novel-compose.production.yml "$APP_DIR/compose.production.yml"
