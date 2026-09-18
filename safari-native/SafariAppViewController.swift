@@ -15,21 +15,18 @@ typealias PlatformViewController = NSViewController
 #endif
 
 #if os(iOS)
-private let scrollView = UIScrollView()
-private let contentStack = UIStackView()
-
-private let iconContainer = UIView()
-private let iconImageView = UIImageView()
-private let titleLabel = UILabel()
-private let subtitleLabel = UILabel()
-
-private let statusCard = UIView()
-private let statusIconView = UIImageView()
-private let statusTitleLabel = UILabel()
-private let statusDetailLabel = UILabel()
-
-private let setupTitleLabel = UILabel()
-private let setupStack = UIStackView()
+// Matches the light paper-and-copper palette in src/options.css.
+private enum AppTheme {
+    static let paper = UIColor(red: 242/255, green: 237/255, blue: 229/255, alpha: 1)
+    static let sheet = UIColor(red: 255/255, green: 253/255, blue: 249/255, alpha: 1)
+    static let ink = UIColor(red: 32/255, green: 39/255, blue: 45/255, alpha: 1)
+    static let muted = UIColor(red: 112/255, green: 119/255, blue: 124/255, alpha: 1)
+    static let copper = UIColor(red: 191/255, green: 105/255, blue: 59/255, alpha: 1)
+    static let copperDark = UIColor(red: 145/255, green: 70/255, blue: 34/255, alpha: 1)
+    static let line = UIColor(red: 221/255, green: 212/255, blue: 199/255, alpha: 1)
+    static let success = UIColor(red: 100/255, green: 132/255, blue: 111/255, alpha: 1)
+    static let danger = UIColor(red: 169/255, green: 80/255, blue: 72/255, alpha: 1)
+}
 #endif
 
 private let extensionBundleIdentifier = "app.noveltracker.extension.Extension"
@@ -103,13 +100,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     @IBOutlet var webView: WKWebView!
     private var authenticationSession: ASWebAuthenticationSession?
 #if os(iOS)
+    private let scrollView = UIScrollView()
+    private let contentStack = UIStackView()
+    private let iconContainer = UIView()
+    private let iconImageView = UIImageView()
     private let titleLabel = UILabel()
-    private let detailLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let statusCard = UIView()
+    private let statusIconView = UIImageView()
+    private let statusTitleLabel = UILabel()
+    private let statusDetailLabel = UILabel()
+    private let setupTitleLabel = UILabel()
+    private let setupStack = UIStackView()
     private let signInStack = UIStackView()
     private var signInButtons: [UIButton] = []
     private let signOutButton = UIButton(type: .system)
     private let deleteAccountButton = UIButton(type: .system)
-//    private var attemptedAutomaticSignIn = false
 #endif
 
     override func viewDidLoad() {
@@ -125,16 +131,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
 #if os(iOS)
-//    override func viewDidAppear(_ animated: Bool) {
-//        super.viewDidAppear(animated)
-//        guard !attemptedAutomaticSignIn, (try? AppSessionStore.read()) == nil else { return }
-//        attemptedAutomaticSignIn = true
-//        signIn()
-//    }
-
     private func configureIOSView() {
         webView?.isHidden = true
-        view.backgroundColor = .systemGroupedBackground
+        overrideUserInterfaceStyle = .light
+        view.backgroundColor = AppTheme.paper
+        view.tintColor = AppTheme.copperDark
 
         // MARK: - Scroll container
 
@@ -142,34 +143,40 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
         contentStack.axis = .vertical
-        contentStack.spacing = 24
+        contentStack.spacing = 20
         contentStack.alignment = .fill
 
         view.addSubview(scrollView)
         scrollView.addSubview(contentStack)
+        let contentWidth = contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -48)
+        // Above the labels' default compression resistance (750) so multi-line text wraps
+        // instead of widening the stack, below required so the 560pt cap wins on iPad.
+        contentWidth.priority = UILayoutPriority(999)
 
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            scrollView.contentLayoutGuide.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
 
-            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 36),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 24),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -24),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -36)
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 24),
+            contentStack.centerXAnchor.constraint(equalTo: scrollView.frameLayoutGuide.centerXAnchor),
+            contentStack.widthAnchor.constraint(lessThanOrEqualToConstant: 560),
+            contentWidth,
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -24)
         ])
 
         // MARK: - Hero
 
         iconContainer.translatesAutoresizingMaskIntoConstraints = false
-        iconContainer.backgroundColor = .systemIndigo
-        iconContainer.layer.cornerRadius = 22
+        iconContainer.backgroundColor = AppTheme.ink
+        iconContainer.layer.cornerRadius = 14
         iconContainer.layer.cornerCurve = .continuous
 
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
-        iconImageView.image = UIImage(systemName: "books.vertical.fill")
-        iconImageView.tintColor = .white
+        iconImageView.image = UIImage(systemName: "bookmark.fill")
+        iconImageView.tintColor = AppTheme.copper
         iconImageView.contentMode = .scaleAspectFit
 
         iconContainer.addSubview(iconImageView)
@@ -195,13 +202,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         ])
 
         titleLabel.text = "Novel Tracker"
-        titleLabel.font = .systemFont(ofSize: 32, weight: .bold)
+        titleLabel.font = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: UIFont(name: "Georgia-Bold", size: 30) ?? .preferredFont(forTextStyle: .largeTitle))
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
         titleLabel.textAlignment = .center
-        titleLabel.textColor = .label
+        titleLabel.textColor = AppTheme.ink
 
         subtitleLabel.text = "Keep your reading list synced between Safari and your Novel Tracker account."
         subtitleLabel.font = .preferredFont(forTextStyle: .body)
-        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.textColor = AppTheme.muted
         subtitleLabel.textAlignment = .center
         subtitleLabel.numberOfLines = 0
 
@@ -219,19 +228,22 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         // MARK: - Account status card
 
-        statusCard.backgroundColor = .secondarySystemGroupedBackground
-        statusCard.layer.cornerRadius = 20
+        statusCard.backgroundColor = AppTheme.sheet
+        statusCard.layer.cornerRadius = 14
+        statusCard.layer.borderWidth = 1
+        statusCard.layer.borderColor = AppTheme.line.cgColor
         statusCard.layer.cornerCurve = .continuous
 
         statusIconView.translatesAutoresizingMaskIntoConstraints = false
         statusIconView.contentMode = .scaleAspectFit
-        statusIconView.tintColor = .secondaryLabel
+        statusIconView.tintColor = AppTheme.muted
 
         statusTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
-        statusTitleLabel.textColor = .label
+        statusTitleLabel.textColor = AppTheme.ink
+        statusTitleLabel.numberOfLines = 0
 
         statusDetailLabel.font = .preferredFont(forTextStyle: .subheadline)
-        statusDetailLabel.textColor = .secondaryLabel
+        statusDetailLabel.textColor = AppTheme.muted
         statusDetailLabel.numberOfLines = 0
 
         let statusTextStack = UIStackView(arrangedSubviews: [
@@ -277,7 +289,8 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             var config = UIButton.Configuration.filled()
             config.title = provider.label
             config.imagePadding = 10
-            config.cornerStyle = .large
+            config.cornerStyle = .fixed
+            config.background.cornerRadius = 9
             config.contentInsets = NSDirectionalEdgeInsets(
                 top: 15,
                 leading: 20,
@@ -287,13 +300,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
             if provider.id == "apple" {
                 // Apple requires its own mark and a black or white ground for
-                // this button; the house indigo is not permitted here.
+                // this button; the copper theme does not apply here.
                 config.image = UIImage(systemName: "apple.logo")
-                config.baseBackgroundColor = .label
-                config.baseForegroundColor = .systemBackground
+                config.baseBackgroundColor = .black
+                config.baseForegroundColor = .white
             } else {
                 config.image = UIImage(systemName: "person.crop.circle.badge.checkmark")
-                config.baseBackgroundColor = .systemIndigo
+                config.baseBackgroundColor = AppTheme.copperDark
                 config.baseForegroundColor = .white
             }
 
@@ -313,7 +326,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         let providerNoteLabel = UILabel()
         providerNoteLabel.text = "Use the same sign-in on each device."
         providerNoteLabel.font = .preferredFont(forTextStyle: .footnote)
-        providerNoteLabel.textColor = .secondaryLabel
+        providerNoteLabel.textColor = AppTheme.muted
         providerNoteLabel.textAlignment = .center
         providerNoteLabel.numberOfLines = 0
         signInStack.addArrangedSubview(providerNoteLabel)
@@ -321,8 +334,10 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         // MARK: - Safari setup
 
         setupTitleLabel.text = "Finish setup in Safari"
-        setupTitleLabel.font = .systemFont(ofSize: 20, weight: .bold)
-        setupTitleLabel.textColor = .label
+        setupTitleLabel.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: UIFont(name: "Georgia-Bold", size: 20) ?? .preferredFont(forTextStyle: .title2))
+        setupTitleLabel.adjustsFontForContentSizeCategory = true
+        setupTitleLabel.numberOfLines = 0
+        setupTitleLabel.textColor = AppTheme.ink
 
         setupStack.axis = .vertical
         setupStack.spacing = 14
@@ -367,7 +382,9 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         settingsConfig.title = "Open Settings"
         settingsConfig.image = UIImage(systemName: "gear")
         settingsConfig.imagePadding = 8
-        settingsConfig.cornerStyle = .large
+        settingsConfig.cornerStyle = .fixed
+        settingsConfig.background.cornerRadius = 9
+        settingsConfig.baseForegroundColor = AppTheme.copperDark
 
         let openSettingsButton = UIButton(type: .system)
         openSettingsButton.configuration = settingsConfig
@@ -386,7 +403,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         // MARK: - Sign out and account deletion
 
         signOutButton.setTitle("Sign Out", for: .normal)
-        signOutButton.setTitleColor(.systemRed, for: .normal)
+        signOutButton.setTitleColor(AppTheme.muted, for: .normal)
         signOutButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         signOutButton.addTarget(self, action: #selector(signOut), for: .touchUpInside)
 
@@ -395,7 +412,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         // Account creation happens in this app on iOS, so account deletion has
         // to be reachable here too (App Store guideline 5.1.1(v)).
         deleteAccountButton.setTitle("Delete Account", for: .normal)
-        deleteAccountButton.setTitleColor(.systemRed, for: .normal)
+        deleteAccountButton.setTitleColor(AppTheme.danger, for: .normal)
         deleteAccountButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         deleteAccountButton.addTarget(self, action: #selector(confirmDeleteAccount), for: .touchUpInside)
 
@@ -417,7 +434,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         numberLabel.textAlignment = .center
         numberLabel.font = .systemFont(ofSize: 14, weight: .bold)
         numberLabel.textColor = .white
-        numberLabel.backgroundColor = .systemIndigo
+        numberLabel.backgroundColor = AppTheme.copperDark
         numberLabel.layer.cornerRadius = 14
         numberLabel.layer.masksToBounds = true
         numberLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -430,12 +447,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         let titleLabel = UILabel()
         titleLabel.text = title
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
-        titleLabel.textColor = .label
+        titleLabel.textColor = AppTheme.ink
+        titleLabel.numberOfLines = 0
 
         let detailLabel = UILabel()
         detailLabel.text = detail
         detailLabel.font = .preferredFont(forTextStyle: .subheadline)
-        detailLabel.textColor = .secondaryLabel
+        detailLabel.textColor = AppTheme.muted
         detailLabel.numberOfLines = 0
 
         let textStack = UIStackView(arrangedSubviews: [
@@ -455,7 +473,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         return row
     }
-    
+
     private func refreshIOSView(message: String? = nil) {
         let session = try? AppSessionStore.read()
         let signedIn = session != nil
@@ -472,7 +490,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         if signedIn {
             statusIconView.image = UIImage(systemName: "checkmark.circle.fill")
-            statusIconView.tintColor = .systemGreen
+            statusIconView.tintColor = AppTheme.success
 
             statusTitleLabel.text = "You're signed in"
 
@@ -488,7 +506,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             }
         } else {
             statusIconView.image = UIImage(systemName: "icloud.slash")
-            statusIconView.tintColor = .secondaryLabel
+            statusIconView.tintColor = AppTheme.muted
 
             statusTitleLabel.text = "Cloud sync is off"
             statusDetailLabel.text =
