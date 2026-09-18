@@ -378,21 +378,27 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             )
         )
 
+        // A gear beside the heading rather than a full-width button under the
+        // steps: it sits next to the step that needs it and costs no height.
         var settingsConfig = UIButton.Configuration.tinted()
-        settingsConfig.title = "Open Settings"
         settingsConfig.image = UIImage(systemName: "gear")
-        settingsConfig.imagePadding = 8
-        settingsConfig.cornerStyle = .fixed
-        settingsConfig.background.cornerRadius = 9
+        settingsConfig.cornerStyle = .capsule
         settingsConfig.baseForegroundColor = AppTheme.copperDark
+        settingsConfig.baseBackgroundColor = AppTheme.copper
 
         let openSettingsButton = UIButton(type: .system)
         openSettingsButton.configuration = settingsConfig
+        openSettingsButton.accessibilityLabel = "Open Settings"
+        openSettingsButton.setContentHuggingPriority(.required, for: .horizontal)
         openSettingsButton.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
-        setupStack.addArrangedSubview(openSettingsButton)
+
+        let setupHeader = UIStackView(arrangedSubviews: [setupTitleLabel, openSettingsButton])
+        setupHeader.axis = .horizontal
+        setupHeader.alignment = .center
+        setupHeader.spacing = 12
 
         let setupContainer = UIStackView(arrangedSubviews: [
-            setupTitleLabel,
+            setupHeader,
             setupStack
         ])
         setupContainer.axis = .vertical
