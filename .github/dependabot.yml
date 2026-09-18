@@ -1,32 +1,29 @@
 version: 2
+
+# One grouped pull request per week across every ecosystem.
+multi-ecosystem-groups:
+  all-updates:
+    schedule:
+      interval: weekly
+      day: monday
+
 updates:
   - package-ecosystem: npm
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    groups:
-      development-tools:
-        dependency-type: development
+    patterns: ["*"]
+    multi-ecosystem-group: all-updates
 
   - package-ecosystem: bundler
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
+    patterns: ["*"]
+    multi-ecosystem-group: all-updates
 
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
+    patterns: ["*"]
+    multi-ecosystem-group: all-updates
 
   - package-ecosystem: docker
     directory: /server
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 3
+    patterns: ["*"]
+    multi-ecosystem-group: all-updates
