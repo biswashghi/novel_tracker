@@ -20,7 +20,7 @@ STAGING_PROJECT ?= novel-tracker-staging
 STAGING_COMPOSE = $(NOVEL_ENV) docker compose -p $(STAGING_PROJECT) -f compose.yml -f compose.staging.yml
 PRODUCTION_COMPOSE = $(NOVEL_ENV) docker compose -p novel-tracker -f compose.yml -f compose.production.yml
 
-.PHONY: local-up local-test local-down local-reset docker-build staging-test package-test production-validate deployment-test
+.PHONY: local-up local-test local-down local-reset docker-build staging-test package-test safari-test platform-test production-validate deployment-test
 
 local-up:
 	$(LOCAL_COMPOSE) up -d --build --wait
@@ -52,6 +52,7 @@ staging-test:
 	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error http://127.0.0.1:$${NOVEL_API_STAGING_PORT:-8792}/ready >/dev/null || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error --retry 60 --retry-delay 2 --retry-all-errors http://127.0.0.1:$${NOVEL_AUTH_STAGING_PORT:-8793}/realms/novel-tracker/.well-known/openid-configuration >/dev/null || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run test:integration || status=$$?; fi; \
+	  if [[ $$status -eq 0 ]]; then $(STAGING_COMPOSE) exec -T postgres psql -U novel_tracker -d novel_tracker -tAc "SELECT EXISTS (SELECT 1 FROM api_client_usage WHERE api_version = 'v1' AND client_platform = 'integration')::int" | grep -qx 1 || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run build:e2e || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run test:e2e || status=$$?; fi; \
 	  if [[ $$status -ne 0 ]]; then $(STAGING_COMPOSE) logs --no-color > staging.log 2>&1 || true; fi; \
@@ -71,6 +72,19 @@ package-test:
 	  unzip -q "$$package" -d "$$unpacked"; \
 	  chmod -R a+rX "$$unpacked"; \
 	  NOVEL_EXTENSION_DIR="$$unpacked" npm run test:e2e:package
+
+safari-test:
+	npm run package:safari
+	project="build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj"; \
+	  xcodebuild -project "$$project" -scheme "Novel Tracker (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build; \
+	  xcodebuild -project "$$project" -scheme "Novel Tracker (iOS)" -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+platform-test:
+ifeq ($(shell uname -s),Darwin)
+	$(MAKE) safari-test
+else
+	@echo "Safari compile check requires macOS; the protected PR gate runs it."
+endif
 
 production-validate:
 	$(PRODUCTION_COMPOSE) config --quiet

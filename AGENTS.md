@@ -72,3 +72,23 @@ and `NOVEL_TRACKER_VERSION_OVERRIDE` for `scripts/package-safari.sh`.
 Omitting all of these (the normal release path) falls back to
 `package.json`'s real version exactly as before — nothing about a normal
 `npm run build`/`package:safari` changed.
+
+## API compatibility
+
+Public API paths are major-versioned. Treat every route registered in
+`docs/api-versions.json` as an installed-client contract:
+
+- Never make a breaking behavior, request, response, or route change inside an
+  existing API version. Add a new major version and keep the old handler.
+- Never delete an API version's registry entry. Move it through `current` →
+  `supported` → `retired`; the old handler stays fully supported until removal.
+- Retire an API only after every known installed copy has moved to the new API,
+  its usage ledger has been quiet for seven days, all four distribution checks
+  are current, and an evidence document and explicit owner approval exist.
+  `npm run api:compatibility` and the protected PR gate enforce this transition.
+- Every new client request must keep sending API version, extension/app version,
+  and platform headers. Never put account, device, token, or library data in the
+  API usage ledger.
+
+See [docs/sync-api.md](docs/sync-api.md#api-lifecycle-rules) for the complete
+contract and rollout sequence.

@@ -1,4 +1,5 @@
 import { applyMutationBatch, observeClock } from "./sync-core.js";
+import { API_ROUTES, apiClientHeaders } from "./api-version.js";
 
 /**
  * Rebuild local state around the server's answer. `survivors` are the pending
@@ -65,9 +66,10 @@ function resolveRejections(sent, rejectedMutations) {
  * supplied by the host so local-only users never need to construct this class.
  */
 export class SyncClient {
-  constructor({ baseUrl, getAccessToken, fetchImpl = globalThis.fetch?.bind(globalThis) }) {
+  constructor({ baseUrl, getAccessToken, clientIdentity, fetchImpl = globalThis.fetch?.bind(globalThis) }) {
     this.baseUrl = String(baseUrl || "").replace(/\/$/, "");
     this.getAccessToken = getAccessToken;
+    this.clientIdentity = clientIdentity;
     this.fetchImpl = fetchImpl;
   }
 
@@ -79,6 +81,7 @@ export class SyncClient {
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
+        ...apiClientHeaders(this.clientIdentity),
         ...(options.headers || {})
       }
     });
@@ -89,7 +92,7 @@ export class SyncClient {
   async push(state) {
     const sent = state.pendingMutations;
     if (!sent.length) return { state, cursor: state.cursor || "", rejected: [] };
-    const result = await this.request("/v1/sync/mutations", {
+    const result = await this.request(API_ROUTES.pushMutations, {
       method: "POST",
       body: JSON.stringify({ mutations: sent })
     });
@@ -108,7 +111,7 @@ export class SyncClient {
     let next = state;
     let hasMore = false;
     do {
-      const result = await this.request(`/v1/sync?cursor=${encodeURIComponent(next.cursor || "")}`);
+      const result = await this.request(`${API_ROUTES.pullSync}?cursor=${encodeURIComponent(next.cursor || "")}`);
       next = applyMutationBatch(next, result.mutations || []);
       next.cursor = result.cursor || next.cursor || "";
       hasMore = Boolean(result.hasMore);

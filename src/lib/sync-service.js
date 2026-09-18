@@ -4,6 +4,8 @@ import { getStorageLocal } from "./extension-api.js";
 import { disconnectSyncAccount, prepareSyncForAccount, saveSyncState } from "./storage.js";
 import { SyncClient } from "./sync-client.js";
 import { API_BASE_URL } from "./config.js";
+import { getApiClientIdentity } from "./api-client-identity.js";
+import { API_ROUTES, apiClientHeaders } from "./api-version.js";
 
 export const SYNC_META_KEY = "novel-tracker:sync-meta";
 
@@ -75,7 +77,12 @@ async function synchronize() {
   await writeMeta({ state: "syncing", lastError: "" });
   try {
     let state = await prepareSyncForAccount(account.subject);
-    const client = new SyncClient({ baseUrl: API_BASE_URL, getAccessToken, fetchImpl: platformFetch });
+    const client = new SyncClient({
+      baseUrl: API_BASE_URL,
+      getAccessToken,
+      clientIdentity: getApiClientIdentity(),
+      fetchImpl: platformFetch
+    });
     state = (await client.pull(state)).state;
     await saveSyncState(state);
     const pushed = await client.push(state);
@@ -113,9 +120,9 @@ export function syncNow() {
 export async function deleteAccount() {
   const token = await getAccessToken();
   if (!token) throw new Error("Sign in is required to delete your account");
-  const response = await platformFetch(`${API_BASE_URL}/v1/account`, {
+  const response = await platformFetch(`${API_BASE_URL}${API_ROUTES.deleteAccount}`, {
     method: "DELETE",
-    headers: { authorization: `Bearer ${token}` }
+    headers: { authorization: `Bearer ${token}`, ...apiClientHeaders(getApiClientIdentity()) }
   });
   if (!response.ok) throw new Error(`Account deletion failed (${response.status})`);
   await signOut();
