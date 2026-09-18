@@ -174,6 +174,13 @@ separate libraries; the realm sets `duplicateEmailsAllowed` with
 `loginWithEmailAllowed` off so a shared email address does not interrupt the
 flow with Keycloak's "account already exists" screen.
 
+Deployment also makes `firstName` and `lastName` optional in the realm user
+profile. Apple supplies names only on the first authorization, so retries and
+returning users may have a verified email without names. Names are retained
+when supplied; missing names must not interrupt sign-in with Keycloak's Review
+Profile form. The configuration preserves other profile attributes and their
+validation and permissions, including the required email address.
+
 Keycloak's generic OIDC broker only accepts a GET callback, but Apple sends a
 cross-site POST when `name` or `email` is requested. Production therefore
 mounts the version-pinned, checksum-verified
@@ -186,11 +193,11 @@ provider release and an end-to-end Apple and Google sign-in test.
 
 `/etc/novel-tracker/app.env` must carry:
 
-| Variable | Purpose |
-| --- | --- |
-| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Service-account client with `realm-management` roles `manage-users` and `manage-identity-providers`, used to delete Keycloak users and create or refresh the Apple provider |
-| `KEYCLOAK_ADMIN_URL` | Optional; container-internal Keycloak address, for the same reason `KEYCLOAK_JWKS_URL` exists |
-| `APPLE_TEAM_ID`, `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple credentials, used to revoke Apple tokens and to mint the provider's client secret |
+| Variable                                                                  | Purpose                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET`                | Service-account client with `realm-management` roles `manage-users` and `manage-identity-providers`, used to delete Keycloak users and create or refresh the Apple provider |
+| `KEYCLOAK_ADMIN_URL`                                                      | Optional; container-internal Keycloak address, for the same reason `KEYCLOAK_JWKS_URL` exists                                                                               |
+| `APPLE_TEAM_ID`, `APPLE_SERVICES_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Sign in with Apple credentials, used to revoke Apple tokens and to mint the provider's client secret                                                                        |
 
 `APPLE_SERVICES_ID` is the Services ID from the Apple Developer portal, not the
 app's bundle identifier, and its return URL must be
