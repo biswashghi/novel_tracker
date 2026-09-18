@@ -20,7 +20,7 @@ STAGING_PROJECT ?= novel-tracker-staging
 STAGING_COMPOSE = $(NOVEL_ENV) docker compose -p $(STAGING_PROJECT) -f compose.yml -f compose.staging.yml
 PRODUCTION_COMPOSE = $(NOVEL_ENV) docker compose -p novel-tracker -f compose.yml -f compose.production.yml
 
-.PHONY: local-up local-test local-down local-reset docker-build staging-test package-test safari-test platform-test production-validate deployment-test
+.PHONY: local-up local-test local-down local-reset docker-build api-test staging-test package-test safari-test platform-test production-validate deployment-test
 
 local-up:
 	$(LOCAL_COMPOSE) up -d --build --wait
@@ -41,6 +41,10 @@ local-reset:
 docker-build:
 	$(STAGING_COMPOSE) build api
 
+# The full ephemeral stack (API image + Postgres + Keycloak): API contract
+# tests, then the browser E2E suite against the same stack. STAGING_E2E=0
+# stops after the API tests, which is all the API deploy pipeline needs.
+STAGING_E2E ?= 1
 staging-test:
 	@set -uo pipefail; rm -f staging.log; \
 	  cleanup() { $(STAGING_COMPOSE) down --volumes --remove-orphans; }; \
@@ -53,10 +57,13 @@ staging-test:
 	  if [[ $$status -eq 0 ]]; then curl --fail --silent --show-error --retry 60 --retry-delay 2 --retry-all-errors http://127.0.0.1:$${NOVEL_AUTH_STAGING_PORT:-8793}/realms/novel-tracker/.well-known/openid-configuration >/dev/null || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then npm run test:integration || status=$$?; fi; \
 	  if [[ $$status -eq 0 ]]; then $(STAGING_COMPOSE) exec -T postgres psql -U novel_tracker -d novel_tracker -tAc "SELECT EXISTS (SELECT 1 FROM api_client_usage WHERE api_version = 'v1' AND client_platform = 'integration')::int" | grep -qx 1 || status=$$?; fi; \
-	  if [[ $$status -eq 0 ]]; then npm run build:e2e || status=$$?; fi; \
-	  if [[ $$status -eq 0 ]]; then npm run test:e2e || status=$$?; fi; \
+	  if [[ $$status -eq 0 && "$(STAGING_E2E)" == 1 ]]; then npm run build:e2e || status=$$?; fi; \
+	  if [[ $$status -eq 0 && "$(STAGING_E2E)" == 1 ]]; then npm run test:e2e || status=$$?; fi; \
 	  if [[ $$status -ne 0 ]]; then $(STAGING_COMPOSE) logs --no-color > staging.log 2>&1 || true; fi; \
 	  exit $$status
+
+api-test: STAGING_E2E = 0
+api-test: staging-test
 
 package-test:
 	@set -euo pipefail; \

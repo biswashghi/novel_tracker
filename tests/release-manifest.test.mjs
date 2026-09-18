@@ -9,7 +9,6 @@ const root = path.resolve(import.meta.dirname, '..');
 const script = path.join(root, 'scripts/release-manifest.mjs');
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const apiImage = `ghcr.io/example/novel-tracker-api@sha256:${'a'.repeat(64)}`;
 
 async function fixture() {
   const directory = await mkdtemp(path.join(tmpdir(), 'novel-release-manifest-'));
@@ -30,7 +29,7 @@ function run(args) {
   return spawnSync(process.execPath, [script, ...args], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, GITHUB_SHA: commit, NOVEL_API_IMAGE: apiImage },
+    env: { ...process.env, GITHUB_SHA: commit },
   });
 }
 
@@ -41,7 +40,6 @@ test('release manifest binds all store packages to one version and commit', asyn
 
   const contents = JSON.parse(await readFile(manifest, 'utf8'));
   assert.equal(contents.commit, commit);
-  assert.equal(contents.apiImage, apiImage);
   assert.ok(Number.isInteger(contents.appleBuildNumber));
   assert.match(contents.schemaMigration.version, /^\d{4}_/);
   assert.deepEqual(

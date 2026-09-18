@@ -413,10 +413,8 @@ node --input-type=module -e '
   // -----------------------------------------------------------------------
   //
   // `xcrun safari-web-extension-converter` hardcodes MARKETING_VERSION to
-  // "1.0" and never touches it again on regeneration — confirmed the hard
-  // way: an upload_to_app_store attempt failed with "The version number has
-  // been previously used" because every build was still shipping as 1.0
-  // regardless of what package.json said.
+  // "1.0"; without this every upload would ship as 1.0 and App Store Connect
+  // would reject it as already used.
 
   let marketingVersionReplacements = 0;
 

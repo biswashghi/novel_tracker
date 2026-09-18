@@ -130,18 +130,12 @@ process.
 
 ## Release Readiness
 
-Routine releases use the guarded process in [docs/release.md](docs/release.md):
-reviewed pull request, aggregate `PR Gate`, immutable candidate artifacts,
-persistent staging, manual production approval, and an explicit release kill
-switch. The repository version is not a release authorization.
+Routine releases follow [docs/release.md](docs/release.md): a version bump
+merged through the `PR Gate`, immutable candidate artifacts, and one manual
+approval before the stores are contacted.
 
 Before approving a public store release, confirm:
 
-- `npm test` passes.
-- `npm run build` succeeds.
-- `npm run package:webstore` creates a ZIP without validation errors.
-- `dist/manifest.json` version matches `package.json`.
-- Icons exist at 16, 32, 48, and 128 pixels.
 - Popup can save the active chapter.
 - Auto-update advances a tracked novel after navigating to the next matching chapter.
 - Library page can search, sort, edit, delete, open chapters, and show history.
