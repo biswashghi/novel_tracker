@@ -53,7 +53,9 @@ returns:
 At most 500 mutations per batch (`413` beyond that) and 8 KB of JSON per
 mutation. The body limit is derived from the two so a worst-case *legal* batch
 can never be refused by an opaque body-size error before per-item validation
-runs.
+runs. Clients push in slices of at most 500 (`MAX_PUSH_BATCH` in
+`src/lib/sync-client.js`): linking a device to a different account re-enqueues
+its whole library, which can exceed one batch.
 
 ### Rejections
 
