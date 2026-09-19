@@ -20,6 +20,7 @@
     "package:safari": "bash scripts/package-safari.sh",
     "package:firefox": "node scripts/package-firefox.mjs",
     "icons": "node scripts/generate-icons.mjs",
+    "store:assets": "node scripts/generate-store-assets.mjs",
     "package:webstore": "node scripts/package-webstore.mjs",
     "test": "node --test",
     "test:coverage": "node --experimental-test-coverage --test --test-coverage-lines=88 --test-coverage-branches=74 --test-coverage-functions=85",
