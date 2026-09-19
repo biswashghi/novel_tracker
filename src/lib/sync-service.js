@@ -1,7 +1,7 @@
 import { getAccessToken, getAccountStatus, signOut } from "./auth.js";
 import { platformFetch } from "./platform-http.js";
 import { getStorageLocal } from "./extension-api.js";
-import { disconnectSyncAccount, prepareSyncForAccount, saveSyncState } from "./storage.js";
+import { disconnectSyncAccount, markAccountSynced, prepareSyncForAccount, saveSyncState } from "./storage.js";
 import { SyncClient } from "./sync-client.js";
 import { API_BASE_URL } from "./config.js";
 import { getApiClientIdentity } from "./api-client-identity.js";
@@ -89,7 +89,7 @@ async function synchronize() {
     state = pushed.state;
     await saveSyncState(state);
     state = (await client.pull(state)).state;
-    await saveSyncState(state);
+    await markAccountSynced(state);
     const rejected = pushed.rejected || [];
     if (rejected.length) {
       const reasons = [...new Set(rejected.map((item) => item.reason))].join(", ");

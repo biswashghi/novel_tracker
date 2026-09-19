@@ -221,10 +221,10 @@ function pruneAppliedMutations(state) {
   }
 }
 
-export function createLocalMutation(state, { novelId, generation, type, payload, now = Date.now() }) {
+export function createLocalMutation(state, { novelId, generation, type, payload, now = Date.now(), mutationId = randomId() }) {
   const clock = tickClock(state.clock, state.deviceId, now);
   return {
-    mutationId: randomId(),
+    mutationId,
     deviceId: state.deviceId,
     novelId,
     generation,
@@ -289,6 +289,31 @@ export function materializeNovel(novel) {
 
 export function materializeNovels(state) {
   return Object.values(state.novels).map(materializeNovel).filter(Boolean);
+}
+
+// FNV-1a over two seeds: a short, stable, synchronous fingerprint for
+// content-derived ids and checksums. Not cryptographic; collisions only
+// matter within one account's novel set.
+export function stableHash(value) {
+  const text = String(value);
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    a = Math.imul(a ^ code, 0x01000193) >>> 0;
+    b = Math.imul(b ^ code, 0x811c9dc5) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+// Fingerprint of everything a sync account would receive from this device:
+// every live novel's fields and history, in id order. Two states with the
+// same checksum have nothing to push that the other lacks.
+export function libraryChecksum(state) {
+  const novels = materializeNovels(state)
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+    .map((novel) => ({ ...novel, chapterHistory: novel.chapterHistory.map((event) => event.id) }));
+  return stableHash(JSON.stringify(novels));
 }
 
 function normalizeIdentityText(value) {

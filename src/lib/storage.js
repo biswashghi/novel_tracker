@@ -2,9 +2,11 @@ import {
   applyMutation,
   createSyncState,
   enqueueLocalMutation,
+  libraryChecksum,
   matchesNovelIdentity,
   materializeNovels,
-  purgeExpiredTombstones
+  purgeExpiredTombstones,
+  stableHash
 } from "./sync-core.js";
 import { getStorageLocal } from "./extension-api.js";
 
@@ -101,9 +103,28 @@ export async function saveSyncState(state) {
   await storage.set({ [SYNC_STORAGE_KEY]: state, [STORAGE_KEY]: activeNovels });
 }
 
+/**
+ * Links this device's library to `subject`, queueing whatever that account
+ * has not seen from this device.
+ *
+ * Accounts are remembered after each successful sync (`markAccountSynced`),
+ * so switching back to one whose recorded checksum still matches the
+ * library queues nothing and resumes from its own cursor. When something did
+ * change, the queued mutations carry ids derived from the account and the
+ * content, so the server's receipts acknowledge the unchanged ones instead of
+ * re-applying them.
+ */
 export async function prepareSyncForAccount(subject) {
   let state = await getSyncState();
   if (state.syncAccountSubject === subject) return state;
+  const known = state.syncAccounts?.[subject];
+  state.syncAccountSubject = subject;
+  state.cursor = known?.cursor || "";
+  if (known?.checksum === libraryChecksum(state)) {
+    await saveSyncState(state);
+    return state;
+  }
+  const linkId = (key) => `link:${subject}:${key}`;
   for (const novel of Object.values(state.novels || {})) {
     const fields = Object.fromEntries(Object.entries(novel.fields || {}).map(([name, register]) => [name, register.value]));
     const history = Object.values(novel.chapterHistory || {}).sort((left, right) => left.readAt.wallMs - right.readAt.wallMs);
@@ -111,24 +132,44 @@ export async function prepareSyncForAccount(subject) {
       novelId: novel.id,
       generation: novel.generation,
       type: "novel.create",
-      payload: { ...fields, event: history[0] }
+      payload: { ...fields, event: history[0] },
+      mutationId: linkId(`${novel.id}:${stableHash(JSON.stringify([fields, history[0]?.id || ""]))}`)
     });
     for (const event of history.slice(1)) {
       state = enqueue(state, {
         novelId: novel.id,
         generation: novel.generation,
         type: "checkpoint.record",
-        payload: { event }
+        payload: { event },
+        mutationId: linkId(`${novel.id}:cp:${stableHash(event.id)}`)
       });
     }
     if (novel.lifecycle === "deleted") {
-      state = enqueue(state, { novelId: novel.id, generation: novel.generation, type: "novel.delete", payload: {} });
+      state = enqueue(state, {
+        novelId: novel.id,
+        generation: novel.generation,
+        type: "novel.delete",
+        payload: {},
+        mutationId: linkId(`${novel.id}:del:${novel.generation}`)
+      });
     }
   }
-  state.cursor = "";
-  state.syncAccountSubject = subject;
   await saveSyncState(state);
   return state;
+}
+
+// Records what the linked account now holds, so a later switch back to it
+// can skip the re-upload (see prepareSyncForAccount).
+export async function markAccountSynced(state) {
+  const next = {
+    ...state,
+    syncAccounts: {
+      ...state.syncAccounts,
+      [state.syncAccountSubject]: { cursor: state.cursor || "", checksum: libraryChecksum(state) }
+    }
+  };
+  await saveSyncState(next);
+  return next;
 }
 
 export async function hasLocalLibraryData() {
