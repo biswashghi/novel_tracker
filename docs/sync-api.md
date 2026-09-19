@@ -53,7 +53,19 @@ returns:
 At most 500 mutations per batch (`413` beyond that) and 8 KB of JSON per
 mutation. The body limit is derived from the two so a worst-case *legal* batch
 can never be refused by an opaque body-size error before per-item validation
-runs.
+runs. Clients push in slices of at most 500 (`MAX_PUSH_BATCH` in
+`src/lib/sync-client.js`): linking a device to a different account can queue
+its whole library, which can exceed one batch.
+
+### Re-linking an account
+
+A device remembers, per account it has synced with, that account's cursor and
+a checksum of the library at the end of the last sync (`syncAccounts` in the
+local state). Switching back to an account whose checksum still matches queues
+nothing and resumes from that cursor. Otherwise the queued snapshot uses
+mutation ids derived from the account, novel, and content
+(`link:<subject>:<novelId>:<hash>`), so receipts acknowledge the unchanged
+parts instead of re-applying them.
 
 ### Rejections
 

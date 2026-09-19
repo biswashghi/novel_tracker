@@ -1,6 +1,9 @@
 import { applyMutationBatch, observeClock } from "./sync-core.js";
 import { API_ROUTES, apiClientHeaders } from "./api-version.js";
 
+// Mirrors MAX_MUTATIONS_PER_BATCH in server/index.js.
+export const MAX_PUSH_BATCH = 500;
+
 /**
  * Rebuild local state around the server's answer. `survivors` are the pending
  * mutations that were neither acknowledged nor rejected, already resolved
@@ -90,21 +93,32 @@ export class SyncClient {
   }
 
   async push(state) {
-    const sent = state.pendingMutations;
-    if (!sent.length) return { state, cursor: state.cursor || "", rejected: [] };
-    const result = await this.request(API_ROUTES.pushMutations, {
-      method: "POST",
-      body: JSON.stringify({ mutations: sent })
-    });
-    const acknowledged = new Set(result.acknowledgedMutationIds || sent.map((item) => item.mutationId));
-    // The server explicitly rejects (never silently skips) structurally
-    // invalid mutations; dropping them here is what keeps one poison pill from
-    // wedging every future sync. Rejections surface to the user via sync meta.
-    const rejections = resolveRejections(sent, result.rejectedMutations);
-    const survivors = sent.filter((item, index) => !acknowledged.has(item.mutationId) && !rejections.indices.has(index));
-    const next = adoptCanonicalState(state, result, survivors);
-    next.cursor = result.cursor || next.cursor || "";
-    return { state: next, cursor: next.cursor, rejected: rejections.reported };
+    let next = state;
+    const rejected = [];
+    // Linking a device to a different account re-enqueues the whole library,
+    // which can exceed the server's per-request limit; one oversized batch
+    // would be refused forever (413), so send in slices the server accepts.
+    while (next.pendingMutations.length) {
+      const sent = next.pendingMutations.slice(0, MAX_PUSH_BATCH);
+      const rest = next.pendingMutations.slice(MAX_PUSH_BATCH);
+      const result = await this.request(API_ROUTES.pushMutations, {
+        method: "POST",
+        body: JSON.stringify({ mutations: sent })
+      });
+      const acknowledged = new Set(result.acknowledgedMutationIds || sent.map((item) => item.mutationId));
+      // The server explicitly rejects (never silently skips) structurally
+      // invalid mutations; dropping them here is what keeps one poison pill
+      // from wedging every future sync. Rejections surface via sync meta.
+      const rejections = resolveRejections(sent, result.rejectedMutations);
+      const survivors = sent.filter((item, index) => !acknowledged.has(item.mutationId) && !rejections.indices.has(index));
+      rejected.push(...rejections.reported);
+      next = adoptCanonicalState(next, result, [...survivors, ...rest]);
+      next.cursor = result.cursor || next.cursor || "";
+      // Anything neither acknowledged nor rejected stays pending for the next
+      // sync rather than being resent in a loop here.
+      if (survivors.length) break;
+    }
+    return { state: next, cursor: next.cursor || "", rejected };
   }
 
   async pull(state) {

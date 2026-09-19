@@ -32,6 +32,7 @@ const {
   normalizeRating,
   normalizeTags,
   normalizeUrl,
+  markAccountSynced,
   prepareSyncForAccount,
   saveSyncState,
   updateNovel,
@@ -559,6 +560,69 @@ test("switching accounts queues a fresh snapshot of the retained local library",
   const switched = await prepareSyncForAccount("new-account");
   assert.equal(switched.syncAccountSubject, "new-account");
   assert.ok(switched.pendingMutations.some((item) => item.type === "novel.create"));
+});
+
+test("switching back to a remembered account with an unchanged library queues nothing", async () => {
+  globalThis.localStorage.clear();
+  await upsertNovel({
+    title: "Local Novel",
+    sourceSite: "example.test",
+    lastReadChapterUrl: "https://example.test/chapter-1",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  let state = await getSyncState();
+  state.pendingMutations = [];
+  state.syncAccountSubject = "google-user";
+  state.cursor = "17";
+  await markAccountSynced(state);
+
+  await prepareSyncForAccount("apple-user");
+  state = await getSyncState();
+  state.pendingMutations = [];
+  state.cursor = "3";
+  await markAccountSynced(state);
+
+  const back = await prepareSyncForAccount("google-user");
+  assert.equal(back.syncAccountSubject, "google-user");
+  assert.equal(back.cursor, "17", "resumes from the account's own cursor");
+  assert.deepEqual(back.pendingMutations, [], "nothing to upload when the library is unchanged");
+});
+
+test("re-linking an account queues content-derived ids so unchanged novels dedupe server-side", async () => {
+  globalThis.localStorage.clear();
+  await upsertNovel({
+    title: "Local Novel",
+    sourceSite: "example.test",
+    lastReadChapterUrl: "https://example.test/chapter-1",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  let state = await getSyncState();
+  state.pendingMutations = [];
+  state.syncAccountSubject = "";
+  await saveSyncState(state);
+
+  const first = await prepareSyncForAccount("google-user");
+  const firstIds = first.pendingMutations.map((item) => item.mutationId);
+  assert.ok(firstIds.every((id) => id.startsWith("link:google-user:")));
+
+  state = await getSyncState();
+  state.pendingMutations = [];
+  await saveSyncState(state);
+  await prepareSyncForAccount("apple-user");
+  await upsertNovel({
+    title: "Second Novel",
+    sourceSite: "example.test",
+    lastReadChapterUrl: "https://example.test/other/chapter-1",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  state = await getSyncState();
+  state.pendingMutations = [];
+  await saveSyncState(state);
+
+  const again = await prepareSyncForAccount("google-user");
+  const againIds = again.pendingMutations.map((item) => item.mutationId);
+  for (const id of firstIds) assert.ok(againIds.includes(id), `unchanged novel keeps id ${id}`);
+  assert.equal(againIds.length, firstIds.length + 1, "only the novel added meanwhile is new");
 });
 
 test("importing a backup keeps the device linked to its synced account", async () => {

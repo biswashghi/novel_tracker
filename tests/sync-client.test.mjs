@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyMutation, createSyncState, enqueueLocalMutation } from "../src/lib/sync-core.js";
-import { SyncClient } from "../src/lib/sync-client.js";
+import { MAX_PUSH_BATCH, SyncClient } from "../src/lib/sync-client.js";
 import {
   API_CLIENT_PLATFORM_HEADER,
   API_CLIENT_VERSION_HEADER,
@@ -229,4 +229,38 @@ test("a slim response with no canonical blob still acks, remaps, and advances", 
   assert.notEqual(result.state.pendingMutations[0].mutationId, firstId);
   assert.equal(result.state.pendingMutations[0].novelId, "cloud-id", "survivor is remapped to the canonical id");
   assert.equal(result.cursor, "7");
+});
+
+test("an oversized pending queue is pushed in server-sized chunks with mappings carried forward", async () => {
+  let local = createSyncState({ deviceId: "local-device", now: 1 });
+  for (let index = 0; index < MAX_PUSH_BATCH * 2 + 200; index += 1) {
+    local = enqueueLocalMutation(local, {
+      novelId: "local-novel",
+      generation: 1,
+      type: "checkpoint.record",
+      payload: { event: { id: `event-${index}`, url: `https://example.test/${index}` } }
+    }, { now: 2 + index }).state;
+  }
+  const batches = [];
+  const fetchImpl = async (_url, options) => {
+    const { mutations } = JSON.parse(options.body);
+    batches.push(mutations);
+    return {
+      ok: true,
+      async json() {
+        return {
+          acknowledgedMutationIds: mutations.map((item) => item.mutationId),
+          novelIdMappings: [{ localNovelId: "local-novel", canonicalNovelId: "cloud-novel" }],
+          mutations: [],
+          cursor: String(batches.length)
+        };
+      }
+    };
+  };
+  const client = new SyncClient({ baseUrl: "https://api.test", getAccessToken: async () => "token", fetchImpl });
+  const { state, cursor } = await client.push(local);
+  assert.deepEqual(batches.map((batch) => batch.length), [MAX_PUSH_BATCH, MAX_PUSH_BATCH, 200]);
+  assert.ok(batches[1].every((item) => item.novelId === "cloud-novel"), "later chunks use the canonical id from the first response");
+  assert.equal(state.pendingMutations.length, 0);
+  assert.equal(cursor, "3");
 });
