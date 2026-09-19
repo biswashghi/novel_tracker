@@ -8,8 +8,8 @@
     "node": ">=22.13 <23"
   },
   "dependencies": {
-    "fastify": "^5.12.3",
-    "jose": "^5.10.0",
+    "fastify": "^5.12.4",
+    "jose": "^6.2.12",
     "pg": "^8.13.3"
   },
   "scripts": {
@@ -45,7 +45,7 @@
     "store:screenshots": "node scripts/capture-appstore-screenshots.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.1",
+    "@playwright/test": "^1.63.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.10.0",
     "globals": "^17.12.0",
