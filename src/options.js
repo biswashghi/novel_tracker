@@ -419,6 +419,7 @@ function createCard(novel) {
 
   // Chapter badge
   const chapterPill = element("span", "chapter-pill");
+  chapterPill.title = novel.lastReadChapterLabel || "";
   chapterPill.append(icon("bookmark"), document.createTextNode(novel.lastReadChapterLabel || "Saved page"));
   titleRow.append(titleBlock, chapterPill);
 
