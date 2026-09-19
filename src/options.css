@@ -1074,39 +1074,6 @@ select {
     );
 }
 
-.card::after {
-  content: "";
-
-  position: absolute;
-
-  top: 0;
-  right: 42px;
-
-  width: 21px;
-  height: 10px;
-
-  opacity: 0;
-
-  transform:
-    translateY(-10px);
-
-  background: var(--copper-soft);
-
-  clip-path:
-    polygon(
-      0 0,
-      100% 0,
-      100% 100%,
-      50% 65%,
-      0 100%
-    );
-
-  transition:
-    opacity 160ms ease,
-    height 160ms ease,
-    transform 180ms cubic-bezier(.2,.8,.2,1);
-}
-
 .card:hover {
   transform:
     translateY(-3px)
@@ -1116,14 +1083,6 @@ select {
     rgba(189, 105, 59, 0.38);
 
   box-shadow: var(--shadow);
-}
-
-.card:hover::after {
-  height: 28px;
-  opacity: 1;
-
-  transform:
-    translateY(0);
 }
 
 /* =========================================================
@@ -1323,12 +1282,12 @@ select {
 }
 
 .chapter-pill {
-  display: inline-flex;
-  align-items: center;
-
-  gap: 5px;
+  display: inline-block;
 
   max-width: 260px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   padding:
     5px
@@ -1352,6 +1311,10 @@ select {
 .chapter-pill svg {
   width: 11px;
   height: 13px;
+
+  margin-right: 5px;
+
+  vertical-align: -2px;
 }
 
 .chapter-link {
@@ -2026,10 +1989,6 @@ select {
 
   .card::before {
     width: 3px;
-  }
-
-  .card::after {
-    display: none;
   }
 
   .cover {
