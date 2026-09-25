@@ -352,30 +352,47 @@ export function isLikelyChapterPage(input) {
 }
 
 /**
- * True when both records name a real novel page (not just the chapter they
- * were saved from) on the same site, and those pages differ. Parsers derive
- * the novel page from the site's structure, so two different ones mean two
- * different novels, however alike their chapter URLs look: /book/<a>/chapter-2
- * and /book/<b>/chapter-9 have the same shape.
+ * A comparable form of a novel page, or "" when the record has no real one.
+ *
+ * Ignores www., a trailing slash, the query and the fragment. A home that is
+ * just the site root (Shin Translations' old parser) or equal to the chapter
+ * it was saved with (the generic fallback, e.g. a Patreon post) is not a
+ * novel page, so it counts as none.
+ */
+function comparableNovelHome(record) {
+  const key = (value) => {
+    try {
+      const url = new URL(value);
+      const path = url.pathname.replace(/\/+$/, "");
+      return `${url.hostname.replace(/^www\./, "")}${path}`;
+    } catch {
+      return "";
+    }
+  };
+  const home = key(record?.novelHomeUrl);
+  if (!home || !home.includes("/")) return "";
+  return home === key(record?.lastReadChapterUrl) ? "" : home;
+}
+
+/**
+ * True when both records name a real novel page and those pages differ.
+ * Parsers derive the novel page from the site's structure, so two different
+ * ones mean two different novels, however alike their chapter URLs look:
+ * /book/<a>/chapter-2 and /book/<b>/chapter-9 have the same shape. Only used
+ * to veto the shape-based fallback; exact identity matches never reach it.
  */
 function hasDifferentNovelHome(savedNovel, incoming) {
-  const savedHome = normalizeUrl(savedNovel.novelHomeUrl);
-  const incomingHome = normalizeUrl(incoming.novelHomeUrl);
-  if (!savedHome || !incomingHome || savedHome === incomingHome) return false;
-  if (getHostname(savedHome) !== getHostname(incomingHome)) return false;
-  // A "home" equal to the chapter it came with is the generic fallback
-  // (e.g. a Patreon post), not evidence of a distinct novel.
-  return (
-    savedHome !== normalizeUrl(savedNovel.lastReadChapterUrl) &&
-    incomingHome !== normalizeUrl(incoming.lastReadChapterUrl)
-  );
+  const savedHome = comparableNovelHome(savedNovel);
+  const incomingHome = comparableNovelHome(incoming);
+  return Boolean(savedHome && incomingHome && savedHome !== incomingHome);
+}
+
+function hasSameNovelHome(savedNovel, incoming) {
+  const savedHome = comparableNovelHome(savedNovel);
+  return Boolean(savedHome && savedHome === comparableNovelHome(incoming));
 }
 
 function matchesSavedChapterPattern(savedNovel, incoming) {
-  if (hasDifferentNovelHome(savedNovel, incoming)) {
-    return false;
-  }
-
   const savedChapter = getUrlParts(savedNovel.lastReadChapterUrl);
   const incomingChapter = getUrlParts(incoming.lastReadChapterUrl);
   const novelHome = getUrlParts(savedNovel.novelHomeUrl);
@@ -394,6 +411,12 @@ function matchesSavedChapterPattern(savedNovel, incoming) {
     incoming.novelHomeUrl || savedNovel.novelHomeUrl
   )) {
     return false;
+  }
+
+  // Both chapters name the same novel page, so their URLs need not share a
+  // shape (Wattpad parts are /<partId>-<slug> with nothing in common).
+  if (hasSameNovelHome(savedNovel, incoming)) {
+    return true;
   }
 
   const sharedPrefix = countSharedPrefix(savedChapter.segments, incomingChapter.segments);
@@ -431,6 +454,7 @@ function findTrackedNovelForAutoUpdate(novels, incoming) {
   return novels.find((novel) => {
     return (
       normalizeText(novel.sourceSite) === normalizeText(incoming.sourceSite) &&
+      !hasDifferentNovelHome(novel, incoming) &&
       matchesSavedChapterPattern(novel, incoming)
     );
   });
@@ -457,6 +481,7 @@ export function findExistingNovelForSave(novels, incoming) {
   return novels.find((novel) => {
     return (
       normalizeText(novel.sourceSite) === normalizeText(incoming.sourceSite) &&
+      !hasDifferentNovelHome(novel, incoming) &&
       matchesSavedChapterPattern(novel, incoming)
     );
   });

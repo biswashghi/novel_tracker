@@ -61,6 +61,9 @@ for (const site of SITE_LAYOUT_FIXTURES) {
   test.describe(site.site, () => {
     for (const novel of site.novels) {
       test(novel.url, async ({ page }) => {
+        // Navigation (45s) + readiness (30s) + selectors + parse poll (30s) must
+        // fit, so a redesign reports its missing elements rather than a bare timeout.
+        test.setTimeout(180_000);
         const opened = await openChapter(page, novel.url);
         test.skip(Boolean(opened.blocked), `${site.site} did not serve the chapter: ${opened.blocked}`);
         expect(opened.status, 'the seeded chapter should still exist').toBeLessThan(400);
@@ -72,7 +75,7 @@ for (const site of SITE_LAYOUT_FIXTURES) {
         // Soft, so one run reports every element that went missing at once.
         for (const selector of site.layout) {
           await expect.soft(page.locator(selector).first(), `layout element ${selector}`).toBeAttached({
-            timeout: 20_000
+            timeout: 10_000
           });
         }
 
