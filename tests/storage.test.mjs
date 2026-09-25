@@ -784,3 +784,94 @@ test("upsertNovel keeps two novels apart when their chapter URLs share a shape",
   const shadowSlave = (await getNovels()).find((novel) => novel.id === first.id);
   assert.equal(shadowSlave.lastReadChapterLabel, "Chapter 118");
 });
+
+test("autoUpdateNovelProgress keeps tracking when the parser's novel page changes form", async () => {
+  // Saved before a parser learned the real novel page, or reached through a
+  // different spelling of the same page: exact identity still wins.
+  const cases = [
+    {
+      name: "Shin Translations record saved with the site root as its home",
+      saved: {
+        title: "TNG",
+        sourceSite: "shintranslations.com",
+        novelHomeUrl: "https://shintranslations.com",
+        lastReadChapterUrl: "https://shintranslations.com/chapter/tng-vol-22-chapter-4-part-1/",
+        lastReadChapterLabel: "TNG Vol. 22 Chapter 4 Part 1"
+      },
+      next: {
+        title: "THE NEW GATE",
+        sourceSite: "shintranslations.com",
+        novelHomeUrl: "https://shintranslations.com/series/the-new-gate-tng-toc/",
+        lastReadChapterUrl: "https://shintranslations.com/chapter/tng-vol-22-chapter-4-part-2/",
+        lastReadChapterLabel: "TNG Vol. 22 Chapter 4 Part 2"
+      }
+    },
+    {
+      name: "Patreon post opened with a tracking query",
+      saved: {
+        title: "DoF 1.6 - A New Home",
+        sourceSite: "patreon.com",
+        novelHomeUrl: "https://www.patreon.com/posts/dof-1-6-new-home-167109588",
+        lastReadChapterUrl: "https://www.patreon.com/posts/dof-1-6-new-home-167109588",
+        lastReadChapterLabel: "DoF 1.6 - A New Home"
+      },
+      next: {
+        title: "DoF 1.7 - Buzzing",
+        sourceSite: "patreon.com",
+        novelHomeUrl: "https://www.patreon.com/posts/dof-1-7-buzzing-167546160",
+        lastReadChapterUrl: "https://www.patreon.com/posts/dof-1-7-buzzing-167546160?utm_source=email",
+        lastReadChapterLabel: "DoF 1.7 - Buzzing"
+      }
+    },
+    {
+      name: "the same novel page with and without www.",
+      saved: {
+        title: "Shadow Slave",
+        sourceSite: "webnovel.com",
+        novelHomeUrl: "https://www.webnovel.com/book/shadow-slave_22196546206090805",
+        lastReadChapterUrl: "https://www.webnovel.com/book/shadow-slave_22196546206090805/one_1",
+        lastReadChapterLabel: "Chapter 1: One"
+      },
+      next: {
+        title: "Shadow Slave (renamed on site)",
+        sourceSite: "webnovel.com",
+        novelHomeUrl: "https://webnovel.com/book/shadow-slave_22196546206090805/",
+        lastReadChapterUrl: "https://www.webnovel.com/book/shadow-slave_22196546206090805/two_2",
+        lastReadChapterLabel: "Chapter 2: Two"
+      }
+    }
+  ];
+
+  for (const { name, saved, next } of cases) {
+    globalThis.localStorage.clear();
+    const stored = await upsertNovel(saved);
+    const result = await autoUpdateNovelProgress(next);
+    assert.equal(result.updated, true, `${name}: ${result.reason}`);
+    assert.equal(result.novel.id, stored.id, name);
+    assert.equal(result.novel.lastReadChapterLabel, next.lastReadChapterLabel, name);
+  }
+});
+
+test("autoUpdateNovelProgress follows Wattpad parts, whose URLs share no path", async () => {
+  globalThis.localStorage.clear();
+
+  const saved = await upsertNovel({
+    title: "Empire of Ashes",
+    sourceSite: "wattpad.com",
+    novelHomeUrl: "https://www.wattpad.com/story/66766637-empire-of-ashes",
+    lastReadChapterUrl: "https://www.wattpad.com/235603347-empire-of-ashes-preview",
+    lastReadChapterLabel: "Preview"
+  });
+
+  const result = await autoUpdateNovelProgress({
+    title: "Empire of Ashes",
+    sourceSite: "wattpad.com",
+    novelHomeUrl: "https://www.wattpad.com/story/66766637-empire-of-ashes",
+    lastReadChapterUrl: "https://www.wattpad.com/235603690-empire-of-ashes-chapter-i-chains-and-bones",
+    lastReadChapterLabel: "Chapter I - Chains and Bones"
+  });
+
+  assert.equal(result.updated, true, result.reason);
+  assert.equal(result.novel.id, saved.id);
+  assert.equal(result.novel.lastReadChapterLabel, "Chapter I - Chains and Bones");
+});

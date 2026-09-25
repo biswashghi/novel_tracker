@@ -510,3 +510,20 @@ test("extractPageMetadataFromRoot ignores a Webnovel bot-check page's heading", 
   assert.equal(metadata.title, "Supreme Magus");
   assert.equal(metadata.lastReadChapterLabel, "A New Beginning");
 });
+
+test("extractPageMetadataFromRoot marks Archive of Our Own work pages that are not chapters", () => {
+  const root = createRoot({ selectors: { "h2.title.heading": { textContent: "All the Young Dudes" } } });
+
+  for (const path of ["navigate", "kudos", "bookmarks", "comments"]) {
+    const metadata = extractPageMetadataFromRoot(root, `https://archiveofourown.org/works/10057010/${path}`);
+    assert.equal(metadata.isChapterPage, false, path);
+    assert.equal(metadata.novelHomeUrl, "https://archiveofourown.org/works/10057010");
+  }
+
+  for (const url of [
+    "https://archiveofourown.org/works/10057010",
+    "https://archiveofourown.org/works/10057010/chapters/22409387"
+  ]) {
+    assert.equal(extractPageMetadataFromRoot(root, url).isChapterPage, undefined, url);
+  }
+});

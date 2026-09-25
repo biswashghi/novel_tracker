@@ -36,6 +36,13 @@
 
     const payload = globalThis.NovelTrackerPageMetadata.extractPageMetadata();
 
+    // A parser can recognise a site page that is not a chapter (AO3's
+    // chapter index, kudos, bookmarks): never move a bookmark to it.
+    if (payload?.isChapterPage === false) {
+      lastProcessedUrl = currentUrl;
+      return;
+    }
+
     if (payload?.autoProgressReady === false) {
       if (readinessUrl !== currentUrl) {
         readinessUrl = currentUrl;
