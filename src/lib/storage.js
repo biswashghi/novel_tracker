@@ -351,7 +351,31 @@ export function isLikelyChapterPage(input) {
   return hasChapterSignal(input?.lastReadChapterUrl, input?.lastReadChapterLabel, input?.novelHomeUrl);
 }
 
+/**
+ * True when both records name a real novel page (not just the chapter they
+ * were saved from) on the same site, and those pages differ. Parsers derive
+ * the novel page from the site's structure, so two different ones mean two
+ * different novels, however alike their chapter URLs look: /book/<a>/chapter-2
+ * and /book/<b>/chapter-9 have the same shape.
+ */
+function hasDifferentNovelHome(savedNovel, incoming) {
+  const savedHome = normalizeUrl(savedNovel.novelHomeUrl);
+  const incomingHome = normalizeUrl(incoming.novelHomeUrl);
+  if (!savedHome || !incomingHome || savedHome === incomingHome) return false;
+  if (getHostname(savedHome) !== getHostname(incomingHome)) return false;
+  // A "home" equal to the chapter it came with is the generic fallback
+  // (e.g. a Patreon post), not evidence of a distinct novel.
+  return (
+    savedHome !== normalizeUrl(savedNovel.lastReadChapterUrl) &&
+    incomingHome !== normalizeUrl(incoming.lastReadChapterUrl)
+  );
+}
+
 function matchesSavedChapterPattern(savedNovel, incoming) {
+  if (hasDifferentNovelHome(savedNovel, incoming)) {
+    return false;
+  }
+
   const savedChapter = getUrlParts(savedNovel.lastReadChapterUrl);
   const incomingChapter = getUrlParts(incoming.lastReadChapterUrl);
   const novelHome = getUrlParts(savedNovel.novelHomeUrl);

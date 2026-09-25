@@ -751,3 +751,36 @@ test("the serial queue keeps running after a task rejects", async () => {
   assert.equal(await following, "ok");
   assert.deepEqual(order, ["first", "second"]);
 });
+
+test("upsertNovel keeps two novels apart when their chapter URLs share a shape", async () => {
+  globalThis.localStorage.clear();
+
+  const first = await upsertNovel({
+    title: "Shadow Slave",
+    sourceSite: "novelfire.net",
+    novelHomeUrl: "https://novelfire.net/book/shadow-slave",
+    lastReadChapterUrl: "https://novelfire.net/book/shadow-slave/chapter-118",
+    lastReadChapterLabel: "Chapter 118"
+  });
+  const second = await upsertNovel({
+    title: "Lord of the Mysteries",
+    sourceSite: "novelfire.net",
+    novelHomeUrl: "https://novelfire.net/book/lord-of-the-mysteries",
+    lastReadChapterUrl: "https://novelfire.net/book/lord-of-the-mysteries/chapter-21",
+    lastReadChapterLabel: "Chapter 21"
+  });
+
+  assert.notEqual(second.id, first.id);
+  assert.equal((await getNovels()).length, 2);
+
+  const progress = await autoUpdateNovelProgress({
+    title: "Lord of the Mysteries",
+    sourceSite: "novelfire.net",
+    novelHomeUrl: "https://novelfire.net/book/lord-of-the-mysteries",
+    lastReadChapterUrl: "https://novelfire.net/book/lord-of-the-mysteries/chapter-22",
+    lastReadChapterLabel: "Chapter 22"
+  });
+  assert.equal(progress.novel.id, second.id);
+  const shadowSlave = (await getNovels()).find((novel) => novel.id === first.id);
+  assert.equal(shadowSlave.lastReadChapterLabel, "Chapter 118");
+});
