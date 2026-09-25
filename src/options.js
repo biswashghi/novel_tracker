@@ -8,6 +8,7 @@ import {
 
 import { computeReadingStats } from "./lib/reading-stats.js";
 import { novelsToCsv } from "./lib/csv.js";
+import { SORT_MODES, sortNovels } from "./lib/library-sort.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
 import { requireFirefoxSyncDataConsent } from "./lib/firefox-data-consent.js";
@@ -205,22 +206,6 @@ function matchesFilters(novel) {
   return searchMatch && statusMatch && tagMatch;
 }
 
-function sortNovels(items) {
-  const next = [...items];
-  const mode = sortSelect.value;
-
-  if (mode === "title") {
-    next.sort((a, b) => a.title.localeCompare(b.title));
-  } else if (mode === "source") {
-    next.sort((a, b) => a.sourceSite.localeCompare(b.sourceSite));
-  } else if (mode === "rating") {
-    next.sort((a, b) => (b.rating || 0) - (a.rating || 0) || new Date(b.updatedAt) - new Date(a.updatedAt));
-  } else {
-    next.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  }
-
-  return next;
-}
 
 /* =========================================================
    TAG FILTER OPTIONS
@@ -646,7 +631,7 @@ function showUndoToast(novel) {
 ========================================================= */
 
 function render() {
-  const filtered = sortNovels(novels.filter(matchesFilters));
+  const filtered = sortNovels(novels.filter(matchesFilters), sortSelect.value);
   library.replaceChildren();
 
   if (!filtered.length) {
@@ -756,7 +741,24 @@ library.addEventListener("submit", async (event) => {
 searchInput.addEventListener("input", render);
 statusFilter.addEventListener("change", render);
 tagFilter.addEventListener("change", render);
-sortSelect.addEventListener("change", render);
+// Remember the chosen order for this browser; storage can be unavailable
+// (private windows), in which case the page just starts at "Recent".
+const SORT_KEY = "novel-tracker:sort";
+try {
+  const savedSort = globalThis.localStorage?.getItem(SORT_KEY);
+  if (SORT_MODES.includes(savedSort)) sortSelect.value = savedSort;
+} catch {
+  // Keep the default order.
+}
+
+sortSelect.addEventListener("change", () => {
+  try {
+    globalThis.localStorage?.setItem(SORT_KEY, sortSelect.value);
+  } catch {
+    // Not remembered, still applied.
+  }
+  render();
+});
 
 /* =========================================================
    EXPORT
