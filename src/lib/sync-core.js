@@ -184,6 +184,13 @@ function applyMutationTo(state, mutation, { now = Date.now() } = {}) {
   state.appliedMutations ||= {};
   if (!mutation?.mutationId || state.appliedMutations[mutation.mutationId]) return state;
   state.clock = observeClock(state.clock, mutation.clock, state.deviceId, now);
+  // Restoring a novel this state never had (or already purged) has nothing to
+  // bring back. Creating it here left an active novel with no fields: a blank
+  // card on every device.
+  if (mutation.type === "novel.restore" && !state.novels[mutation.novelId]) {
+    state.appliedMutations[mutation.mutationId] = true;
+    return state;
+  }
   const novel = ensureNovel(state, mutation);
   const currentGeneration = Number(novel.generation || 1);
 

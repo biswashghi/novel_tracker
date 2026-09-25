@@ -931,11 +931,44 @@ test("getDeletedNovels lists restorable novels until restoreNovel brings them ba
   assert.equal(deleted.title, "Gone Tomorrow");
   assert.equal(deleted.lastReadChapterLabel, "Chapter 3");
   assert.deepEqual(deleted.tags, ["keep"]);
-  assert.equal(Date.parse(deleted.purgeAt) - Date.parse(deleted.deletedAt), 30 * 24 * 60 * 60 * 1000);
+  // Offered until a day before the 30-day tombstone could be purged.
+  assert.equal(Date.parse(deleted.purgeAt) - Date.parse(deleted.deletedAt), 29 * 24 * 60 * 60 * 1000);
 
   await restoreNovel(saved.id);
   assert.deepEqual(await getDeletedNovels(), []);
   const [restored] = await getNovels();
   assert.equal(restored.id, saved.id);
   assert.equal(restored.lastReadChapterUrl, "https://www.royalroad.com/fiction/9/gone-tomorrow/chapter/3/three");
+});
+
+test("getDeletedNovels times the restore window from the delete's own clock", async () => {
+  globalThis.localStorage.clear();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  const recent = await upsertNovel({
+    title: "Deleted Recently",
+    sourceSite: "example.com",
+    novelHomeUrl: "https://example.com/recent",
+    lastReadChapterUrl: "https://example.com/recent/chapter-1"
+  });
+  const old = await upsertNovel({
+    title: "Deleted Long Ago",
+    sourceSite: "example.com",
+    novelHomeUrl: "https://example.com/old",
+    lastReadChapterUrl: "https://example.com/old/chapter-1"
+  });
+  await deleteNovel(recent.id);
+  await deleteNovel(old.id);
+
+  // As if the old delete had been made 29.5 days ago on another device but
+  // only pulled here today: deletedAtMs (local apply time) is fresh, the
+  // delete's clock is not.
+  const state = await getSyncState();
+  state.novels[old.id].deletedAt = { ...state.novels[old.id].deletedAt, wallMs: Date.now() - 29.5 * DAY };
+  // And a tombstone for a novel this device never had any fields for.
+  state.novels["ghost"] = { id: "ghost", generation: 1, lifecycle: "deleted", fields: {}, chapterHistory: {}, headCheckpointId: "", deletedAt: { wallMs: Date.now(), logical: 0, actorId: "x" }, deletedAtMs: Date.now() };
+  await saveSyncState(state);
+
+  const listed = await getDeletedNovels();
+  assert.deepEqual(listed.map((novel) => novel.title), ["Deleted Recently"]);
 });

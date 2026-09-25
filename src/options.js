@@ -2,8 +2,7 @@
 // there is exactly one writer for the sync blob (see background.js).
 import {
   exportNovelsJson,
-  getDeletedNovels,
-  getNovels,
+  getLibraryView,
   normalizeTags
 } from "./lib/storage.js";
 
@@ -576,8 +575,13 @@ trashList.addEventListener("click", async (event) => {
   if (!id) return;
 
   button.disabled = true;
-  await sendMessage("novel-tracker:library-restore", { id });
-  await refresh();
+  try {
+    await sendMessage("novel-tracker:library-restore", { id });
+    await refresh();
+  } catch (error) {
+    button.disabled = false;
+    window.alert(error.message || "Could not restore that novel.");
+  }
 });
 
 /* =========================================================
@@ -593,6 +597,22 @@ function hideToast() {
   toast.replaceChildren();
 }
 
+function startToastTimer() {
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(hideToast, UNDO_WINDOW_MS);
+}
+
+// Hold the toast while the pointer or keyboard focus is on it, so there is
+// always time to reach Undo (WCAG 2.2.1).
+toast.addEventListener("mouseenter", () => window.clearTimeout(toastTimer));
+toast.addEventListener("focusin", () => window.clearTimeout(toastTimer));
+toast.addEventListener("mouseleave", () => {
+  if (!toast.hidden && !toast.contains(document.activeElement)) startToastTimer();
+});
+toast.addEventListener("focusout", (event) => {
+  if (!toast.hidden && !toast.contains(event.relatedTarget)) startToastTimer();
+});
+
 function showUndoToast(novel) {
   hideToast();
 
@@ -600,13 +620,17 @@ function showUndoToast(novel) {
   undo.type = "button";
   undo.addEventListener("click", async () => {
     hideToast();
-    await sendMessage("novel-tracker:library-restore", { id: novel.id });
-    await refresh();
+    try {
+      await sendMessage("novel-tracker:library-restore", { id: novel.id });
+      await refresh();
+    } catch (error) {
+      window.alert(error.message || "Could not undo that delete. It is still in Recently deleted.");
+    }
   });
 
   toast.append(element("span", "", `Deleted "${novel.title}"`), undo);
   toast.hidden = false;
-  toastTimer = window.setTimeout(hideToast, UNDO_WINDOW_MS);
+  startToastTimer();
 }
 
 /* =========================================================
@@ -626,8 +650,9 @@ function render() {
 }
 
 async function refresh() {
-  const [active, deleted] = await Promise.all([getNovels(), getDeletedNovels()]);
-  novels = active;
+  const view = await getLibraryView();
+  const deleted = view.deleted;
+  novels = view.novels;
   populateTagFilter(novels);
   renderStats(novels);
   render();
