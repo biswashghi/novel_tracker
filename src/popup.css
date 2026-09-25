@@ -1,35 +1,57 @@
+/* =========================================================
+   NOVEL TRACKER · POPUP
+   Same palette and motion tokens as the library page.
+========================================================= */
+
 :root {
   color-scheme: light;
 
-  --paper: #f2ede5;
-  --paper-deep: #e7ded2;
-  --sheet: #fffdf9;
-  --sheet-glass: rgba(255, 253, 249, 0.8);
+  --paper: #f6f3ee;
+  --paper-deep: #ece6dc;
+  --sheet: #fffdfa;
+  --sheet-inset: #f8f4ee;
+  --sheet-glass: rgba(246, 243, 238, 0.86);
+  --field: #ffffff;
 
-  --ink: #20272d;
-  --muted: #6d7478;
-  --subtle: #99948d;
+  --ink: #1b2025;
+  --muted: #676d73;
+  --subtle: #8d9296;
 
-  --copper: #bd693b;
-  --copper-hover: #974a25;
-  --copper-soft: #f1ddcf;
-  --copper-faint: #f8eee7;
-  --focus-ring: rgba(189, 105, 59, 0.1);
+  --copper: #b45a2a;
+  --copper-hover: #9c4a1e;
+  --copper-ink: #8f431c;
+  --copper-soft: #f7e7dc;
+  --copper-faint: #fbf1ea;
 
-  --line: #ddd4c8;
-  --line-dark: #c9bdad;
+  --fill: var(--copper);
+  --fill-hover: var(--copper-hover);
+  --on-fill: #ffffff;
 
-  --danger: #aa4e46;
-  --success: #597565;
+  --line: #e8e2d8;
+  --line-dark: #d6cdbf;
 
-  --shadow:
-    0 14px 34px rgba(44, 33, 24, 0.12);
+  --danger: #a8403a;
+  --danger-soft: #f8e5e3;
+  --success: #2f6f4b;
+  --success-soft: #e3f0e7;
 
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+
+  --shadow-small: 0 1px 2px rgba(33, 26, 18, 0.05), 0 1px 1px rgba(33, 26, 18, 0.03);
+  --shadow: 0 10px 26px -12px rgba(33, 26, 18, 0.28);
+  --focus-ring: 0 0 0 3px rgba(180, 90, 42, 0.28);
+
+  --ease-out: cubic-bezier(0.22, 0.8, 0.26, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --fast: 120ms;
+  --base: 200ms;
+  --slow: 360ms;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --font-display: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
+
+  font-family: var(--font-ui);
 }
 
 /* =========================================================
@@ -42,62 +64,80 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --paper: #15181b;
-    --paper-deep: #22272c;
-    --sheet: #1e2327;
-    --sheet-glass: rgba(30, 35, 39, 0.85);
+    --paper: #121417;
+    --paper-deep: #1f2327;
+    --sheet: #1a1d21;
+    --sheet-inset: #16191c;
+    --sheet-glass: rgba(18, 20, 23, 0.85);
+    --field: #15181b;
 
-    --ink: #ece6dd;
-    --muted: #a1a6a9;
-    --subtle: #7c8184;
+    --ink: #ebe6de;
+    --muted: #a3a8ad;
+    --subtle: #80868b;
 
-    --copper: #d8804f;
-    --copper-hover: #f0ac7f;
-    --copper-soft: #3b2a20;
-    --copper-faint: #2a211b;
+    --copper: #dd8a5b;
+    --copper-hover: #eba077;
+    --copper-ink: #f2b48d;
+    --copper-soft: #3a281d;
+    --copper-faint: #241c17;
 
-    --line: #30363b;
-    --line-dark: #3e454b;
+    --fill: #dd8a5b;
+    --fill-hover: #eba077;
+    --on-fill: #121417;
 
-    --danger: #e07b71;
-    --success: #87a893;
-    --focus-ring: rgba(216, 128, 79, 0.35);
+    --line: #2a2f34;
+    --line-dark: #3a4046;
 
-    --shadow:
-      0 14px 34px rgba(0, 0, 0, 0.45);
+    --danger: #ec8a80;
+    --danger-soft: #3a2220;
+    --success: #86c7a0;
+    --success-soft: #1d2c24;
+
+    --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
+    --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --paper: #15181b;
-  --paper-deep: #22272c;
-  --sheet: #1e2327;
-  --sheet-glass: rgba(30, 35, 39, 0.85);
+  --paper: #121417;
+  --paper-deep: #1f2327;
+  --sheet: #1a1d21;
+  --sheet-inset: #16191c;
+  --sheet-glass: rgba(18, 20, 23, 0.85);
+  --field: #15181b;
 
-  --ink: #ece6dd;
-  --muted: #a1a6a9;
-  --subtle: #7c8184;
+  --ink: #ebe6de;
+  --muted: #a3a8ad;
+  --subtle: #80868b;
 
-  --copper: #d8804f;
-  --copper-hover: #f0ac7f;
-  --copper-soft: #3b2a20;
-  --copper-faint: #2a211b;
+  --copper: #dd8a5b;
+  --copper-hover: #eba077;
+  --copper-ink: #f2b48d;
+  --copper-soft: #3a281d;
+  --copper-faint: #241c17;
 
-  --line: #30363b;
-  --line-dark: #3e454b;
+  --fill: #dd8a5b;
+  --fill-hover: #eba077;
+  --on-fill: #121417;
 
-  --danger: #e07b71;
-  --success: #87a893;
-  --focus-ring: rgba(216, 128, 79, 0.35);
+  --line: #2a2f34;
+  --line-dark: #3a4046;
 
-  --shadow:
-    0 14px 34px rgba(0, 0, 0, 0.45);
+  --danger: #ec8a80;
+  --danger-soft: #3a2220;
+  --success: #86c7a0;
+  --success-soft: #1d2c24;
+
+  --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
+  --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
 }
 
 /* =========================================================
-   RESET
+   BASE
 ========================================================= */
 
 * {
@@ -112,23 +152,35 @@ body {
   min-width: 390px;
 
   background: var(--paper);
-
   color: var(--ink);
+
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   min-height: 100%;
+
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 button,
 input,
 select {
   font: inherit;
+  color: inherit;
 }
 
 button,
 select {
   cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .svg-sprite {
@@ -138,250 +190,142 @@ select {
   height: 0;
 
   overflow: hidden;
-
   pointer-events: none;
 }
 
+svg {
+  flex: none;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
 /* =========================================================
-   SHELL
+   SHELL + HEADER
 ========================================================= */
 
 .popup-shell {
   min-height: 100%;
-
-  overflow: hidden;
-
-  background:
-    linear-gradient(
-      90deg,
-      rgba(107, 81, 54, 0.025) 1px,
-      transparent 1px
-    ),
-    var(--paper);
-
-  background-size:
-    28px 100%;
 }
 
-/* =========================================================
-   HEADER
-========================================================= */
-
 .popup-header {
-  position: relative;
-
-  min-height: 76px;
-
-  padding:
-    15px
-    16px
-    14px
-    62px;
-
   display: flex;
   align-items: center;
+  gap: 12px;
 
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(189, 105, 59, 0.08),
-      transparent 34%
-    ),
-    var(--sheet);
+  padding: 14px 16px 12px;
 
-  border-bottom:
-    1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+
+  background: var(--sheet-glass);
 }
 
 .popup-bookmark {
-  position: absolute;
+  width: 32px;
+  height: 32px;
 
-  top: -1px;
-  left: 18px;
+  display: grid;
+  place-items: center;
 
-  width: 27px;
-  height: 43px;
+  border-radius: var(--radius-sm);
 
-  color: var(--copper);
+  background: var(--fill);
+  color: var(--on-fill);
 
-  filter:
-    drop-shadow(
-      0 5px 8px rgba(102, 52, 26, 0.15)
-    );
-
-  opacity: 1;
-  transform: none;
+  box-shadow: var(--shadow-small);
 }
 
 .popup-bookmark svg {
-  width: 100%;
-  height: 100%;
-  display: block;
+  width: 15px;
+  height: 17px;
 }
 
 .popup-heading {
   min-width: 0;
+
+  display: grid;
+  gap: 1px;
+
+  margin-right: auto;
 }
 
 .popup-heading > span {
-  display: block;
-
-  margin-bottom: 2px;
-
   color: var(--copper);
 
-  font-size: 0.58rem;
-  font-weight: 850;
-
-  letter-spacing: 0.12em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .popup-heading h1 {
   margin: 0;
 
-  font-family:
-    Georgia,
-    "Times New Roman",
-    serif;
-
-  font-size: 1.36rem;
-
-  line-height: 1.02;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 1.22rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 .library-button {
-  appearance: none;
-
   width: 34px;
   height: 34px;
-
-  margin-left: auto;
-
-  border:
-    1px solid var(--line);
-
-  border-radius: 10px;
 
   display: grid;
   place-items: center;
 
-  background: transparent;
-  color: var(--ink);
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius-sm);
+
+  background: var(--sheet);
+  color: var(--muted);
 
   transition:
-    background 130ms ease,
-    border-color 130ms ease,
-    color 130ms ease,
-    transform 130ms ease;
-}
-
-.library-button:hover {
-  background: var(--copper-faint);
-
-  border-color:
-    rgba(189, 105, 59, 0.28);
-
-  color: var(--copper-hover);
-
-  transform:
-    translateY(-1px);
-}
-
-.library-button:active {
-  transform:
-    scale(0.92);
+    background-color var(--fast) var(--ease-out),
+    color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
 }
 
 .library-button svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
+}
+
+.library-button:hover {
+  background: var(--sheet-inset);
+  color: var(--ink);
+}
+
+.library-button:active {
+  transform: scale(0.94);
 }
 
 /* =========================================================
-   PAGE CONTEXT
+   CURRENT PAGE
 ========================================================= */
 
 .current-page-card {
   position: relative;
 
-  margin:
-    11px
-    14px
-    0;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
 
-  padding:
-    9px
-    11px;
-
-  display: grid;
-
-  grid-template-columns:
-    32px
-    minmax(0, 1fr)
-    17px;
-
+  display: flex;
   align-items: center;
+  gap: 10px;
 
-  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
 
-  overflow: hidden;
+  background: var(--sheet);
+  box-shadow: var(--shadow-small);
 
-  background:
-    var(--sheet-glass);
-
-  border:
-    1px solid var(--line);
-
-  border-radius: 12px;
-
-  box-shadow:
-    0 4px 12px
-    rgba(55, 42, 29, 0.035);
-
-  animation:
-    context-enter
-    320ms
-    80ms
-    ease-out
-    both;
-}
-
-@keyframes context-enter {
-  from {
-    opacity: 0;
-
-    transform:
-      translateY(5px);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-      translateY(0);
-  }
-}
-
-.current-page-card::after {
-  content: "";
-
-  position: absolute;
-
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-
-  width: 3px;
-
-  border-radius:
-    0
-    999px
-    999px
-    0;
-
-  background: var(--copper);
+  animation: rise var(--slow) var(--ease-out) both;
 }
 
 .current-page-icon {
@@ -391,43 +335,45 @@ select {
   display: grid;
   place-items: center;
 
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
 
   background: var(--copper-soft);
-  color: var(--copper-hover);
+  color: var(--copper-ink);
+
+  transition: background-color var(--base) var(--ease-out), color var(--base) var(--ease-out);
 }
 
 .current-page-icon svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
+}
+
+body.existing-novel .current-page-icon {
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .current-page-copy {
   min-width: 0;
 
   display: grid;
-
-  gap: 2px;
+  gap: 1px;
 }
 
 .current-page-copy span {
   color: var(--muted);
 
-  font-size: 0.61rem;
-  font-weight: 750;
-
-  letter-spacing: 0.07em;
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.current-page-copy strong,
 .site-pill {
   overflow: hidden;
 
-  color: var(--ink);
-
-  font-size: 0.76rem;
-  font-weight: 700;
+  font-size: 0.86rem;
+  font-weight: 650;
 
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -435,6 +381,8 @@ select {
 
 .site-pill.loading {
   color: var(--muted);
+
+  animation: shimmer 1.2s ease-in-out infinite;
 }
 
 .site-pill.ready {
@@ -445,42 +393,23 @@ select {
   color: var(--danger);
 }
 
+@keyframes shimmer {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .context-spark {
-  width: 17px;
-  height: 17px;
+  margin-left: auto;
 
-  color:
-    rgba(189, 105, 59, 0.5);
-
-  animation:
-    sparkle
-    3.5s
-    ease-in-out
-    infinite;
+  color: var(--copper);
 }
 
 .context-spark svg {
-  width: 100%;
-  height: 100%;
-}
+  width: 14px;
+  height: 14px;
 
-@keyframes sparkle {
-  0%,
-  100% {
-    opacity: 0.45;
-
-    transform:
-      scale(0.88)
-      rotate(0deg);
-  }
-
-  50% {
-    opacity: 1;
-
-    transform:
-      scale(1.08)
-      rotate(5deg);
-  }
+  opacity: 0.6;
 }
 
 /* =========================================================
@@ -488,62 +417,52 @@ select {
 ========================================================= */
 
 .tracker-form {
-  padding:
-    13px
-    14px
-    10px;
+  padding: 12px 16px 10px;
 
   display: grid;
-
   gap: 10px;
+
+  animation: rise var(--slow) var(--ease-out) 60ms both;
 }
 
 .field-row {
   display: grid;
-
-  grid-template-columns:
-    1fr
-    1.12fr;
-
-  gap: 9px;
+  grid-template-columns: 1fr 1.12fr;
+  gap: 8px;
 }
 
 .field {
-  display: grid;
+  min-width: 0;
 
+  display: grid;
   gap: 4px;
 }
 
 .field > span {
   color: var(--muted);
 
-  font-size: 0.64rem;
-  font-weight: 750;
+  font-size: 0.68rem;
+  font-weight: 650;
 }
 
 .field input,
 .field select {
   width: 100%;
-  height: 37px;
+  height: 36px;
 
-  border:
-    1px solid var(--line-dark);
+  padding: 0 10px;
 
-  border-radius: 9px;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius-sm);
 
-  padding:
-    0
-    10px;
+  background: var(--field);
+  color: var(--ink);
+
+  font-size: 0.84rem;
 
   outline: none;
 
-  background: var(--sheet);
-  color: var(--ink);
-
-  transition:
-    border-color 130ms ease,
-    box-shadow 130ms ease,
-    transform 130ms ease;
+  transition: border-color var(--fast) var(--ease-out), box-shadow var(--fast) var(--ease-out);
 }
 
 .field input::placeholder {
@@ -553,20 +472,8 @@ select {
 .field input:focus,
 .field select:focus {
   border-color: var(--copper);
-
-  box-shadow:
-    0 0 0 3px
-    var(--focus-ring);
+  box-shadow: var(--focus-ring);
 }
-
-.field input:focus {
-  transform:
-    translateY(-1px);
-}
-
-/* =========================================================
-   ICON INPUTS
-========================================================= */
 
 .field-with-icon {
   position: relative;
@@ -574,66 +481,50 @@ select {
 
 .field-with-icon > svg {
   position: absolute;
-
-  left: 10px;
   top: 50%;
+  left: 10px;
 
   width: 14px;
   height: 14px;
 
-  transform:
-    translateY(-50%);
-
   color: var(--subtle);
 
-  pointer-events: none;
+  transform: translateY(-50%);
 
-  transition:
-    color 130ms ease;
+  transition: color var(--fast) var(--ease-out);
+  pointer-events: none;
+}
+
+.field-with-icon input {
+  padding-left: 31px;
 }
 
 .field-with-icon:focus-within > svg {
   color: var(--copper);
 }
 
-.field-with-icon input {
-  padding-left: 32px;
-}
-
-/* =========================================================
-   MORE DETAILS
-========================================================= */
-
+/* More details */
 .more-details {
-  border-top:
-    1px solid var(--line);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 
-  border-bottom:
-    1px solid var(--line);
+  interpolate-size: allow-keywords;
 }
 
 .more-details summary {
-  position: relative;
-
-  min-height: 35px;
-
-  padding:
-    8px
-    2px;
+  min-height: 34px;
 
   display: flex;
   align-items: center;
-
   gap: 8px;
 
-  cursor: pointer;
+  padding: 6px 2px;
 
+  cursor: pointer;
   list-style: none;
 
-  color: var(--ink);
-
-  font-size: 0.71rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 650;
 }
 
 .more-details summary::-webkit-details-marker {
@@ -643,7 +534,6 @@ select {
 .summary-main {
   display: inline-flex;
   align-items: center;
-
   gap: 7px;
 }
 
@@ -657,254 +547,154 @@ select {
 .summary-hint {
   margin-left: auto;
 
-  color: var(--muted);
+  color: var(--subtle);
 
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 
 .summary-chevron {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
 
   color: var(--muted);
 
-  transition:
-    transform 160ms ease,
-    color 160ms ease;
+  transition: transform var(--base) var(--ease-out);
 }
 
 .more-details[open] .summary-chevron {
-  transform:
-    rotate(180deg);
+  transform: rotate(180deg);
+}
 
-  color: var(--copper);
+.more-details::details-content {
+  height: 0;
+  overflow: clip;
+
+  transition:
+    height var(--base) var(--ease-out),
+    content-visibility var(--base) allow-discrete;
+}
+
+.more-details[open]::details-content {
+  height: auto;
 }
 
 .optional-fields {
-  padding:
-    3px
-    0
-    13px;
-
   display: grid;
+  gap: 8px;
 
-  gap: 11px;
-
-  animation:
-    optional-open
-    180ms ease-out both;
+  padding: 2px 0 10px;
 }
 
-@keyframes optional-open {
-  from {
-    opacity: 0;
-
-    transform:
-      translateY(-4px);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-      translateY(0);
-  }
-}
-
-/* =========================================================
-   STATUS
-========================================================= */
-
+/* Status line */
 .status {
-  min-height: 16px;
+  min-height: 18px;
 
   color: var(--muted);
 
-  font-size: 0.68rem;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.status.ready,
+.status.existing {
+  color: var(--ink);
+}
+
+.status.success {
+  color: var(--success);
+
+  font-weight: 650;
+
+  animation: rise var(--base) var(--ease-out) both;
 }
 
 .status.error {
   color: var(--danger);
 }
 
-.status.success {
-  color: var(--success);
-}
-
-.status.ready {
-  color: var(--muted);
-}
-
-.status.existing {
-  color: var(--copper-hover);
-}
-
-/* =========================================================
-   SAVE BUTTON
-========================================================= */
-
+/* Save */
 .save-button {
-  appearance: none;
-
-  position: relative;
-
-  width: 100%;
-  height: 46px;
-
-  border: 0;
-  border-radius: 11px;
-
-  padding:
-    0
-    18px;
+  height: 42px;
 
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 
-  gap: 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
 
-  overflow: hidden;
+  background: var(--fill);
+  color: var(--on-fill);
 
-  background:
-    linear-gradient(
-      135deg,
-      #c97040,
-      #b85c30
-    );
+  font-size: 0.9rem;
+  font-weight: 700;
 
-  color: #fff;
-
-  font-weight: 750;
-  line-height: 1;
-
-  box-shadow:
-    0 7px 16px
-    rgba(143, 71, 40, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, var(--shadow);
 
   transition:
-    transform 140ms ease,
-    box-shadow 140ms ease,
-    background 140ms ease;
+    background-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out),
+    box-shadow var(--base) var(--ease-out),
+    opacity var(--base) var(--ease-out);
 }
 
-/*
- * Important:
- * Dynamically inserted SVGs need an explicit box.
- */
-.save-button > svg,
-.save-button-icon {
-  display: block;
-
-  width: 16px !important;
-  height: 18px !important;
-
-  min-width: 16px;
-  max-width: 16px;
-
-  flex:
-    0
-    0
-    16px;
-
-  overflow: visible;
-
-  background:
-    transparent !important;
-
-  color: currentColor;
-}
-
-.save-button > svg use {
-  pointer-events: none;
+.save-button svg {
+  width: 15px;
+  height: 17px;
 }
 
 .save-button:hover {
-  transform:
-    translateY(-2px);
-
-  background:
-    linear-gradient(
-      135deg,
-      #d27a49,
-      #b65c30
-    );
-
-  box-shadow:
-    0 10px 20px
-    rgba(143, 71, 40, 0.24);
+  background: var(--fill-hover);
 }
 
 .save-button:active {
-  transform:
-    translateY(1px)
-    scale(0.985);
+  transform: scale(0.98);
 }
 
 .save-button:disabled {
-  cursor: wait;
+  opacity: 0.55;
+  cursor: default;
 
-  opacity: 0.75;
-
-  transform: none;
-
-  box-shadow:
-    0 5px 12px
-    rgba(143, 71, 40, 0.12);
+  box-shadow: none;
 }
 
 .save-button.saving .save-button-icon {
-  animation: none;
-  transform: none;
+  animation: spin 0.9s linear infinite;
 }
 
 .save-button.saved {
-  background:
-    linear-gradient(
-      135deg,
-      #668a72,
-      #52705e
-    );
-
-  box-shadow:
-    0 7px 16px
-    rgba(70, 105, 83, 0.2);
+  background: var(--success);
+  color: var(--on-fill);
 }
 
-/* =========================================================
-   EXISTING NOVEL VISUAL STATE
-========================================================= */
-
-body.existing-novel .current-page-card::after {
-  background:
-    var(--success);
+.save-button.saved .save-button-icon {
+  animation: pop var(--slow) var(--ease-spring);
 }
 
-body.existing-novel .current-page-icon {
-  background:
-    rgba(89, 117, 101, 0.12);
-
-  color:
-    var(--success);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* =========================================================
-   FOOTER
-========================================================= */
+@keyframes pop {
+  from {
+    transform: scale(0.4);
+  }
+}
 
 /* =========================================================
    CONTINUE READING
 ========================================================= */
 
 .continue-reading {
-  margin:
-    0
-    14px
-    6px;
+  margin: 0 16px 6px;
 
-  border-top:
-    1px solid var(--line);
+  border-top: 1px solid var(--line);
+
+  interpolate-size: allow-keywords;
 }
 
 .continue-reading[hidden] {
@@ -912,21 +702,19 @@ body.existing-novel .current-page-icon {
 }
 
 .continue-reading summary {
-  min-height: 33px;
+  min-height: 34px;
 
   display: flex;
   align-items: center;
-
   gap: 7px;
 
   cursor: pointer;
-
   list-style: none;
 
   color: var(--muted);
 
-  font-size: 0.64rem;
-  font-weight: 750;
+  font-size: 0.66rem;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -936,14 +724,14 @@ body.existing-novel .current-page-icon {
 }
 
 .continue-count {
-  min-width: 17px;
+  min-width: 18px;
 
-  padding: 1px 5px;
+  padding: 1px 6px;
 
   border-radius: 999px;
 
   background: var(--copper-soft);
-  color: var(--copper-hover);
+  color: var(--copper-ink);
 
   text-align: center;
   letter-spacing: 0;
@@ -955,30 +743,32 @@ body.existing-novel .current-page-icon {
 
   margin-left: auto;
 
-  transition: transform 150ms ease;
+  transition: transform var(--base) var(--ease-out);
 }
 
 .continue-reading[open] .continue-chevron {
   transform: rotate(180deg);
 }
 
-.continue-reading .continue-list {
-  padding-bottom: 4px;
+.continue-reading::details-content {
+  height: 0;
+  overflow: clip;
+
+  transition:
+    height var(--base) var(--ease-out),
+    content-visibility var(--base) allow-discrete;
 }
 
-/* No readable page: the disabled form has nothing to offer, so keep only
-   its explanation and give the room to the list. */
-body.no-page .tracker-form > :not(.status) {
-  display: none;
+.continue-reading[open]::details-content {
+  height: auto;
 }
 
 .continue-list {
   margin: 0;
-  padding: 0;
+  padding: 0 0 4px;
 
   display: grid;
-
-  gap: 5px;
+  gap: 6px;
 
   list-style: none;
 }
@@ -988,31 +778,33 @@ body.no-page .tracker-form > :not(.status) {
 
   width: 100%;
 
-  border:
-    1px solid var(--line);
-
-  border-radius: 10px;
-
-  padding: 6px 9px 6px 6px;
-
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  grid-template-columns: 30px minmax(0, 1fr) 14px;
   align-items: center;
+  gap: 10px;
 
-  gap: 9px;
+  padding: 6px 10px 6px 6px;
+
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
 
   background: var(--sheet);
   color: var(--ink);
 
   text-align: left;
 
+  box-shadow: var(--shadow-small);
+
   transition:
-    border-color 120ms ease,
-    transform 120ms ease;
+    border-color var(--fast) var(--ease-out),
+    transform var(--base) var(--ease-out),
+    box-shadow var(--base) var(--ease-out);
 }
 
 .continue-item:hover {
-  border-color: var(--copper);
+  border-color: var(--line-dark);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 
 .continue-item:active {
@@ -1022,8 +814,8 @@ body.no-page .tracker-form > :not(.status) {
 .continue-cover {
   position: relative;
 
-  width: 28px;
-  height: 38px;
+  width: 30px;
+  height: 40px;
 
   display: grid;
   place-items: center;
@@ -1032,10 +824,10 @@ body.no-page .tracker-form > :not(.status) {
 
   border-radius: 3px 5px 5px 3px;
 
-  background: linear-gradient(145deg, #c98656, #82492d);
-  color: white;
+  background: linear-gradient(150deg, #cd7c4d, #7e4424);
+  color: #fff8f0;
 
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -1054,7 +846,6 @@ body.no-page .tracker-form > :not(.status) {
   min-width: 0;
 
   display: grid;
-
   gap: 1px;
 }
 
@@ -1062,18 +853,18 @@ body.no-page .tracker-form > :not(.status) {
 .continue-copy span {
   overflow: hidden;
 
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .continue-copy strong {
-  font-size: 0.76rem;
+  font-size: 0.8rem;
 }
 
 .continue-copy span {
   color: var(--muted);
 
-  font-size: 0.66rem;
+  font-size: 0.7rem;
 }
 
 .continue-arrow {
@@ -1083,13 +874,28 @@ body.no-page .tracker-form > :not(.status) {
   color: var(--subtle);
 
   transform: rotate(-90deg);
+
+  transition: transform var(--base) var(--ease-spring), color var(--fast) var(--ease-out);
 }
 
+.continue-item:hover .continue-arrow {
+  color: var(--copper);
+
+  transform: rotate(-90deg) translateY(2px);
+}
+
+/* No readable page: the disabled form has nothing to offer, so keep only
+   its explanation and give the room to the list. */
+body.no-page .tracker-form > :not(.status) {
+  display: none;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
 .popup-footer {
-  padding:
-    0
-    14px
-    10px;
+  padding: 0 16px 10px;
 }
 
 .popup-footer button {
@@ -1097,37 +903,26 @@ body.no-page .tracker-form > :not(.status) {
 
   width: 100%;
 
-  border: 0;
-
-  padding:
-    7px
-    5px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 7px;
 
-  background: transparent;
+  padding: 8px 5px;
 
+  border: 0;
+
+  background: transparent;
   color: var(--muted);
 
-  font-size: 0.69rem;
+  font-size: 0.72rem;
   font-weight: 650;
 
-  transition:
-    color 120ms ease,
-    transform 120ms ease;
+  transition: color var(--fast) var(--ease-out);
 }
 
 .popup-footer button:hover {
-  color: var(--copper-hover);
-}
-
-.popup-footer button:active {
-  transform:
-    scale(0.97);
+  color: var(--copper);
 }
 
 .popup-footer button > svg {
@@ -1136,51 +931,20 @@ body.no-page .tracker-form > :not(.status) {
 }
 
 /* =========================================================
-   SMALLER POPUP
-========================================================= */
-
-@media (max-width: 360px) {
-
-  html,
-  body {
-    width: 350px;
-    min-width: 350px;
-  }
-
-  .popup-header {
-    padding-left: 58px;
-  }
-
-  .popup-bookmark {
-    left: 16px;
-  }
-
-  .field-row {
-    grid-template-columns: 1fr;
-  }
-
-}
-
-/* =========================================================
    REDUCED MOTION
 ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
-    animation-duration:
-      0.01ms !important;
-
-    animation-iteration-count:
-      1 !important;
-
-    transition-duration:
-      0.01ms !important;
-
-    scroll-behavior:
-      auto !important;
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 
+  .continue-item:hover {
+    transform: none;
+  }
 }
