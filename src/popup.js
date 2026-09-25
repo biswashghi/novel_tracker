@@ -25,6 +25,7 @@ const openLibraryButton = document.querySelector("#open-library");
 const openLibraryFooterButton = document.querySelector("#open-library-footer");
 const continueSection = document.querySelector("#continue-reading");
 const continueList = document.querySelector("#continue-list");
+const continueCount = document.querySelector("#continue-count");
 
 const fields = {
   title: document.querySelector("#title"),
@@ -184,18 +185,28 @@ function relativeTime(value) {
   return days < 30 ? `${days}d ago` : new Date(value).toLocaleDateString();
 }
 
+function isWebUrl(value) {
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
 function continueItem(novel) {
   const item = document.createElement("li");
   const button = document.createElement("button");
   button.type = "button";
   button.className = "continue-item";
-  button.title = novel.lastReadChapterUrl;
 
   const cover = document.createElement("span");
   cover.className = "continue-cover";
   cover.setAttribute("aria-hidden", "true");
   if (novel.coverImageUrl) {
     const image = document.createElement("img");
+    // Covers are remote; don't tell their hosts which extension asked.
+    image.referrerPolicy = "no-referrer";
+    image.loading = "lazy";
     image.src = novel.coverImageUrl;
     image.alt = "";
     // Fall back to initials when a cover fails to load.
@@ -216,9 +227,16 @@ function continueItem(novel) {
 
   button.append(cover, copy, icon("chevron", "continue-arrow"));
   button.addEventListener("click", async () => {
-    // tabs.create needs no permission; the popup closes once focus moves.
-    await extensionApi.tabs.create({ url: novel.lastReadChapterUrl });
-    window.close();
+    button.disabled = true;
+    try {
+      // tabs.create needs no permission; the popup closes once focus moves.
+      await extensionApi.tabs.create({ url: novel.lastReadChapterUrl });
+      window.close();
+    } catch (error) {
+      console.error("Unable to open chapter:", error);
+      setStatus(`Could not open "${novel.title}".`, "error");
+      button.disabled = false;
+    }
   });
 
   item.append(button);
@@ -226,17 +244,32 @@ function continueItem(novel) {
 }
 
 /**
- * The most recently read novels other than the one on this page, so the
- * popup doubles as a jump-back-in list when you are not on a chapter.
+ * The most recently read novels other than the one on this page.
+ *
+ * Chrome cuts popups off at 600px, so the list has to share that height
+ * with the save form. On a page the popup cannot read, the form is useless:
+ * it collapses (body.no-page) and the list opens. On a chapter, the list
+ * stays a one-line disclosure under the form.
  */
-function renderContinueReading(novels, currentNovelId = "") {
+async function showContinueReading({ pageReadable, currentNovelId = "" }) {
+  document.body.classList.toggle("no-page", !pageReadable);
+
+  let novels = [];
+  try {
+    novels = await getNovels();
+  } catch (error) {
+    console.error("Unable to load recent novels:", error);
+  }
+
   const recent = novels
-    .filter((novel) => novel.id !== currentNovelId && novel.lastReadChapterUrl?.startsWith("http"))
+    .filter((novel) => novel.id !== currentNovelId && isWebUrl(novel.lastReadChapterUrl))
     .filter((novel) => novel.status !== "completed" && novel.status !== "dropped")
     .sort((left, right) => new Date(right.updatedAt) - new Date(left.updatedAt))
     .slice(0, CONTINUE_LIMIT);
 
   continueList.replaceChildren(...recent.map(continueItem));
+  continueCount.textContent = recent.length ? String(recent.length) : "";
+  continueSection.open = !pageReadable;
   continueSection.hidden = recent.length === 0;
 }
 
@@ -271,6 +304,7 @@ async function loadCurrentPage() {
         busy: true
       });
 
+      await showContinueReading({ pageReadable: false });
       return;
     }
 
@@ -292,7 +326,7 @@ async function loadCurrentPage() {
     const novels = await getNovels();
 
     existingNovel = findExistingNovelForSave(novels, saveCandidate(metadata)) || null;
-    renderContinueReading(novels, existingNovel?.id);
+    showContinueReading({ pageReadable: true, currentNovelId: existingNovel?.id });
 
     if (existingNovel) {
       fields.status.value =
@@ -345,6 +379,8 @@ async function loadCurrentPage() {
       iconName: "bookmark",
       busy: true
     });
+
+    await showContinueReading({ pageReadable: false });
   }
 }
 
@@ -452,8 +488,4 @@ openLibraryFooterButton?.addEventListener(
    START
 ========================================================= */
 
-// Render the list straight away so it is there even when the current tab is
-// not a readable page; loadCurrentPage refines it once it knows which novel
-// (if any) this tab belongs to.
-getNovels().then((novels) => renderContinueReading(novels)).catch(() => {});
 loadCurrentPage();
