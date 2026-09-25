@@ -51,6 +51,7 @@ const syncNowButton = document.querySelector("#sync-now");
 const deleteAccountButton = document.querySelector("#delete-account");
 
 let novels = [];
+let animateEntrance = true;
 
 /* =========================================================
    SVG HELPERS
@@ -352,6 +353,18 @@ function actionButton(text, action, iconName, className = "") {
   return node;
 }
 
+function iconButton(label, action, iconName, className = "") {
+  const node = element("button", `icon-button ${className}`.trim());
+  node.type = "button";
+  node.dataset.action = action;
+  node.title = label;
+  node.setAttribute("aria-label", label);
+  node.append(icon(iconName));
+  return node;
+}
+
+const STATUS_LABELS = { active: "Reading", paused: "Paused", completed: "Completed", dropped: "Dropped" };
+
 function field(labelText, name, value) {
   const wrapper = element("div", "field");
   const label = element("label", "", labelText);
@@ -455,26 +468,40 @@ function createCard(novel) {
     cover.textContent = fallbackCover;
   }
 
-  // Content: title row + meta
+  // Content: title, one line of meta, where you are, then actions.
   const content = element("div", "content");
   const titleRow = element("div", "title-row");
-  const titleBlock = document.createElement("div");
+  const titleBlock = element("div", "title-block");
   titleBlock.append(element("h2", "", novel.title));
 
   const meta = element("div", "meta");
-  meta.append(
-    element("span", "", novel.sourceSite),
-    element("span", "", novel.status),
-    element("span", "", `Updated ${formatDate(novel.updatedAt)}`)
-  );
+  const statusPill = element("span", "status-pill", STATUS_LABELS[novel.status] || novel.status);
+  statusPill.dataset.status = novel.status;
+  const updated = element("span", "meta-updated", `Updated ${formatRelativeDate(novel.updatedAt)}`);
+  updated.title = formatDate(novel.updatedAt);
+  meta.append(statusPill, element("span", "meta-source", novel.sourceSite), updated);
 
   if (novel.rating > 0) {
     const ratingDisplay = element("span", "rating-display");
-    ratingDisplay.append(icon("star"), document.createTextNode(` ${novel.rating}/5`));
+    ratingDisplay.setAttribute("aria-label", `Rated ${novel.rating} of 5`);
+    ratingDisplay.append(icon("star"), document.createTextNode(String(novel.rating)));
     meta.append(ratingDisplay);
   }
 
   titleBlock.append(meta);
+  titleRow.append(titleBlock);
+  content.append(titleRow);
+
+  // Where you are: the chapter to continue from, which is also the card's
+  // primary action. The URL lives in the button's tooltip and the edit form.
+  const progress = element("div", "progress-row");
+  const chapterPill = element("span", "chapter-pill");
+  chapterPill.title = novel.lastReadChapterLabel || "";
+  chapterPill.append(icon("bookmark"), element("span", "chapter-pill-text", novel.lastReadChapterLabel || "Saved page"));
+  const chaptersRead = historyEntries.length;
+  progress.append(chapterPill);
+  if (chaptersRead > 1) progress.append(element("span", "progress-count", `${chaptersRead} chapters read`));
+  content.append(progress);
 
   // Tag chips
   if (novel.tags?.length) {
@@ -484,20 +511,8 @@ function createCard(novel) {
       chip.append(icon("tag"), document.createTextNode(tag));
       tagRow.append(chip);
     }
-    titleBlock.append(tagRow);
+    content.append(tagRow);
   }
-
-  // Chapter badge
-  const chapterPill = element("span", "chapter-pill");
-  chapterPill.title = novel.lastReadChapterLabel || "";
-  chapterPill.append(icon("bookmark"), document.createTextNode(novel.lastReadChapterLabel || "Saved page"));
-  titleRow.append(titleBlock, chapterPill);
-
-  // Current chapter URL
-  const chapterLink = element("div", "chapter-link", novel.lastReadChapterUrl);
-  chapterLink.title = novel.lastReadChapterUrl;
-
-  content.append(titleRow, chapterLink);
 
   // Notes preview
   if (novel.notes) {
@@ -505,13 +520,11 @@ function createCard(novel) {
     content.append(element("div", "notes-preview", preview));
   }
 
-  // Actions
+  // Actions: one clear primary, quiet icon buttons for the rest.
   const actions = element("div", "actions");
-  actions.append(
-    actionButton("Open chapter", "open", "external", "primary-card-action"),
-    actionButton("Edit", "edit", "edit"),
-    actionButton("Delete", "delete", "trash", "danger")
-  );
+  const open = actionButton("Continue", "open", "external", "primary-card-action");
+  open.title = novel.lastReadChapterUrl;
+  actions.append(open, iconButton("Edit", "edit", "edit"), iconButton("Delete", "delete", "trash", "danger"));
 
   content.append(actions);
 
@@ -576,7 +589,9 @@ function createCard(novel) {
   submit.append(icon("check"), document.createTextNode("Save changes"));
   formActions.append(submit, actionButton("Cancel", "cancel", null));
 
-  form.append(statusField, formActions);
+  // Status sits beside Rating, ahead of the full-width Notes.
+  form.insertBefore(statusField, form.querySelector(".field-wide"));
+  form.append(formActions);
   content.append(form);
   article.append(cover, content);
   return article;
@@ -712,7 +727,17 @@ function render() {
     return;
   }
 
-  filtered.forEach((novel) => library.append(createCard(novel)));
+  filtered.forEach((novel, index) => {
+    const card = createCard(novel);
+    if (animateEntrance) {
+      // Stagger only the first screenful, only once: re-renders while
+      // searching or sorting should feel instant, not replay the intro.
+      card.classList.add("is-entering");
+      card.style.setProperty("--i", String(Math.min(index, 8)));
+    }
+    library.append(card);
+  });
+  animateEntrance = false;
 }
 
 async function refresh() {
