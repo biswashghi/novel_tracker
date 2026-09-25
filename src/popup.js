@@ -1,4 +1,5 @@
 import {
+  buildSaveCandidate,
   findExistingNovelForSave,
   getNovels,
   getHostname
@@ -160,22 +161,8 @@ function populateForm(data) {
    EXISTING NOVEL
 ========================================================= */
 
-/**
- * The record a save would produce, so the preview lookup asks the identity
- * question with exactly the values the save will use.
- */
 function saveCandidate(source) {
-  const chapterUrl = String(source.lastReadChapterUrl || "").trim();
-
-  return {
-    title: String(source.title || "").trim(),
-    sourceSite: getHostname(chapterUrl),
-    novelHomeUrl: String(source.novelHomeUrl || "").trim() || chapterUrl,
-    lastReadChapterUrl: chapterUrl,
-    lastReadChapterLabel: String(source.lastReadChapterLabel || "").trim(),
-    coverImageUrl: String(source.coverImageUrl || "").trim(),
-    status: source.status || "active"
-  };
+  return { ...buildSaveCandidate(source), status: source.status || "active" };
 }
 
 /* =========================================================
