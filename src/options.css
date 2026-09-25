@@ -1708,6 +1708,158 @@ select {
 }
 
 /* =========================================================
+   RECENTLY DELETED
+========================================================= */
+
+.trash {
+  margin-top: 18px;
+
+  padding: 12px 16px;
+
+  background: var(--sheet);
+
+  border:
+    1px solid var(--line);
+
+  border-radius: 14px;
+}
+
+.trash summary {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  color: var(--muted);
+
+  font-size: 0.82rem;
+  font-weight: 700;
+
+  cursor: pointer;
+  list-style: none;
+}
+
+.trash summary::-webkit-details-marker {
+  display: none;
+}
+
+.trash summary svg {
+  width: 15px;
+  height: 15px;
+}
+
+.trash-hint {
+  margin: 8px 0 4px;
+
+  color: var(--faint);
+
+  font-size: 0.74rem;
+}
+
+.trash-list {
+  display: grid;
+}
+
+.trash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  padding: 10px 0;
+
+  border-top:
+    1px solid var(--line);
+}
+
+.trash-copy {
+  min-width: 0;
+
+  display: grid;
+
+  gap: 2px;
+}
+
+.trash-copy strong {
+  color: var(--ink);
+
+  font-size: 0.86rem;
+}
+
+.trash-copy span {
+  overflow: hidden;
+
+  color: var(--muted);
+
+  font-size: 0.74rem;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+
+  z-index: 60;
+
+  max-width: calc(100vw - 32px);
+
+  display: flex;
+  align-items: center;
+
+  gap: 14px;
+
+  padding: 10px 12px 10px 16px;
+
+  transform: translateX(-50%);
+
+  background: var(--nav);
+  color: var(--nav-text);
+
+  border-radius: 10px;
+
+  box-shadow: var(--shadow);
+
+  font-size: 0.84rem;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+.toast span {
+  overflow: hidden;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  flex: none;
+
+  border: 0;
+  border-radius: 7px;
+
+  padding: 5px 11px;
+
+  background: var(--copper);
+  color: white;
+
+  font-weight: 700;
+}
+
+.toast-action:hover {
+  background: var(--copper-light);
+}
+
+/* =========================================================
    TABLET
 ========================================================= */
 

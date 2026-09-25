@@ -2,6 +2,7 @@
 // there is exactly one writer for the sync blob (see background.js).
 import {
   exportNovelsJson,
+  getDeletedNovels,
   getNovels,
   normalizeTags
 } from "./lib/storage.js";
@@ -14,6 +15,10 @@ import { requireFirefoxSyncDataConsent } from "./lib/firefox-data-consent.js";
 import { AUTH_PROVIDERS } from "./lib/config.js";
 
 const library = document.querySelector("#library");
+const trash = document.querySelector("#trash");
+const trashSummary = document.querySelector("#trash-summary");
+const trashList = document.querySelector("#trash-list");
+const toast = document.querySelector("#toast");
 
 const searchInput = document.querySelector("#search");
 const statusFilter = document.querySelector("#status-filter");
@@ -533,6 +538,78 @@ function createEmptyState() {
 }
 
 /* =========================================================
+   RECENTLY DELETED
+========================================================= */
+
+function renderTrash(items) {
+  trash.hidden = !items.length;
+  trashSummary.textContent = `Recently deleted (${items.length})`;
+  trashList.replaceChildren();
+
+  for (const novel of items) {
+    const row = element("div", "trash-item");
+    row.dataset.id = novel.id;
+
+    const copy = element("div", "trash-copy");
+    copy.append(
+      element("strong", "", novel.title),
+      element(
+        "span",
+        "",
+        `${novel.sourceSite} · ${novel.lastReadChapterLabel || "Saved page"} · deleted ${formatRelativeDate(novel.deletedAt)}`
+      )
+    );
+
+    const restore = actionButton("Restore", "restore", "history");
+    restore.title = `Restorable until ${formatDate(novel.purgeAt)}`;
+    const actions = element("div", "actions");
+    actions.append(restore);
+
+    row.append(copy, actions);
+    trashList.append(row);
+  }
+}
+
+trashList.addEventListener("click", async (event) => {
+  const button = event.target.closest('button[data-action="restore"]');
+  const id = button?.closest(".trash-item")?.dataset.id;
+  if (!id) return;
+
+  button.disabled = true;
+  await sendMessage("novel-tracker:library-restore", { id });
+  await refresh();
+});
+
+/* =========================================================
+   UNDO TOAST
+========================================================= */
+
+const UNDO_WINDOW_MS = 7000;
+let toastTimer = null;
+
+function hideToast() {
+  window.clearTimeout(toastTimer);
+  toast.hidden = true;
+  toast.replaceChildren();
+}
+
+function showUndoToast(novel) {
+  hideToast();
+
+  const undo = element("button", "toast-action", "Undo");
+  undo.type = "button";
+  undo.addEventListener("click", async () => {
+    hideToast();
+    await sendMessage("novel-tracker:library-restore", { id: novel.id });
+    await refresh();
+  });
+
+  toast.append(element("span", "", `Deleted "${novel.title}"`), undo);
+  toast.hidden = false;
+  toastTimer = window.setTimeout(hideToast, UNDO_WINDOW_MS);
+}
+
+/* =========================================================
    RENDER
 ========================================================= */
 
@@ -549,10 +626,12 @@ function render() {
 }
 
 async function refresh() {
-  novels = await getNovels();
+  const [active, deleted] = await Promise.all([getNovels(), getDeletedNovels()]);
+  novels = active;
   populateTagFilter(novels);
   renderStats(novels);
   render();
+  renderTrash(deleted);
 }
 
 /* =========================================================
@@ -601,10 +680,11 @@ library.addEventListener("click", async (event) => {
   }
 
   if (action === "delete") {
-    const confirmed = window.confirm(`Delete "${novel.title}" from your tracker?`);
-    if (!confirmed) return;
+    // No confirm(): the delete is undoable from the toast, and from Recently
+    // deleted for the next 30 days.
     await sendMessage("novel-tracker:library-delete", { id });
     await refresh();
+    showUndoToast(novel);
   }
 });
 

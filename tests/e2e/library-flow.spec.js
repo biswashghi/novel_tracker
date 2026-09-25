@@ -75,10 +75,25 @@ test('library page lists, edits, and deletes a saved novel', async ({ context, e
   const renamedCard = optionsPage.locator('.card', { hasText: 'Test Fiction (renamed)' });
   await expect(renamedCard).toBeVisible();
 
-  // Delete: accept the confirm() dialog and verify the card disappears.
-  optionsPage.once('dialog', (dialog) => dialog.accept());
+  // Delete: the card disappears at once, with no confirm() dialog.
   await renamedCard.locator('button[data-action="delete"]').click();
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toHaveCount(0);
+
+  // Undo from the toast brings it straight back.
+  await optionsPage.locator('#toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(renamedCard).toBeVisible();
+  await expect(optionsPage.locator('#toast')).toBeHidden();
+
+  // Delete again and restore from Recently deleted instead.
+  await renamedCard.locator('button[data-action="delete"]').click();
+  await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toHaveCount(0);
+  const trash = optionsPage.locator('#trash');
+  await trash.locator('summary').click();
+  const trashItem = trash.locator('.trash-item', { hasText: 'Test Fiction (renamed)' });
+  await expect(trashItem).toBeVisible();
+  await trashItem.locator('button[data-action="restore"]').click();
+  await expect(renamedCard).toBeVisible();
+  await expect(trash).toBeHidden();
 });
 
 test('export downloads a JSON backup and import restores it', async ({ context, extensionId, serviceWorker }) => {
