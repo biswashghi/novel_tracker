@@ -338,7 +338,96 @@ function normalizeIdentityUrl(value) {
   }
 }
 
+// Comparable host+path for a URL: www. and trailing slashes dropped,
+// lower-cased like the rest of the library's URL matching.
+function urlKey(value) {
+  try {
+    const url = new URL(value);
+    return `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+// A path segment that is a site's own numeric id for a work: a bare number
+// of 3+ digits that is not a year (/fiction/21220, /works/10057010), or a long
+// id with a slug (/story/66766637-empire-of-ashes). Slugs that merely start
+// with a number ("1000-years-in-hell") and dates (/2025/01/…) are not ids.
+function workIdSegment(segment) {
+  if (/^\d{3,}$/.test(segment) && !/^(19|20)\d\d$/.test(segment)) return segment;
+  return segment.match(/^(\d{6,})-/)?.[1] || "";
+}
+
+// urlKey cut after the work's id segment, so a work keeps one key when its
+// site renames the slug: /fiction/21220/<old> and /fiction/21220/<new>.
+function pageKey(value) {
+  const key = urlKey(value);
+  if (!key) return "";
+  const [host, ...segments] = key.split("/");
+  const kept = [];
+  for (const segment of segments) {
+    const id = workIdSegment(segment);
+    kept.push(id || segment);
+    if (id) break;
+  }
+  return [host, ...kept].join("/");
+}
+
+function isUnderPage(key, page) {
+  return key === page || key.startsWith(`${page}/`);
+}
+
+/**
+ * A comparable form of a record's novel page, or "" when it has no real one:
+ * just the site root (Shin Translations' old parser), or the very chapter it
+ * was saved from (the generic fallback, e.g. a Patreon post, or a site an
+ * older build had no parser for).
+ */
+export function comparableNovelHome(record) {
+  const home = urlKey(record?.novelHomeUrl);
+  if (!home || !home.includes("/") || home === urlKey(record?.lastReadChapterUrl)) return "";
+  return pageKey(record.novelHomeUrl);
+}
+
+/**
+ * True when two records are evidently different works, whatever else matches
+ * (title, or a chapter URL of the same shape):
+ * - both name a real novel page, and those differ; or
+ * - one names a real novel page on a site that files chapters under it
+ *   (/novels/<slug>/<n>, /fiction/<id>/…, /works/<id>/chapters/…), and the
+ *   other's chapter in the same section of that site is not under it.
+ * The second case covers records with no usable novel page, like those an
+ * older build saved for Chikari's /novels/ route: without it, any chapter of
+ * any other novel on the site looked like that record's next chapter.
+ */
+export function belongToDifferentNovels(saved, incoming) {
+  const savedHome = comparableNovelHome(saved);
+  const incomingHome = comparableNovelHome(incoming);
+  if (savedHome && incomingHome) return savedHome !== incomingHome;
+
+  const chapterOutside = (home, own, other) => {
+    if (!home) return false;
+    const ownChapter = pageKey(own?.lastReadChapterUrl);
+    const otherChapter = pageKey(other?.lastReadChapterUrl);
+    if (!ownChapter || !otherChapter || !isUnderPage(ownChapter, home)) return false;
+    // Same host and same section (/novels vs /novels); a chapter elsewhere on
+    // the site (/collections/…/works/…) may be the same work under another path.
+    const [homeHost, homeSection] = home.split("/");
+    const [otherHost, otherSection] = otherChapter.split("/");
+    return otherHost === homeHost && otherSection === homeSection && !isUnderPage(otherChapter, home);
+  };
+  return chapterOutside(incomingHome, incoming, saved) || chapterOutside(savedHome, saved, incoming);
+}
+
+/**
+ * Same work by novel page, chapter URL, or title on the same site, unless
+ * the two are evidently different works (belongToDifferentNovels): two works
+ * that share a title (a novel and its manhwa), or an old record whose only
+ * link to the incoming page is a shared site. Used by the library and by the
+ * server's canonical-id mapping, so sync cannot merge them either.
+ */
 export function matchesNovelIdentity(existing, incoming) {
+  if (belongToDifferentNovels(existing, incoming)) return false;
   const existingHome = normalizeIdentityUrl(existing?.novelHomeUrl);
   const incomingHome = normalizeIdentityUrl(incoming?.novelHomeUrl);
   if (existingHome && incomingHome && existingHome === incomingHome) return true;
