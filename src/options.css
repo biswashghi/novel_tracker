@@ -1984,14 +1984,14 @@ select {
 
   padding: 5px 11px;
 
-  background: var(--copper);
-  color: white;
+  background: var(--fill);
+  color: var(--on-fill);
 
   font-weight: 700;
 }
 
 .toast-action:hover {
-  background: var(--copper-light);
+  background: var(--fill-hover);
 }
 
 /* =========================================================
