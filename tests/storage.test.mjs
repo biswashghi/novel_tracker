@@ -972,3 +972,38 @@ test("getDeletedNovels times the restore window from the delete's own clock", as
   const listed = await getDeletedNovels();
   assert.deepEqual(listed.map((novel) => novel.title), ["Deleted Recently"]);
 });
+
+test("importNovelsJson keeps each chapter's original read time", async () => {
+  globalThis.localStorage.clear();
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [{
+      title: "Old Favourite",
+      sourceSite: "example.com",
+      novelHomeUrl: "https://example.com/old-favourite",
+      lastReadChapterUrl: "https://example.com/old-favourite/3",
+      lastReadChapterLabel: "Chapter 3",
+      updatedAt: "2025-05-03T10:00:00.000Z",
+      chapterHistory: [
+        { url: "https://example.com/old-favourite/1", label: "Chapter 1", readAt: "2025-05-01T10:00:00.000Z" },
+        { url: "https://example.com/old-favourite/2", label: "Chapter 2", readAt: "2025-05-02T10:00:00.000Z" },
+        { url: "https://example.com/old-favourite/3", label: "Chapter 3", readAt: "2025-05-03T10:00:00.000Z" }
+      ]
+    }]
+  }));
+
+  const [novel] = await getNovels();
+  assert.deepEqual(novel.chapterHistory.map((entry) => entry.readAt), [
+    "2025-05-01T10:00:00.000Z",
+    "2025-05-02T10:00:00.000Z",
+    "2025-05-03T10:00:00.000Z"
+  ]);
+  assert.equal(novel.updatedAt, "2025-05-03T10:00:00.000Z");
+  assert.equal(novel.lastReadChapterLabel, "Chapter 3");
+
+  // The local clock still moves forward, so the next real read sorts after them.
+  const state = await getSyncState();
+  assert.ok(state.clock.wallMs >= Date.parse("2025-05-03T10:00:00.000Z"));
+  assert.equal(state.pendingMutations.length, 3);
+});
