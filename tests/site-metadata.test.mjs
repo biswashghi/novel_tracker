@@ -527,3 +527,32 @@ test("extractPageMetadataFromRoot marks Archive of Our Own work pages that are n
     assert.equal(extractPageMetadataFromRoot(root, url).isChapterPage, undefined, url);
   }
 });
+
+test("extractPageMetadataFromRoot never treats a novel's own page or chapter list as a chapter", () => {
+  const root = createRoot({ selectors: { ".booktitle": { textContent: "Shadow Slave" } } });
+  const cases = [
+    ["https://novelfire.net/book/shadow-slave", "https://novelfire.net/book/shadow-slave"],
+    ["https://novelfire.net/book/shadow-slave/chapters", "https://novelfire.net/book/shadow-slave"],
+    ["https://www.webnovel.com/book/shadow-slave_22196546206090805", "https://www.webnovel.com/book/shadow-slave_22196546206090805"],
+    ["https://www.webnovel.com/book/shadow-slave_22196546206090805/catalog", "https://www.webnovel.com/book/shadow-slave_22196546206090805"],
+    ["https://www.wattpad.com/story/66766637-empire-of-ashes", "https://www.wattpad.com/story/66766637-empire-of-ashes"],
+    ["https://readnovelfull.com/second-world.html", "https://readnovelfull.com/second-world.html"]
+  ];
+
+  for (const [url, home] of cases) {
+    const metadata = extractPageMetadataFromRoot(root, url);
+    assert.equal(metadata.isChapterPage, false, url);
+    assert.equal(metadata.novelHomeUrl, home, url);
+  }
+
+  // Chapters on the same sites still are.
+  for (const url of [
+    "https://novelfire.net/book/shadow-slave/chapter-1",
+    "https://www.webnovel.com/book/shadow-slave_22196546206090805/nightmare-begins_59583457017254387",
+    "https://www.webnovel.com/book/shadow-slave_22196546206090805/59583457017254387",
+    "https://www.wattpad.com/235603347-empire-of-ashes-preview",
+    "https://readnovelfull.com/second-world/chapter-1-1-beta-test.html"
+  ]) {
+    assert.notEqual(extractPageMetadataFromRoot(root, url).isChapterPage, false, url);
+  }
+});
