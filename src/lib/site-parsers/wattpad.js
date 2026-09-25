@@ -8,6 +8,15 @@
     hostnames: ["wattpad.com"],
     parse({ core, root, segments, url }) {
       // Story parts live at /<partId>-<slug>; the story itself is /story/<id>-<slug>.
+      if (segments[0] === "story" && segments[1]) {
+        // The story's own page: identify it, but never move a bookmark to it.
+        return {
+          title: core.firstText(root, [".story-info__title", "h1"]) || core.cleanTitle(String(root.title || "").split(" - ")[0]),
+          novelHomeUrl: core.normalizePathUrl(url.toString(), `/story/${segments[1]}`),
+          isChapterPage: false
+        };
+      }
+
       const partMatch = segments.length === 1 ? segments[0].match(/^(\d+)(?:-(.*))?$/) : null;
       if (!partMatch) {
         return null;

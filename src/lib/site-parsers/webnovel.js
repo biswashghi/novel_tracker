@@ -3,13 +3,23 @@
     id: "webnovel",
     hostnames: ["webnovel.com"],
     parse({ core, root, hostname, segments, url }) {
-      // /book/<slug>_<bookId>/<chapterSlug>_<chapterId> (or just /<chapterId>)
-      if (segments[0] !== "book" || segments.length < 3) {
+      // /book/<slug>_<bookId>/<chapterSlug>_<chapterId> (or just /<chapterId>);
+      // the novel page is /book/<slug>_<bookId> and its list .../catalog.
+      if (segments[0] !== "book" || segments.length < 2) {
         return null;
       }
 
       const bookSegment = segments[1];
       const bookSlug = bookSegment.replace(/_\d+$/, "");
+      if (segments.length < 3 || !/(^|_)\d+$/.test(segments[2])) {
+        // Opening a tracked novel's own page must not move its bookmark there.
+        return {
+          title: core.titleCaseFromSlug(bookSlug),
+          novelHomeUrl: core.normalizePathUrl(url.toString(), `/book/${bookSegment}`),
+          coverImageUrl: "",
+          isChapterPage: false
+        };
+      }
       const chapterId = segments[2].match(/(\d+)$/)?.[1] || "";
       const homePath = `/book/${bookSegment}`;
 
