@@ -4,6 +4,7 @@
   --paper: #f2ede5;
   --paper-deep: #e7ded2;
   --sheet: #fffdf9;
+  --sheet-glass: rgba(255, 253, 249, 0.8);
 
   --ink: #20272d;
   --muted: #6d7478;
@@ -28,6 +29,68 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+}
+
+/* =========================================================
+   DARK THEME
+   Follows the system unless the reader picked a theme
+   (theme-init.js sets data-theme on <html>).
+========================================================= */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #15181b;
+    --paper-deep: #22272c;
+    --sheet: #1e2327;
+    --sheet-glass: rgba(30, 35, 39, 0.85);
+
+    --ink: #ece6dd;
+    --muted: #a1a6a9;
+    --subtle: #7c8184;
+
+    --copper: #d8804f;
+    --copper-hover: #f0ac7f;
+    --copper-soft: #3b2a20;
+    --copper-faint: #2a211b;
+
+    --line: #30363b;
+    --line-dark: #3e454b;
+
+    --danger: #e07b71;
+    --success: #87a893;
+
+    --shadow:
+      0 14px 34px rgba(0, 0, 0, 0.45);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #15181b;
+  --paper-deep: #22272c;
+  --sheet: #1e2327;
+  --sheet-glass: rgba(30, 35, 39, 0.85);
+
+  --ink: #ece6dd;
+  --muted: #a1a6a9;
+  --subtle: #7c8184;
+
+  --copper: #d8804f;
+  --copper-hover: #f0ac7f;
+  --copper-soft: #3b2a20;
+  --copper-faint: #2a211b;
+
+  --line: #30363b;
+  --line-dark: #3e454b;
+
+  --danger: #e07b71;
+  --success: #87a893;
+
+  --shadow:
+    0 14px 34px rgba(0, 0, 0, 0.45);
 }
 
 /* =========================================================
@@ -263,7 +326,7 @@ select {
   overflow: hidden;
 
   background:
-    rgba(255, 253, 249, 0.8);
+    var(--sheet-glass);
 
   border:
     1px solid var(--line);

@@ -8,6 +8,9 @@
 
   --sheet: #fffdf9;
   --sheet-hover: #fff9f1;
+  --sheet-glass: var(--sheet-glass);
+  --sheet-veil: var(--sheet-veil);
+  --field: white;
 
   --ink: #20272d;
   --ink-soft: #394248;
@@ -19,6 +22,7 @@
   --copper-light: #df8c59;
   --copper-dark: #914622;
   --copper-soft: #f1ddcf;
+  --copper-wash: var(--copper-wash);
 
   --line: #ddd4c7;
   --line-dark: #c8bcac;
@@ -43,6 +47,90 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+}
+
+/* =========================================================
+   DARK THEME
+   Follows the system unless the reader picked a theme
+   (theme-init.js sets data-theme on <html>).
+========================================================= */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #15181b;
+    --paper-light: #1a1e22;
+    --paper-deep: #22272c;
+
+    --sheet: #1e2327;
+    --sheet-hover: #242a2f;
+    --sheet-glass: rgba(30, 35, 39, 0.9);
+    --sheet-veil: rgba(30, 35, 39, 0.6);
+    --field: #171b1e;
+
+    --ink: #ece6dd;
+    --ink-soft: #d0c9bf;
+
+    --muted: #a1a6a9;
+    --faint: #7c8184;
+
+    --copper: #d8804f;
+    --copper-light: #e89a6b;
+    --copper-dark: #f0ac7f;
+    --copper-soft: #3b2a20;
+    --copper-wash: rgba(216, 128, 79, 0.1);
+
+    --line: #30363b;
+    --line-dark: #3e454b;
+
+    --green: #87a893;
+    --danger: #e07b71;
+
+    --shadow-small:
+      0 4px 16px rgba(0, 0, 0, 0.3);
+
+    --shadow:
+      0 16px 40px rgba(0, 0, 0, 0.45);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #15181b;
+  --paper-light: #1a1e22;
+  --paper-deep: #22272c;
+
+  --sheet: #1e2327;
+  --sheet-hover: #242a2f;
+  --sheet-glass: rgba(30, 35, 39, 0.9);
+  --sheet-veil: rgba(30, 35, 39, 0.6);
+  --field: #171b1e;
+
+  --ink: #ece6dd;
+  --ink-soft: #d0c9bf;
+
+  --muted: #a1a6a9;
+  --faint: #7c8184;
+
+  --copper: #d8804f;
+  --copper-light: #e89a6b;
+  --copper-dark: #f0ac7f;
+  --copper-soft: #3b2a20;
+  --copper-wash: rgba(216, 128, 79, 0.1);
+
+  --line: #30363b;
+  --line-dark: #3e454b;
+
+  --green: #87a893;
+  --danger: #e07b71;
+
+  --shadow-small:
+    0 4px 16px rgba(0, 0, 0, 0.3);
+
+  --shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 /* =========================================================
@@ -740,7 +828,7 @@ select {
     14px;
 
   background:
-    rgba(255, 253, 249, 0.89);
+    var(--sheet-glass);
 
   border:
     1px solid var(--line);
@@ -834,7 +922,7 @@ select {
   gap: 13px;
 
   background:
-    rgba(255, 253, 249, 0.89);
+    var(--sheet-glass);
 
   border:
     1px solid var(--line);
@@ -1265,7 +1353,7 @@ select {
     10px;
 
   background:
-    rgba(241, 221, 207, 0.28);
+    var(--copper-wash);
 
   border-left:
     2px solid var(--copper-soft);
@@ -1568,7 +1656,7 @@ select {
 
   outline: 0;
 
-  background: white;
+  background: var(--field);
   color: var(--ink);
 
   font: inherit;
@@ -1649,7 +1737,7 @@ select {
   color: var(--muted);
 
   background:
-    rgba(255, 253, 249, 0.6);
+    var(--sheet-veil);
 
   border:
     1px dashed var(--line-dark);
@@ -2281,4 +2369,18 @@ select {
     scroll-behavior: auto !important;
   }
 
+}
+
+/* =========================================================
+   THEME TOGGLE
+========================================================= */
+
+.theme-toggle .theme-icon {
+  display: none;
+}
+
+.theme-toggle[data-theme-choice="system"] .theme-icon-system,
+.theme-toggle[data-theme-choice="light"] .theme-icon-light,
+.theme-toggle[data-theme-choice="dark"] .theme-icon-dark {
+  display: block;
 }
