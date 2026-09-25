@@ -770,7 +770,8 @@ exportJsonButton.addEventListener("click", async () => {
 
 exportCsvButton.addEventListener("click", async () => {
   // A byte-order mark so Excel opens the UTF-8 file with titles intact.
-  const items = [...(await getNovels())].sort((a, b) => a.title.localeCompare(b.title));
+  const { novels: items } = await getLibraryView();
+  items.sort((a, b) => a.title.localeCompare(b.title));
   const stamp = new Date().toISOString().slice(0, 10);
   downloadTextFile(`novel-tracker-library-${stamp}.csv`, `\uFEFF${novelsToCsv(items)}`, "text/csv;charset=utf-8");
 });
