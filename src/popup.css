@@ -14,6 +14,7 @@
   --copper-hover: #974a25;
   --copper-soft: #f1ddcf;
   --copper-faint: #f8eee7;
+  --focus-ring: rgba(189, 105, 59, 0.1);
 
   --line: #ddd4c8;
   --line-dark: #c9bdad;
@@ -60,6 +61,7 @@
 
     --danger: #e07b71;
     --success: #87a893;
+    --focus-ring: rgba(216, 128, 79, 0.35);
 
     --shadow:
       0 14px 34px rgba(0, 0, 0, 0.45);
@@ -88,6 +90,7 @@
 
   --danger: #e07b71;
   --success: #87a893;
+  --focus-ring: rgba(216, 128, 79, 0.35);
 
   --shadow:
     0 14px 34px rgba(0, 0, 0, 0.45);
@@ -553,7 +556,7 @@ select {
 
   box-shadow:
     0 0 0 3px
-    rgba(189, 105, 59, 0.1);
+    var(--focus-ring);
 }
 
 .field input:focus {
