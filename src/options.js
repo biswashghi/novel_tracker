@@ -384,6 +384,12 @@ function createCard(novel) {
     const image = document.createElement("img");
     image.src = novel.coverImageUrl;
     image.alt = `${novel.title} cover`;
+    // A cover that fails to load falls back to the initials, rather than
+    // leaving alt text jammed against the edge of an unpadded cover.
+    image.addEventListener("error", () => {
+      image.remove();
+      cover.textContent = fallbackCover;
+    });
     cover.append(image);
   } else {
     cover.textContent = fallbackCover;
@@ -905,7 +911,10 @@ function applyThemeChoice(choice) {
 }
 
 themeToggle.addEventListener("click", () => {
-  const next = THEME_CHOICES[(THEME_CHOICES.indexOf(readThemeChoice()) + 1) % THEME_CHOICES.length];
+  // Cycle from what is shown, not from storage: if storage is unavailable a
+  // re-read would always say "system" and the toggle could never reach dark.
+  const current = themeToggle.dataset.themeChoice || "system";
+  const next = THEME_CHOICES[(THEME_CHOICES.indexOf(current) + 1) % THEME_CHOICES.length];
   try {
     globalThis.localStorage?.setItem(THEME_KEY, next);
   } catch {

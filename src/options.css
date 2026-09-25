@@ -8,8 +8,8 @@
 
   --sheet: #fffdf9;
   --sheet-hover: #fff9f1;
-  --sheet-glass: var(--sheet-glass);
-  --sheet-veil: var(--sheet-veil);
+  --sheet-glass: rgba(255, 253, 249, 0.89);
+  --sheet-veil: rgba(255, 253, 249, 0.6);
   --field: white;
 
   --ink: #20272d;
@@ -22,7 +22,15 @@
   --copper-light: #df8c59;
   --copper-dark: #914622;
   --copper-soft: #f1ddcf;
-  --copper-wash: var(--copper-wash);
+  --copper-wash: rgba(241, 221, 207, 0.28);
+
+  /* Filled copper buttons: their own tokens so dark mode can use dark text. */
+  --fill: var(--copper);
+  --fill-hover: var(--copper-dark);
+  --on-fill: white;
+
+  --danger-wash: rgba(169, 80, 72, 0.06);
+  --focus-ring: rgba(189, 105, 59, 0.1);
 
   --line: #ddd4c7;
   --line-dark: #c8bcac;
@@ -86,6 +94,13 @@
 
     --green: #87a893;
     --danger: #e07b71;
+    --fill: #d8804f;
+    --fill-hover: #e89a6b;
+    --on-fill: #15181b;
+
+    --danger-wash: rgba(224, 123, 113, 0.12);
+    --focus-ring: rgba(216, 128, 79, 0.35);
+
 
     --shadow-small:
       0 4px 16px rgba(0, 0, 0, 0.3);
@@ -125,6 +140,13 @@
 
   --green: #87a893;
   --danger: #e07b71;
+  --fill: #d8804f;
+  --fill-hover: #e89a6b;
+  --on-fill: #15181b;
+
+  --danger-wash: rgba(224, 123, 113, 0.12);
+  --focus-ring: rgba(216, 128, 79, 0.35);
+
 
   --shadow-small:
     0 4px 16px rgba(0, 0, 0, 0.3);
@@ -965,7 +987,7 @@ select {
   transform:
     translateY(-50%);
 
-  color: #788087;
+  color: var(--muted);
 
   transition:
     color 130ms ease,
@@ -1497,16 +1519,16 @@ select {
 }
 
 .actions .primary-card-action {
-  border-color: var(--copper);
+  border-color: var(--fill);
 
-  background: var(--copper);
-  color: white;
+  background: var(--fill);
+  color: var(--on-fill);
 }
 
 .actions .primary-card-action:hover {
-  border-color: var(--copper-dark);
+  border-color: var(--fill-hover);
 
-  background: var(--copper-dark);
+  background: var(--fill-hover);
 }
 
 .actions .danger {
@@ -1518,7 +1540,7 @@ select {
 
 .actions .danger:hover {
   background:
-    rgba(169, 80, 72, 0.06);
+    var(--danger-wash);
 }
 
 /* =========================================================
@@ -1696,7 +1718,7 @@ select {
 
   box-shadow:
     0 0 0 3px
-    rgba(189, 105, 59, 0.1);
+    var(--focus-ring);
 }
 
 .field-wide {
