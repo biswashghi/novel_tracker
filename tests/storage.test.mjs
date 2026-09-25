@@ -1205,3 +1205,68 @@ test("importing a backup keeps two same-titled works with different novel pages 
 
   assert.equal((await getNovels()).length, 2);
 });
+
+test("novels whose slugs start with the same number, or share a dated path, stay separate", async () => {
+  const pairs = [
+    ["https://novelfire.net/book/1000-years-in-hell", "https://novelfire.net/book/1000-ways-to-die", "chapter-4", "chapter-9"],
+    ["https://chikari.moe/novels/100-days-of-x", "https://chikari.moe/novels/100-years", "4", "9"],
+    ["https://example.com/2025/01/novel-a", "https://example.com/2025/03/novel-b", "chapter-4", "chapter-9"]
+  ];
+
+  for (const [homeA, homeB, chapterA, chapterB] of pairs) {
+    globalThis.localStorage.clear();
+    const site = new URL(homeA).hostname;
+    const first = await upsertNovel({ title: "A", sourceSite: site, novelHomeUrl: homeA, lastReadChapterUrl: `${homeA}/${chapterA}`, lastReadChapterLabel: "Chapter 4" });
+    const result = await autoUpdateNovelProgress({ title: "B", sourceSite: site, novelHomeUrl: homeB, lastReadChapterUrl: `${homeB}/${chapterB}`, lastReadChapterLabel: "Chapter 9" });
+    assert.equal(result.updated, false, `${homeB} must not update ${homeA}`);
+    const second = await saveChapterFromPage({ title: "B", novelHomeUrl: homeB, lastReadChapterUrl: `${homeB}/${chapterB}`, lastReadChapterLabel: "Chapter 9" });
+    assert.notEqual(second.id, first.id, homeB);
+  }
+});
+
+test("novel pages that differ only in letter case are the same novel", async () => {
+  globalThis.localStorage.clear();
+
+  const saved = await upsertNovel({
+    title: "Some Novel",
+    sourceSite: "example.com",
+    novelHomeUrl: "https://example.com/Novels/Some-Novel",
+    lastReadChapterUrl: "https://example.com/novels/some-novel/chapter-1",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  const result = await autoUpdateNovelProgress({
+    title: "Some Novel",
+    sourceSite: "example.com",
+    novelHomeUrl: "https://example.com/novels/some-novel",
+    lastReadChapterUrl: "https://example.com/novels/some-novel/chapter-2",
+    lastReadChapterLabel: "Chapter 2"
+  });
+
+  assert.equal(result.updated, true, result.reason);
+  assert.equal(result.novel.id, saved.id);
+});
+
+test("an old record read through another part of the site can still pick up its novel page", async () => {
+  globalThis.localStorage.clear();
+
+  // Saved before AO3 had a parser, through a collection URL: no novel page.
+  const legacyUrl = "https://archiveofourown.org/collections/fest/works/123456/chapters/5";
+  await importNovelsJson(JSON.stringify({ version: 1, novels: [{
+    title: "Small Work",
+    sourceSite: "archiveofourown.org",
+    novelHomeUrl: legacyUrl,
+    lastReadChapterUrl: legacyUrl,
+    lastReadChapterLabel: "Chapter 5"
+  }] }));
+
+  const saved = await saveChapterFromPage({
+    title: "Small Work",
+    novelHomeUrl: "https://archiveofourown.org/works/123456",
+    lastReadChapterUrl: "https://archiveofourown.org/works/123456/chapters/6",
+    lastReadChapterLabel: "Chapter 6"
+  });
+
+  const novels = await getNovels();
+  assert.equal(novels.length, 1);
+  assert.equal(saved.lastReadChapterLabel, "Chapter 6");
+});

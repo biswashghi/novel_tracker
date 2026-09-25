@@ -224,3 +224,47 @@ test("restoring a novel the state does not have is a no-op, not a blank novel", 
   assert.deepEqual(materializeNovels(next), []);
   assert.equal(next.appliedMutations["restore-ghost"], true);
 });
+
+test("canonical id mapping does not merge two works that only share a title", () => {
+  let state = createSyncState({ deviceId: "server", now: 1000 });
+  state = applyMutation(state, {
+    mutationId: "novel-create",
+    deviceId: "device-a",
+    novelId: "novel-x",
+    generation: 1,
+    clock: { wallMs: 2000, logical: 0, actorId: "device-a" },
+    type: "novel.create",
+    payload: {
+      title: "The Academy’s Weapon Replicator",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator",
+      lastReadChapterUrl: "https://chikari.moe/novels/the-academys-weapon-replicator/40",
+      event: { id: "e1", url: "https://chikari.moe/novels/the-academys-weapon-replicator/40", label: "Chapter 39" }
+    }
+  });
+
+  const manhwa = {
+    mutationId: "manhwa-create",
+    deviceId: "device-b",
+    novelId: "manhwa-local",
+    generation: 1,
+    clock: { wallMs: 3000, logical: 0, actorId: "device-b" },
+    type: "novel.create",
+    payload: {
+      title: "The Academy’s Weapon Replicator",
+      sourceSite: "chikari.moe",
+      novelHomeUrl: "https://chikari.moe/series/the-academys-weapon-replicator",
+      lastReadChapterUrl: "https://chikari.moe/series/the-academys-weapon-replicator/2",
+      event: { id: "e2", url: "https://chikari.moe/series/the-academys-weapon-replicator/2", label: "Chapter 2" }
+    }
+  };
+  assert.equal(findCanonicalNovelId(state, manhwa), "manhwa-local");
+
+  // The same work from another device still maps onto the existing record.
+  const sameWork = {
+    ...manhwa,
+    novelId: "novel-local",
+    payload: { ...manhwa.payload, novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator", lastReadChapterUrl: "https://chikari.moe/novels/the-academys-weapon-replicator/41" }
+  };
+  assert.equal(findCanonicalNovelId(state, sameWork), "novel-x");
+});
