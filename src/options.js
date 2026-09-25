@@ -6,7 +6,7 @@ import {
   normalizeTags
 } from "./lib/storage.js";
 
-import { computeReadingStats } from "./lib/reading-stats.js";
+import { computeReadingHeatmap, computeReadingStats } from "./lib/reading-stats.js";
 import { novelsToCsv } from "./lib/csv.js";
 import { SORT_MODES, sortNovels } from "./lib/library-sort.js";
 
@@ -31,6 +31,10 @@ const statWeek = document.querySelector("#stat-week");
 const statMonth = document.querySelector("#stat-month");
 const statCompleted = document.querySelector("#stat-completed");
 const statTotal = document.querySelector("#stat-total");
+
+const activity = document.querySelector("#reading-activity");
+const activitySummary = document.querySelector("#activity-summary");
+const activityGrid = document.querySelector("#activity-grid");
 
 const exportJsonButton = document.querySelector("#export-json");
 const exportCsvButton = document.querySelector("#export-csv");
@@ -246,6 +250,75 @@ function renderStats(items) {
   statCompleted.textContent = String(stats.completedCount);
   statTotal.textContent = String(stats.totalNovels);
 }
+
+/* =========================================================
+   READING ACTIVITY HEATMAP
+========================================================= */
+
+const ACTIVITY_WEEKS = 52;
+const WEEKDAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+
+function parseDayKey(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function renderActivity(items) {
+  const heatmap = computeReadingHeatmap(items, { weeks: ACTIVITY_WEEKS });
+  activity.hidden = heatmap.total === 0;
+  if (activity.hidden) return;
+
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  activitySummary.textContent =
+    `${plural(heatmap.total, "chapter")} on ${plural(heatmap.activeDays, "day")} in the last year`;
+  activityGrid.setAttribute("aria-label", `Reading activity: ${activitySummary.textContent}`);
+  activityGrid.style.setProperty("--weeks", String(heatmap.weeks.length));
+
+  const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const monthFormat = new Intl.DateTimeFormat(undefined, { month: "short" });
+  const cells = [element("span")];
+
+  // Row-major: a header row of month labels, then one row per weekday.
+  let previousMonth = parseDayKey(heatmap.weeks[0][0].date).getMonth();
+  for (const week of heatmap.weeks) {
+    const firstDay = parseDayKey(week[0].date);
+    const startsMonth = firstDay.getMonth() !== previousMonth;
+    previousMonth = firstDay.getMonth();
+    cells.push(element("span", "activity-label", startsMonth ? monthFormat.format(firstDay) : ""));
+  }
+
+  WEEKDAY_LABELS.forEach((label, weekday) => {
+    cells.push(element("span", "activity-label", label));
+    for (const week of heatmap.weeks) {
+      const day = week[weekday];
+      const cell = element("span", "activity-cell");
+      cell.dataset.level = String(day.level);
+      if (day.future) {
+        cell.classList.add("is-future");
+      } else {
+        const date = dayFormat.format(parseDayKey(day.date));
+        cell.title = day.count ? `${plural(day.count, "chapter")} · ${date}` : `No chapters · ${date}`;
+      }
+      cells.push(cell);
+    }
+  });
+
+  activityGrid.replaceChildren(...cells);
+  activitySummary.dataset.total = activitySummary.textContent;
+
+  // Newest weeks are on the right; show them first where the grid scrolls.
+  const scroller = activityGrid.parentElement;
+  scroller.scrollLeft = scroller.scrollWidth;
+}
+
+// Hovering a day shows its count in the summary line; leaving restores the total.
+activityGrid.addEventListener("mouseover", (event) => {
+  const cell = event.target.closest(".activity-cell[title]");
+  if (cell) activitySummary.textContent = cell.title;
+});
+activityGrid.addEventListener("mouseleave", () => {
+  activitySummary.textContent = activitySummary.dataset.total || "";
+});
 
 /* =========================================================
    HISTORY
@@ -648,6 +721,7 @@ async function refresh() {
   novels = view.novels;
   populateTagFilter(novels);
   renderStats(novels);
+  renderActivity(novels);
   render();
   renderTrash(deleted);
 }
