@@ -34,6 +34,7 @@ const {
   normalizeUrl,
   markAccountSynced,
   prepareSyncForAccount,
+  saveChapterFromPage,
   saveSyncState,
   updateNovel,
   upsertNovel
@@ -874,4 +875,34 @@ test("autoUpdateNovelProgress follows Wattpad parts, whose URLs share no path", 
   assert.equal(result.updated, true, result.reason);
   assert.equal(result.novel.id, saved.id);
   assert.equal(result.novel.lastReadChapterLabel, "Chapter I - Chains and Bones");
+});
+
+test("saveChapterFromPage keeps a tracked novel's status, novel page and cover", async () => {
+  globalThis.localStorage.clear();
+
+  const saved = await upsertNovel({
+    title: "Some Novel",
+    sourceSite: "example.com",
+    novelHomeUrl: "https://example.com/novels/some-novel",
+    lastReadChapterUrl: "https://example.com/novels/some-novel/chapter-1",
+    lastReadChapterLabel: "Chapter 1",
+    coverImageUrl: "https://example.com/covers/some-novel.jpg",
+    status: "paused"
+  });
+
+  // What the shortcut reads from a generic chapter page: no cover, and the
+  // chapter itself standing in for the novel page.
+  const result = await saveChapterFromPage({
+    title: "Some Novel",
+    lastReadChapterUrl: "https://example.com/novels/some-novel/chapter-2",
+    lastReadChapterLabel: "Chapter 2",
+    novelHomeUrl: "https://example.com/novels/some-novel/chapter-2",
+    coverImageUrl: ""
+  });
+
+  assert.equal(result.id, saved.id);
+  assert.equal(result.lastReadChapterLabel, "Chapter 2");
+  assert.equal(result.status, "paused");
+  assert.equal(result.novelHomeUrl, "https://example.com/novels/some-novel");
+  assert.equal(result.coverImageUrl, "https://example.com/covers/some-novel.jpg");
 });

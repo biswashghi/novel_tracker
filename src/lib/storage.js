@@ -507,6 +507,23 @@ export function buildSaveCandidate(source) {
   };
 }
 
+/**
+ * Saves a chapter read straight from a page, with no form to review it (the
+ * keyboard shortcut and context menu). Like the popup, a novel that is
+ * already tracked keeps its stored novel page and cover: chapter pages often
+ * carry no cover or a site logo, and a generic page's "novel page" is just
+ * the chapter itself.
+ */
+export async function saveChapterFromPage(metadata) {
+  const candidate = buildSaveCandidate(metadata);
+  const existing = findExistingNovelForSave(await getNovels(), candidate);
+  if (existing) {
+    candidate.novelHomeUrl = existing.novelHomeUrl || candidate.novelHomeUrl;
+    candidate.coverImageUrl = existing.coverImageUrl || candidate.coverImageUrl;
+  }
+  return upsertNovel(candidate);
+}
+
 export function normalizeUrl(url) {
   if (!url) {
     return "";
