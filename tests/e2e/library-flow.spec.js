@@ -113,17 +113,24 @@ test('the save shortcut and context menu save the tab without opening the popup'
   await mockSitePage(context, CHAPTER_URL, CHAPTER_HTML);
   await sitePage.goto(CHAPTER_URL);
 
-  // The menu item is registered for page right-clicks.
-  // (chrome.contextMenus has no getter; creating the same id again must fail.)
-  const duplicate = await serviceWorker.evaluate(
-    () =>
-      new Promise((resolve) => {
-        chrome.contextMenus.create({ id: 'novel-tracker:save-chapter', title: 'x' }, () =>
-          resolve(chrome.runtime.lastError?.message || '')
-        );
-      })
-  );
-  expect(duplicate).toMatch(/duplicate/i);
+  // The menu item is registered for page right-clicks. chrome.contextMenus
+  // has no getter; update() with no changes fails only for a missing id, so
+  // it checks without touching the item. The background creates it
+  // asynchronously after install, so poll.
+  await expect
+    .poll(
+      () =>
+        serviceWorker.evaluate(
+          () =>
+            new Promise((resolve) => {
+              chrome.contextMenus.update('novel-tracker:save-chapter', {}, () =>
+                resolve(chrome.runtime.lastError?.message || 'registered')
+              );
+            })
+        ),
+      { timeout: 10_000 }
+    )
+    .toBe('registered');
 
   const commands = await serviceWorker.evaluate(() => chrome.commands.getAll());
   expect(commands.find((command) => command.name === 'save-chapter')?.description).toBeTruthy();
