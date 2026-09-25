@@ -28,6 +28,7 @@
     "test:e2e": "playwright test",
     "test:e2e:package": "playwright test tests/e2e/extension-smoke.spec.js tests/e2e/auto-progress.spec.js tests/e2e/library-flow.spec.js",
     "test:e2e:live": "playwright test --config=playwright.live.config.js",
+    "test:e2e:layouts": "playwright test --config=playwright.live.config.js tests/e2e/live/site-layouts.spec.js --workers=4",
     "test:e2e:headed": "playwright test --headed",
     "e2e:stack:up": "node scripts/e2e-stack.mjs up",
     "e2e:stack:down": "node scripts/e2e-stack.mjs down",

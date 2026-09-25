@@ -61,7 +61,8 @@ further into the same novel.
 ### Which sites are supported?
 
 Royal Road, Patreon, Wuxiaworld, NovelBin, ScribbleHub, Creative Novels, Light
-Novels Translations, Shin Translations, and Chikari. Other sites fall back to
+Novels Translations, Shin Translations, Chikari, Archive of Our Own, Wattpad,
+Webnovel, NovelFire, and ReadNovelFull. Other sites fall back to
 generic page information and can still be saved manually.
 
 ### I signed in with Apple but my library looks empty

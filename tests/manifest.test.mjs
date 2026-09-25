@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { PARSER_FILES } from "../src/lib/site-parser-files.js";
 
 const manifest = JSON.parse(await readFile(new URL("../src/manifest.json", import.meta.url), "utf8"));
 
@@ -13,7 +14,12 @@ const supportedHostPatterns = [
   "https://*.creativenovels.com/*",
   "https://*.lightnovelstranslations.com/*",
   "https://*.shintranslations.com/*",
-  "https://chikari.moe/*"
+  "https://chikari.moe/*",
+  "https://*.archiveofourown.org/*",
+  "https://*.wattpad.com/*",
+  "https://*.webnovel.com/*",
+  "https://*.novelfire.net/*",
+  "https://*.readnovelfull.com/*"
 ];
 
 test("manifest limits automatic host access to supported novel sites", () => {
@@ -39,4 +45,16 @@ test("manifest does not request the broad tabs permission", () => {
   // listing and buys nothing.
   assert.ok(!manifest.permissions.includes("tabs"));
   assert.ok(manifest.permissions.includes("activeTab"));
+});
+
+test("content scripts load the same parsers, in the same order, as the popup injects", () => {
+  assert.deepEqual(manifest.content_scripts[0].js, [...PARSER_FILES, "content-script.js"]);
+});
+
+test("every site parser on disk is registered in the shared parser list", async () => {
+  const onDisk = (await readdir(new URL("../src/lib/site-parsers/", import.meta.url)))
+    .filter((name) => name.endsWith(".js"))
+    .map((name) => `lib/site-parsers/${name}`);
+  const listed = PARSER_FILES.filter((file) => file.startsWith("lib/site-parsers/"));
+  assert.deepEqual([...listed].sort(), onDisk.sort());
 });

@@ -1,29 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const PARSER_FILES = [
-  "../src/lib/parser-core.js",
-  "../src/lib/site-parsers/royalroad.js",
-  "../src/lib/site-parsers/patreon.js",
-  "../src/lib/site-parsers/wuxiaworld.js",
-  "../src/lib/site-parsers/novelbin.js",
-  "../src/lib/site-parsers/scribblehub.js",
-  "../src/lib/site-parsers/creativenovels.js",
-  "../src/lib/site-parsers/lightnovelstranslations.js",
-  "../src/lib/site-parsers/shintranslations.js",
-  "../src/lib/site-parsers/chikari.js",
-  "../src/lib/page-metadata.js"
-];
+import { PARSER_FILES } from "../src/lib/site-parser-files.js";
 
 for (const file of PARSER_FILES) {
-  await import(file);
+  await import(`../src/${file}`);
 }
 
 const { extractPageMetadataFromRoot } = globalThis.NovelTrackerPageMetadata;
 
-function createRoot({ title = "", selectors = {} }) {
+function createRoot({ title = "", selectors = {}, all = {} }) {
   return {
     title,
+    querySelectorAll(selector) {
+      return all[selector] || [];
+    },
     querySelector(selector) {
       if (!(selector in selectors)) {
         return null;
@@ -315,4 +306,191 @@ test("extractPageMetadataFromRoot strips Chikari's site suffix from series Open 
   assert.equal(metadata.novelHomeUrl, "https://chikari.moe/series/omniscient-reader");
   assert.equal(metadata.lastReadChapterLabel, "Chapter 304");
   assert.equal(metadata.autoProgressReady, true);
+});
+
+test("extractPageMetadataFromRoot reads Wuxiaworld's utility-class reader layout", () => {
+  const root = createRoot({
+    title: "Coiling Dragon - Book 1, Chapter 1 – Early Morning at a Township",
+    selectors: {
+      "h1": { textContent: "Related Novels" },
+      "[class*='-Chapter'] h4": { textContent: "Book 1, Chapter 1 – Early Morning at a Township" }
+    },
+    all: {
+      'a[href$="/novel/coiling-dragon"]': [{ textContent: "" }, { textContent: "Coiling Dragon" }]
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://www.wuxiaworld.com/novel/coiling-dragon/cd-book-1-chapter-1"
+  );
+
+  assert.equal(metadata.title, "Coiling Dragon");
+  assert.equal(metadata.novelHomeUrl, "https://www.wuxiaworld.com/novel/coiling-dragon");
+  assert.equal(metadata.lastReadChapterLabel, "Book 1, Chapter 1 – Early Morning at a Township");
+});
+
+test("extractPageMetadataFromRoot falls back to Wuxiaworld's document title", () => {
+  const root = createRoot({ title: "Renegade Immortal - Chapter 1 – Leaving Home" });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://www.wuxiaworld.com/novel/renegade-immortal/rge-chapter-1"
+  );
+
+  assert.equal(metadata.title, "Renegade Immortal");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1 – Leaving Home");
+});
+
+test("extractPageMetadataFromRoot resolves Shin Translations abbreviations to their series", () => {
+  const root = createRoot({
+    title: "TNG Vol. 22 Chapter 4 Part 2 – Shin Translations",
+    selectors: { "h1": { textContent: "TNG Vol. 22 Chapter 4 Part 2" } },
+    all: {
+      "a[href*='/series/']": [
+        { href: "https://shintranslations.com/series/", textContent: "Series" },
+        {
+          href: "https://shintranslations.com/series/starting-a-new-life-for-the-discarded-all-rounder-dar/",
+          textContent: "Starting a New Life for the Discarded All-Rounder (DAR)"
+        },
+        { href: "https://shintranslations.com/series/the-new-gate-tng-toc/", textContent: "THE NEW GATE (TNG)" }
+      ]
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://shintranslations.com/chapter/tng-vol-22-chapter-4-part-2/"
+  );
+
+  assert.equal(metadata.title, "THE NEW GATE");
+  assert.equal(metadata.novelHomeUrl, "https://shintranslations.com/series/the-new-gate-tng-toc/");
+  assert.equal(metadata.lastReadChapterLabel, "TNG Vol. 22 Chapter 4 Part 2");
+});
+
+test("extractPageMetadataFromRoot uses the Archive of Our Own work and chapter headings", () => {
+  const root = createRoot({
+    title: "Evitative - Chapter 1 - Vichan - Harry Potter - J. K. Rowling [Archive of Our Own]",
+    selectors: {
+      "h2.title.heading": { textContent: "Evitative" },
+      "#chapters .chapter.preface h3.title": { textContent: "Chapter 1: The Library" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://archiveofourown.org/works/20049589/chapters/47480461?view_adult=true"
+  );
+
+  assert.equal(metadata.title, "Evitative");
+  assert.equal(metadata.novelHomeUrl, "https://archiveofourown.org/works/20049589");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1: The Library");
+});
+
+test("extractPageMetadataFromRoot treats an Archive of Our Own one-shot as chapter 1", () => {
+  const root = createRoot({
+    title: "Small Work - isthisselfcare [Archive of Our Own]",
+    selectors: { "h2.title.heading": { textContent: "Small Work" } }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://archiveofourown.org/collections/fest/works/123456"
+  );
+
+  assert.equal(metadata.title, "Small Work");
+  assert.equal(metadata.novelHomeUrl, "https://archiveofourown.org/works/123456");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1");
+});
+
+test("extractPageMetadataFromRoot finds the Wattpad story from its title link", () => {
+  const root = createRoot({
+    title: "Empire of Ashes - Preview - Wattpad",
+    selectors: {
+      "h2.title": { textContent: "Empire of Ashes" },
+      "h1.h2": { textContent: "Preview" },
+      "img.cover": { src: "https://img.wattpad.com/cover/66766637-288-k635916.jpg" }
+    },
+    all: {
+      "a[href*='/story/']": [
+        { href: "https://www.wattpad.com/story/25279524", textContent: "Community Happenings" },
+        { href: "https://www.wattpad.com/story/66766637-empire-of-ashes?ref=nav", textContent: "Empire of Ashes" }
+      ]
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(root, "https://www.wattpad.com/235603347-empire-of-ashes-preview");
+
+  assert.equal(metadata.title, "Empire of Ashes");
+  assert.equal(metadata.novelHomeUrl, "https://www.wattpad.com/story/66766637-empire-of-ashes");
+  assert.equal(metadata.lastReadChapterLabel, "Preview");
+  assert.equal(metadata.coverImageUrl, "https://img.wattpad.com/cover/66766637-288-k635916.jpg");
+});
+
+test("extractPageMetadataFromRoot falls back to the Wattpad cover's story id", () => {
+  const root = createRoot({
+    selectors: {
+      "h2.title": { textContent: "Empire of Ashes" },
+      "img[src*='/cover/']": { src: "https://img.wattpad.com/cover/66766637-64-k635916.jpg" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(root, "https://www.wattpad.com/235603347-empire-of-ashes-preview");
+
+  assert.equal(metadata.novelHomeUrl, "https://www.wattpad.com/story/66766637");
+});
+
+test("extractPageMetadataFromRoot reads the Webnovel chapter the URL names", () => {
+  const root = createRoot({
+    title: "Shadow Slave Chapter 1 - Nightmare Begins - WebNovel",
+    selectors: {
+      'a[href$="/book/shadow-slave_22196546206090805"]': { textContent: "Shadow Slave" },
+      '[data-cid="59583457017254387"] h1': { textContent: "Chapter 1: Nightmare Begins" },
+      ".cha-tit h1": { textContent: "Chapter 0: Earlier Chapter Still In The Page" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://www.webnovel.com/book/shadow-slave_22196546206090805/nightmare-begins_59583457017254387"
+  );
+
+  assert.equal(metadata.title, "Shadow Slave");
+  assert.equal(metadata.novelHomeUrl, "https://www.webnovel.com/book/shadow-slave_22196546206090805");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1: Nightmare Begins");
+});
+
+test("extractPageMetadataFromRoot uses the NovelFire book link and chapter title", () => {
+  const root = createRoot({
+    selectors: {
+      ".booktitle": { textContent: "Lord of the Mysteries" },
+      ".chapter-title": { textContent: "Chapter 1 - Crimson" },
+      'meta[property="og:image"]': { content: "https://novelfire.net/server-1/lord-of-the-mysteries.jpg" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(root, "https://novelfire.net/book/lord-of-the-mysteries/chapter-1");
+
+  assert.equal(metadata.title, "Lord of the Mysteries");
+  assert.equal(metadata.novelHomeUrl, "https://novelfire.net/book/lord-of-the-mysteries");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1 - Crimson");
+  assert.equal(metadata.coverImageUrl, "https://novelfire.net/server-1/lord-of-the-mysteries.jpg");
+});
+
+test("extractPageMetadataFromRoot maps ReadNovelFull chapters to the novel's .html page", () => {
+  const root = createRoot({
+    selectors: {
+      ".novel-title": { textContent: "Second World" },
+      ".chr-title": { textContent: "Chapter 1 - 1.  Beta Test" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://readnovelfull.com/second-world/chapter-1-1-beta-test.html"
+  );
+
+  assert.equal(metadata.title, "Second World");
+  assert.equal(metadata.novelHomeUrl, "https://readnovelfull.com/second-world.html");
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 1 - 1. Beta Test");
 });

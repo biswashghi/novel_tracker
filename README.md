@@ -33,8 +33,17 @@ Novel Tracker includes site-specific parsers for:
 - Light Novels Translations
 - Shin Translations
 - Chikari
+- Archive of Our Own
+- Wattpad
+- Webnovel
+- NovelFire
+- ReadNovelFull
 
 Other sites fall back to generic page metadata and can still be saved manually.
+A scheduled workflow loads two or three real chapters from every supported site
+each day and checks that the parsers still read them correctly (see
+`tests/e2e/live/site-layouts.fixtures.js`).
+
 NovelUpdates is useful for discovery, but it is not treated as a reading source
 because it indexes releases rather than hosting chapters.
 
@@ -64,6 +73,7 @@ src/
     parser-core.js            Shared parsing helpers for the site profiles
     page-metadata.js          Extracts title/chapter/home URL from a page
     site-parsers/             One profile per supported site (royalroad, chikari, …)
+    site-parser-files.js      Parser load order shared by the popup and manifest
     storage.js                Library reads and mutations over the sync blob
     reading-stats.js          Streaks and chapter counts for the stats row
     sync-core.js              CRDT: HLC clocks, field-level LWW, tombstones
