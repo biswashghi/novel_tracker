@@ -599,8 +599,26 @@ async function saveNovels(novels) {
   // account or force every already-synced novel through a full resync.
   const previous = await getSyncState();
   let state = { ...previous, novels: {}, pendingMutations: [], appliedMutations: {} };
+  // Each imported mutation carries the clock of the read it records, the way
+  // the legacy migration in getSyncState does. Queueing them through the
+  // local clock instead (enqueue) stamped every chapter with the import time:
+  // an HLC never moves backwards, so a historical `now` was clamped forward,
+  // and restoring a backup made a year of reading look like one afternoon.
+  const record = (novelId, type, clock, payload) => {
+    const mutation = {
+      mutationId: globalThis.crypto.randomUUID(),
+      deviceId: state.deviceId,
+      novelId,
+      generation: 1,
+      clock,
+      type,
+      payload
+    };
+    state = applyMutation(state, mutation);
+    state.pendingMutations.push(mutation);
+  };
+
   for (const novel of novels) {
-    const now = Date.parse(novel.updatedAt || "") || Date.now();
     const novelId = novel.id || globalThis.crypto.randomUUID();
     const history = normalizeChapterHistory(novel.chapterHistory);
     const event = toEvent(history[history.length - 1] || {
@@ -608,21 +626,11 @@ async function saveNovels(novels) {
       label: novel.lastReadChapterLabel,
       readAt: novel.updatedAt
     }, novelId, history.length - 1, state.deviceId);
-    state = enqueue(state, {
-      novelId,
-      generation: 1,
-      type: "novel.create",
-      payload: { ...novel, event }
-    }, now);
+    record(novelId, "novel.create", event.readAt, { ...novel, event });
     for (const [index, historyEntry] of history.entries()) {
       const importedEvent = toEvent(historyEntry, novelId, index, state.deviceId);
       if (importedEvent.id === event.id) continue;
-      state = enqueue(state, {
-        novelId,
-        generation: 1,
-        type: "checkpoint.record",
-        payload: { event: importedEvent }
-      }, Date.parse(historyEntry.readAt || "") || now);
+      record(novelId, "checkpoint.record", importedEvent.readAt, { event: importedEvent });
     }
   }
   await saveSyncState(state);
