@@ -363,6 +363,8 @@ function iconButton(label, action, iconName, className = "") {
   return node;
 }
 
+// The one set of status names: card pills, the edit form and the filter all
+// use it (the popup's select says the same).
 const STATUS_LABELS = { active: "Reading", paused: "Paused", completed: "Completed", dropped: "Dropped" };
 
 function field(labelText, name, value) {
@@ -475,15 +477,17 @@ function createCard(novel) {
   titleBlock.append(element("h2", "", novel.title));
 
   const meta = element("div", "meta");
-  const statusPill = element("span", "status-pill", STATUS_LABELS[novel.status] || novel.status);
-  statusPill.dataset.status = novel.status;
+  const status = STATUS_LABELS[novel.status] ? novel.status : "active";
+  const statusPill = element("span", "status-pill", STATUS_LABELS[status]);
+  statusPill.dataset.status = status;
   const updated = element("span", "meta-updated", `Updated ${formatRelativeDate(novel.updatedAt)}`);
   updated.title = formatDate(novel.updatedAt);
   meta.append(statusPill, element("span", "meta-source", novel.sourceSite), updated);
 
   if (novel.rating > 0) {
     const ratingDisplay = element("span", "rating-display");
-    ratingDisplay.setAttribute("aria-label", `Rated ${novel.rating} of 5`);
+    ratingDisplay.setAttribute("role", "img");
+    ratingDisplay.setAttribute("aria-label", `Rated ${novel.rating} out of 5`);
     ratingDisplay.append(icon("star"), document.createTextNode(String(novel.rating)));
     meta.append(ratingDisplay);
   }
@@ -570,12 +574,7 @@ function createCard(novel) {
   const statusSelect = document.createElement("select");
   statusSelect.name = "status";
 
-  for (const [value, label] of [
-    ["active", "Active"],
-    ["paused", "Paused"],
-    ["completed", "Completed"],
-    ["dropped", "Dropped"]
-  ]) {
+  for (const [value, label] of Object.entries(STATUS_LABELS)) {
     const option = element("option", "", label);
     option.value = value;
     option.selected = novel.status === value;
@@ -724,6 +723,7 @@ function render() {
 
   if (!filtered.length) {
     library.append(createEmptyState());
+    animateEntrance = false;
     return;
   }
 
@@ -937,6 +937,8 @@ for (const provider of AUTH_PROVIDERS) {
   button.id = `sign-in-${provider.id}`;
   button.className = "top-action primary-action sign-in-button";
   button.dataset.provider = provider.id;
+  // The visible label is hidden on narrow screens; keep the button named.
+  button.setAttribute("aria-label", provider.label);
 
   const label = document.createElement("span");
   label.textContent = provider.label;
@@ -998,6 +1000,7 @@ const THEME_KEY = "novel-tracker:theme";
 const THEME_CHOICES = ["system", "light", "dark"];
 const THEME_LABELS = { system: "match system", light: "light", dark: "dark" };
 const themeToggle = document.querySelector("#theme-toggle");
+let themeFadeTimer = null;
 
 function readThemeChoice() {
   try {
@@ -1031,6 +1034,12 @@ themeToggle.addEventListener("click", () => {
   } catch {
     // Still switch for this page view even if it cannot be remembered.
   }
+  // Fade every surface together for the switch only (see .theme-changing),
+  // rather than leaving colour transitions on everything all the time.
+  const root = document.documentElement;
+  root.classList.add("theme-changing");
+  window.clearTimeout(themeFadeTimer);
+  themeFadeTimer = window.setTimeout(() => root.classList.remove("theme-changing"), 420);
   applyThemeChoice(next);
 });
 
