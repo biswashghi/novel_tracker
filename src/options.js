@@ -7,6 +7,7 @@ import {
 } from "./lib/storage.js";
 
 import { computeReadingStats } from "./lib/reading-stats.js";
+import { novelsToCsv } from "./lib/csv.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
 import { requireFirefoxSyncDataConsent } from "./lib/firefox-data-consent.js";
@@ -31,6 +32,7 @@ const statCompleted = document.querySelector("#stat-completed");
 const statTotal = document.querySelector("#stat-total");
 
 const exportJsonButton = document.querySelector("#export-json");
+const exportCsvButton = document.querySelector("#export-csv");
 const importJsonButton = document.querySelector("#import-json");
 const importFileInput = document.querySelector("#import-file");
 
@@ -669,8 +671,8 @@ async function refresh() {
    DOWNLOAD / IMPORT
 ========================================================= */
 
-function downloadTextFile(filename, text) {
-  const blob = new Blob([text], { type: "application/json" });
+function downloadTextFile(filename, text, type = "application/json") {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -764,6 +766,13 @@ exportJsonButton.addEventListener("click", async () => {
   const text = await exportNovelsJson();
   const stamp = new Date().toISOString().slice(0, 10);
   downloadTextFile(`novel-tracker-backup-${stamp}.json`, text);
+});
+
+exportCsvButton.addEventListener("click", async () => {
+  // A byte-order mark so Excel opens the UTF-8 file with titles intact.
+  const items = [...(await getNovels())].sort((a, b) => a.title.localeCompare(b.title));
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadTextFile(`novel-tracker-library-${stamp}.csv`, `\uFEFF${novelsToCsv(items)}`, "text/csv;charset=utf-8");
 });
 
 /* =========================================================

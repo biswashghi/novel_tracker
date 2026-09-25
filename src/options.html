@@ -90,6 +90,11 @@
                 fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
         </symbol>
 
+        <symbol id="i-table" viewBox="0 0 24 24">
+            <rect x="4" y="5" width="16" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M4 10h16M4 14.5h16M10 10v9" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </symbol>
+
         <symbol id="i-trash" viewBox="0 0 24 24">
             <path d="M5 7h14M9 7V4.5h6V7m2 0-.8 12H7.8L7 7M10 10.5V16M14 10.5V16" fill="none" stroke="currentColor"
                 stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
@@ -274,6 +279,13 @@
                     title="Export library">
                     <svg>
                         <use href="#i-export"></use>
+                    </svg>
+                </button>
+
+                <button type="button" id="export-csv" class="icon-action" aria-label="Export library as CSV"
+                    title="Export as CSV (spreadsheet)">
+                    <svg>
+                        <use href="#i-table"></use>
                     </svg>
                 </button>
 

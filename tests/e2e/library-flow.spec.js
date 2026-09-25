@@ -1,4 +1,5 @@
 import { test, expect, extensionUrl, mockSitePage, stubActiveTab } from './fixtures/extension.js';
+import { readFile } from 'node:fs/promises';
 
 const CHAPTER_URL = 'https://www.royalroad.com/fiction/12345/test-fiction/7';
 const CHAPTER_HTML = `
@@ -160,4 +161,25 @@ test('the save shortcut and context menu save the tab without opening the popup'
   const optionsPage = await context.newPage();
   await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
+});
+
+test('CSV export downloads one spreadsheet row per novel', async ({ context, extensionId, serviceWorker }) => {
+  await saveChapterViaPopup({ context, extensionId, serviceWorker });
+
+  const optionsPage = await context.newPage();
+  await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
+  await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
+
+  const [download] = await Promise.all([
+    optionsPage.waitForEvent('download'),
+    optionsPage.locator('#export-csv').click()
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^novel-tracker-library-\d{4}-\d{2}-\d{2}\.csv$/);
+
+  const csv = (await readFile(await download.path(), 'utf8')).replace(/^\uFEFF/, '');
+  const [header, row, trailing] = csv.split('\r\n');
+  expect(header).toBe('Title,Source,Novel page,Chapter,Chapter URL,Status,Rating,Tags,Notes,Chapters read,Last read');
+  expect(row).toContain('Test Fiction');
+  expect(row).toContain(CHAPTER_URL);
+  expect(trailing).toBe('');
 });
