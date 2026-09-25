@@ -1178,6 +1178,8 @@ select {
 ========================================================= */
 
 .cover {
+  position: relative;
+
   width: 78px;
   height: 105px;
 
@@ -1187,14 +1189,13 @@ select {
 
   overflow: hidden;
 
-  padding: 8px;
-
   border-radius:
-    5px
-    9px
-    9px
-    5px;
+    4px
+    8px
+    8px
+    4px;
 
+  /* Only visible behind the initials when a novel has no cover image. */
   background:
     linear-gradient(
       145deg,
@@ -1221,6 +1222,28 @@ select {
     box-shadow 180ms ease;
 }
 
+.cover:not(:has(img)) {
+  padding: 8px;
+}
+
+/* A hairline edge plus a lit spine on the left, drawn over the image so the
+   cover reads as a book without framing it in a thick copper border. */
+.cover::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  border-radius: inherit;
+
+  pointer-events: none;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(32, 22, 14, 0.14),
+    inset 3px 0 0 rgba(255, 255, 255, 0.16),
+    inset 4px 0 0 rgba(32, 22, 14, 0.1);
+}
+
 .card:hover .cover {
   transform:
     translateY(-2px)
@@ -1232,6 +1255,8 @@ select {
 }
 
 .cover img {
+  display: block;
+
   width: 100%;
   height: 100%;
 
@@ -2234,7 +2259,9 @@ select {
   .cover {
     width: 54px;
     height: 74px;
+  }
 
+  .cover:not(:has(img)) {
     padding: 5px;
   }
 
