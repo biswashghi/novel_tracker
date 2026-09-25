@@ -5,6 +5,7 @@ import {
 } from "./lib/storage.js";
 
 import { getExtensionApi } from "./lib/extension-api.js";
+import { PARSER_FILES } from "./lib/site-parser-files.js";
 
 const extensionApi = getExtensionApi();
 
@@ -14,19 +15,6 @@ async function sendMessage(type, payload) {
   return result;
 }
 
-const PARSER_FILES = [
-  "lib/parser-core.js",
-  "lib/site-parsers/royalroad.js",
-  "lib/site-parsers/chikari.js",
-  "lib/site-parsers/patreon.js",
-  "lib/site-parsers/wuxiaworld.js",
-  "lib/site-parsers/novelbin.js",
-  "lib/site-parsers/scribblehub.js",
-  "lib/site-parsers/creativenovels.js",
-  "lib/site-parsers/lightnovelstranslations.js",
-  "lib/site-parsers/shintranslations.js",
-  "lib/page-metadata.js"
-];
 
 const form = document.querySelector("#novel-form");
 const sitePill = document.querySelector("#site-pill");

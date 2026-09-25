@@ -20,6 +20,11 @@
     "https://*.lightnovelstranslations.com/*",
     "https://*.shintranslations.com/*",
     "https://chikari.moe/*",
+    "https://*.archiveofourown.org/*",
+    "https://*.wattpad.com/*",
+    "https://*.webnovel.com/*",
+    "https://*.novelfire.net/*",
+    "https://*.readnovelfull.com/*",
     "https://api.novel.bghimire.com/*",
     "https://auth.novel.bghimire.com/*"
   ],
@@ -44,7 +49,12 @@
         "https://*.creativenovels.com/*",
         "https://*.lightnovelstranslations.com/*",
         "https://*.shintranslations.com/*",
-        "https://chikari.moe/*"
+        "https://chikari.moe/*",
+        "https://*.archiveofourown.org/*",
+        "https://*.wattpad.com/*",
+        "https://*.webnovel.com/*",
+        "https://*.novelfire.net/*",
+        "https://*.readnovelfull.com/*"
       ],
       "js": [
         "lib/parser-core.js",
@@ -57,6 +67,11 @@
         "lib/site-parsers/lightnovelstranslations.js",
         "lib/site-parsers/shintranslations.js",
         "lib/site-parsers/chikari.js",
+        "lib/site-parsers/archiveofourown.js",
+        "lib/site-parsers/wattpad.js",
+        "lib/site-parsers/webnovel.js",
+        "lib/site-parsers/novelfire.js",
+        "lib/site-parsers/readnovelfull.js",
         "lib/page-metadata.js",
         "content-script.js"
       ],

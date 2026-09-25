@@ -57,13 +57,51 @@ jobs:
         run: npm run build
 
       - name: Exercise live Chikari chapter flows
-        run: npm run test:e2e:live
+        run: npm run test:e2e:live -- tests/e2e/live/chikari-live.spec.js
 
       - name: Upload browser diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chikari-live-site-diagnostics
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  site-layouts:
+    name: Supported site layouts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Runs the extension's parsers against the seeded chapters in
+      # tests/e2e/live/site-layouts.fixtures.js. Sites that answer the runner
+      # with a bot challenge are reported as skipped, not failed.
+      - name: Check every supported site's chapter layout
+        run: npm run test:e2e:layouts
+
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: site-layout-diagnostics
           path: |
             playwright-report
             test-results
