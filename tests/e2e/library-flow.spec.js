@@ -67,6 +67,24 @@ test('library page lists, edits, and deletes a saved novel', async ({ context, e
   const card = optionsPage.locator('.card', { hasText: 'Test Fiction' });
   await expect(card).toBeVisible({ timeout: 15_000 });
 
+  // The card leads with status, source and a relative time; the chapter URL
+  // is the Continue button's tooltip rather than a line of text.
+  await expect(card.locator('.status-pill')).toHaveText('Reading');
+  await expect(card.locator('.status-pill')).toHaveAttribute('data-status', 'active');
+  await expect(card.locator('.meta-updated')).toHaveText(/^Updated (just now|\d+m ago)$/);
+  await expect(card.locator('button[data-action="open"]')).toHaveText('Continue');
+  await expect(card.locator('button[data-action="open"]')).toHaveAttribute('title', CHAPTER_URL);
+  await expect(card.locator('button[data-action="edit"]')).toHaveAttribute('aria-label', 'Edit');
+  // One set of status names everywhere: the pill, the edit form and the filter.
+  await expect(card.locator('select[name="status"] option[value="active"]')).toHaveText('Reading');
+  await expect(optionsPage.locator('#status-filter option[value="active"]')).toHaveText('Reading');
+  // Sign-in buttons keep a name when their visible label is hidden.
+  await optionsPage.setViewportSize({ width: 600, height: 800 });
+  for (const button of await optionsPage.locator('.sign-in-button').all()) {
+    await expect(button).toHaveAttribute('aria-label', /^Sign in/);
+  }
+  await optionsPage.setViewportSize({ width: 1280, height: 800 });
+
   // Edit: rename the novel and confirm the change persists after re-render.
   await card.locator('button[data-action="edit"]').click();
   const titleInput = card.locator('input[name="title"]');

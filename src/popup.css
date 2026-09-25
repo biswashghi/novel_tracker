@@ -1,140 +1,7 @@
 /* =========================================================
    NOVEL TRACKER · POPUP
-   Same palette and motion tokens as the library page.
+   Styles only; tokens come from tokens.css.
 ========================================================= */
-
-:root {
-  color-scheme: light;
-
-  --paper: #f6f3ee;
-  --paper-deep: #ece6dc;
-  --sheet: #fffdfa;
-  --sheet-inset: #f8f4ee;
-  --sheet-glass: rgba(246, 243, 238, 0.86);
-  --field: #ffffff;
-
-  --ink: #1b2025;
-  --muted: #676d73;
-  --subtle: #8d9296;
-
-  --copper: #b45a2a;
-  --copper-hover: #9c4a1e;
-  --copper-ink: #8f431c;
-  --copper-soft: #f7e7dc;
-  --copper-faint: #fbf1ea;
-
-  --fill: var(--copper);
-  --fill-hover: var(--copper-hover);
-  --on-fill: #ffffff;
-
-  --line: #e8e2d8;
-  --line-dark: #d6cdbf;
-
-  --danger: #a8403a;
-  --danger-soft: #f8e5e3;
-  --success: #2f6f4b;
-  --success-soft: #e3f0e7;
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-
-  --shadow-small: 0 1px 2px rgba(33, 26, 18, 0.05), 0 1px 1px rgba(33, 26, 18, 0.03);
-  --shadow: 0 10px 26px -12px rgba(33, 26, 18, 0.28);
-  --focus-ring: 0 0 0 3px rgba(180, 90, 42, 0.28);
-
-  --ease-out: cubic-bezier(0.22, 0.8, 0.26, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
-  --fast: 120ms;
-  --base: 200ms;
-  --slow: 360ms;
-
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --font-display: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
-
-  font-family: var(--font-ui);
-}
-
-/* =========================================================
-   DARK THEME
-   Follows the system unless the reader picked a theme
-   (theme-init.js sets data-theme on <html>).
-========================================================= */
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-
-    --paper: #121417;
-    --paper-deep: #1f2327;
-    --sheet: #1a1d21;
-    --sheet-inset: #16191c;
-    --sheet-glass: rgba(18, 20, 23, 0.85);
-    --field: #15181b;
-
-    --ink: #ebe6de;
-    --muted: #a3a8ad;
-    --subtle: #80868b;
-
-    --copper: #dd8a5b;
-    --copper-hover: #eba077;
-    --copper-ink: #f2b48d;
-    --copper-soft: #3a281d;
-    --copper-faint: #241c17;
-
-    --fill: #dd8a5b;
-    --fill-hover: #eba077;
-    --on-fill: #121417;
-
-    --line: #2a2f34;
-    --line-dark: #3a4046;
-
-    --danger: #ec8a80;
-    --danger-soft: #3a2220;
-    --success: #86c7a0;
-    --success-soft: #1d2c24;
-
-    --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
-    --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --paper: #121417;
-  --paper-deep: #1f2327;
-  --sheet: #1a1d21;
-  --sheet-inset: #16191c;
-  --sheet-glass: rgba(18, 20, 23, 0.85);
-  --field: #15181b;
-
-  --ink: #ebe6de;
-  --muted: #a3a8ad;
-  --subtle: #80868b;
-
-  --copper: #dd8a5b;
-  --copper-hover: #eba077;
-  --copper-ink: #f2b48d;
-  --copper-soft: #3a281d;
-  --copper-faint: #241c17;
-
-  --fill: #dd8a5b;
-  --fill-hover: #eba077;
-  --on-fill: #121417;
-
-  --line: #2a2f34;
-  --line-dark: #3a4046;
-
-  --danger: #ec8a80;
-  --danger-soft: #3a2220;
-  --success: #86c7a0;
-  --success-soft: #1d2c24;
-
-  --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
-  --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
-}
 
 /* =========================================================
    BASE
@@ -279,7 +146,7 @@ svg {
   display: grid;
   place-items: center;
 
-  border: 1px solid var(--line-dark);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
 
   background: var(--sheet);
@@ -349,8 +216,8 @@ svg {
 }
 
 body.existing-novel .current-page-icon {
-  background: var(--success-soft);
-  color: var(--success);
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 
 .current-page-copy {
@@ -452,7 +319,7 @@ body.existing-novel .current-page-icon {
 
   padding: 0 10px;
 
-  border: 1px solid var(--line-dark);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
 
   background: var(--field);
@@ -466,7 +333,7 @@ body.existing-novel .current-page-icon {
 }
 
 .field input::placeholder {
-  color: var(--subtle);
+  color: var(--faint);
 }
 
 .field input:focus,
@@ -487,7 +354,7 @@ body.existing-novel .current-page-icon {
   width: 14px;
   height: 14px;
 
-  color: var(--subtle);
+  color: var(--faint);
 
   transform: translateY(-50%);
 
@@ -547,7 +414,7 @@ body.existing-novel .current-page-icon {
 .summary-hint {
   margin-left: auto;
 
-  color: var(--subtle);
+  color: var(--faint);
 
   font-size: 0.68rem;
   font-weight: 600;
@@ -602,7 +469,7 @@ body.existing-novel .current-page-icon {
 }
 
 .status.success {
-  color: var(--success);
+  color: var(--ok);
 
   font-weight: 650;
 
@@ -665,7 +532,7 @@ body.existing-novel .current-page-icon {
 }
 
 .save-button.saved {
-  background: var(--success);
+  background: var(--ok);
   color: var(--on-fill);
 }
 
@@ -802,7 +669,7 @@ body.existing-novel .current-page-icon {
 }
 
 .continue-item:hover {
-  border-color: var(--line-dark);
+  border-color: var(--line-strong);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
@@ -871,7 +738,7 @@ body.existing-novel .current-page-icon {
   width: 14px;
   height: 14px;
 
-  color: var(--subtle);
+  color: var(--faint);
 
   transform: rotate(-90deg);
 

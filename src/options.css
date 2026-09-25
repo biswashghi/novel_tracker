@@ -1,186 +1,8 @@
 /* =========================================================
    NOVEL TRACKER · LIBRARY
-   One token set per theme; every component reads tokens only.
+   Styles only; every colour, radius, shadow and duration comes
+   from tokens.css.
 ========================================================= */
-
-:root {
-  color-scheme: light;
-
-  /* Surfaces */
-  --paper: #f6f3ee;
-  --paper-deep: #ece6dc;
-  --sheet: #fffdfa;
-  --sheet-hover: #fffaf3;
-  --sheet-inset: #f8f4ee;
-  --sheet-glass: rgba(246, 243, 238, 0.82);
-  --field: #ffffff;
-
-  /* Text */
-  --ink: #1b2025;
-  --ink-soft: #3a4148;
-  --muted: #676d73;
-  --faint: #8d9296;
-
-  /* Lines */
-  --line: #e8e2d8;
-  --line-strong: #d6cdbf;
-
-  /* Accent: a single copper, plus a tint for quiet fills */
-  --copper: #b45a2a;
-  --copper-hover: #9c4a1e;
-  --copper-ink: #8f431c;
-  --copper-soft: #f7e7dc;
-  --copper-wash: rgba(180, 90, 42, 0.07);
-
-  /* Filled buttons (dark mode swaps to dark text on a lighter copper) */
-  --fill: var(--copper);
-  --fill-hover: var(--copper-hover);
-  --on-fill: #ffffff;
-
-  /* Status */
-  --ok: #2f6f4b;
-  --ok-soft: #e3f0e7;
-  --warn: #8a5a0c;
-  --warn-soft: #f8ecd3;
-  --info: #2f5f92;
-  --info-soft: #e2ebf6;
-  --quiet: #5e646a;
-  --quiet-soft: #eeebe6;
-  --danger: #a8403a;
-  --danger-wash: rgba(168, 64, 58, 0.08);
-
-  /* Chrome */
-  --nav: #1f252a;
-  --nav-text: #f7f2ea;
-
-  /* Shape */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-pill: 999px;
-
-  --shadow-small: 0 1px 2px rgba(33, 26, 18, 0.05), 0 1px 1px rgba(33, 26, 18, 0.03);
-  --shadow: 0 12px 32px -12px rgba(33, 26, 18, 0.22), 0 2px 6px rgba(33, 26, 18, 0.05);
-  --shadow-float: 0 18px 48px -12px rgba(20, 16, 12, 0.35);
-  --focus-ring: 0 0 0 3px rgba(180, 90, 42, 0.28);
-
-  /* Motion */
-  --ease-out: cubic-bezier(0.22, 0.8, 0.26, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
-  --fast: 120ms;
-  --base: 200ms;
-  --slow: 360ms;
-
-  /* Type */
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --font-display: "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
-
-  font-family: var(--font-ui);
-}
-
-/* =========================================================
-   DARK THEME
-   Follows the system unless the reader picked a theme
-   (theme-init.js sets data-theme on <html>).
-========================================================= */
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-
-    --paper: #121417;
-    --paper-deep: #1f2327;
-    --sheet: #1a1d21;
-    --sheet-hover: #1f2327;
-    --sheet-inset: #16191c;
-    --sheet-glass: rgba(18, 20, 23, 0.78);
-    --field: #15181b;
-
-    --ink: #ebe6de;
-    --ink-soft: #cfc9bf;
-    --muted: #a3a8ad;
-    --faint: #80868b;
-
-    --line: #2a2f34;
-    --line-strong: #3a4046;
-
-    --copper: #dd8a5b;
-    --copper-hover: #eba077;
-    --copper-ink: #f2b48d;
-    --copper-soft: #3a281d;
-    --copper-wash: rgba(221, 138, 91, 0.1);
-
-    --fill: #dd8a5b;
-    --fill-hover: #eba077;
-    --on-fill: #121417;
-
-    --ok: #86c7a0;
-    --ok-soft: #1d2c24;
-    --warn: #e3b660;
-    --warn-soft: #2f2718;
-    --info: #8fb5e3;
-    --info-soft: #1c2635;
-    --quiet: #a3a8ad;
-    --quiet-soft: #24282d;
-    --danger: #ec8a80;
-    --danger-wash: rgba(236, 138, 128, 0.12);
-
-    --nav: #0e1013;
-
-    --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow: 0 14px 36px -12px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
-    --shadow-float: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
-    --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --paper: #121417;
-  --paper-deep: #1f2327;
-  --sheet: #1a1d21;
-  --sheet-hover: #1f2327;
-  --sheet-inset: #16191c;
-  --sheet-glass: rgba(18, 20, 23, 0.78);
-  --field: #15181b;
-
-  --ink: #ebe6de;
-  --ink-soft: #cfc9bf;
-  --muted: #a3a8ad;
-  --faint: #80868b;
-
-  --line: #2a2f34;
-  --line-strong: #3a4046;
-
-  --copper: #dd8a5b;
-  --copper-hover: #eba077;
-  --copper-ink: #f2b48d;
-  --copper-soft: #3a281d;
-  --copper-wash: rgba(221, 138, 91, 0.1);
-
-  --fill: #dd8a5b;
-  --fill-hover: #eba077;
-  --on-fill: #121417;
-
-  --ok: #86c7a0;
-  --ok-soft: #1d2c24;
-  --warn: #e3b660;
-  --warn-soft: #2f2718;
-  --info: #8fb5e3;
-  --info-soft: #1c2635;
-  --quiet: #a3a8ad;
-  --quiet-soft: #24282d;
-  --danger: #ec8a80;
-  --danger-wash: rgba(236, 138, 128, 0.12);
-
-  --nav: #0e1013;
-
-  --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 14px 36px -12px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-float: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
-  --focus-ring: 0 0 0 3px rgba(221, 138, 91, 0.4);
-}
 
 /* =========================================================
    BASE
@@ -207,10 +29,21 @@ body {
 
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
 
+/* Only while the theme toggle switches palettes (options.js adds the class
+   for ~400ms): every surface fades together instead of the page background
+   fading behind cards that snap. */
+.theme-changing *,
+.theme-changing *::before,
+.theme-changing *::after,
+.theme-changing body {
   transition:
     background-color var(--slow) var(--ease-out),
-    color var(--slow) var(--ease-out);
+    border-color var(--slow) var(--ease-out),
+    color var(--slow) var(--ease-out),
+    fill var(--slow) var(--ease-out),
+    box-shadow var(--slow) var(--ease-out) !important;
 }
 
 button,
@@ -267,8 +100,6 @@ svg {
   background: var(--sheet-glass);
   border-bottom: 1px solid var(--line);
 
-  -webkit-backdrop-filter: saturate(1.6) blur(14px);
-  backdrop-filter: saturate(1.6) blur(14px);
 }
 
 .topbar-inner {
