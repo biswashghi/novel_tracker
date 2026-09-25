@@ -871,6 +871,52 @@ deleteAccountButton.addEventListener("click", () =>
 );
 
 /* =========================================================
+   THEME
+========================================================= */
+
+// theme-init.js applies the saved choice before first paint; this only
+// cycles it. Stored in localStorage (shared by the popup and this page, which
+// are the same extension origin) so it is a per-browser preference and never syncs.
+const THEME_KEY = "novel-tracker:theme";
+const THEME_CHOICES = ["system", "light", "dark"];
+const THEME_LABELS = { system: "match system", light: "light", dark: "dark" };
+const themeToggle = document.querySelector("#theme-toggle");
+
+function readThemeChoice() {
+  try {
+    const saved = globalThis.localStorage?.getItem(THEME_KEY);
+    return THEME_CHOICES.includes(saved) ? saved : "system";
+  } catch {
+    return "system";
+  }
+}
+
+function applyThemeChoice(choice) {
+  if (choice === "system") {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = choice;
+  }
+
+  themeToggle.dataset.themeChoice = choice;
+  const label = `Theme: ${THEME_LABELS[choice]}`;
+  themeToggle.setAttribute("aria-label", label);
+  themeToggle.title = label;
+}
+
+themeToggle.addEventListener("click", () => {
+  const next = THEME_CHOICES[(THEME_CHOICES.indexOf(readThemeChoice()) + 1) % THEME_CHOICES.length];
+  try {
+    globalThis.localStorage?.setItem(THEME_KEY, next);
+  } catch {
+    // Still switch for this page view even if it cannot be remembered.
+  }
+  applyThemeChoice(next);
+});
+
+applyThemeChoice(readThemeChoice());
+
+/* =========================================================
    INITIAL LOAD
 ========================================================= */
 
