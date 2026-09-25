@@ -1,10 +1,10 @@
 import {
   autoUpdateNovelProgress,
-  buildSaveCandidate,
   deleteNovel,
   hasLocalLibraryData,
   importNovelsJson,
   restoreNovel,
+  saveChapterFromPage,
   updateNovel,
   upsertNovel
 } from "./lib/storage.js";
@@ -148,7 +148,7 @@ async function showSaveResult(tabId, ok, title) {
     await action.setBadgeText({ tabId, text: ok ? "✓" : "!" });
     await action.setTitle?.({ tabId, title });
     setTimeout(() => {
-      action.setBadgeText({ tabId, text: "" }).catch?.(() => {});
+      action.setBadgeText({ tabId, text: "" })?.catch?.(() => {});
       action.setTitle?.({ tabId, title: "" })?.catch?.(() => {});
     }, BADGE_MS);
   } catch {
@@ -157,11 +157,15 @@ async function showSaveResult(tabId, ok, title) {
 }
 
 async function saveChapterFromTab(tab) {
-  if (!tab?.id || !/^https?:/.test(tab.url || "")) return null;
+  if (!tab?.id) return null;
+  if (!/^https?:/.test(tab.url || "")) {
+    await showSaveResult(tab.id, false, "Novel Tracker can only save chapters on web pages.");
+    return null;
+  }
   try {
     const metadata = await readTabMetadata(tab.id);
     if (!metadata?.lastReadChapterUrl) throw new Error("No chapter information on this page");
-    const saved = await runLibraryWrite(upsertNovel, buildSaveCandidate(metadata));
+    const saved = await runLibraryWrite(saveChapterFromPage, metadata);
     const label = [saved?.title, saved?.lastReadChapterLabel].filter(Boolean).join(" · ");
     await showSaveResult(tab.id, true, `Saved to Novel Tracker: ${label}`);
     return saved;
@@ -185,13 +189,8 @@ function createSaveMenu() {
 }
 
 extensionApi.commands?.onCommand?.addListener((command, tab) => {
-  if (command !== SAVE_COMMAND) return;
-  if (tab) {
-    saveChapterFromTab(tab);
-    return;
-  }
-  // Older Firefox releases do not pass the tab to onCommand.
-  extensionApi.tabs.query({ active: true, currentWindow: true }).then(([active]) => saveChapterFromTab(active));
+  // Every supported browser passes the tab (Firefox since 126; the minimum is 140).
+  if (command === SAVE_COMMAND) saveChapterFromTab(tab);
 });
 
 extensionApi.contextMenus?.onClicked?.addListener((info, tab) => {
