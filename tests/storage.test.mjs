@@ -25,7 +25,9 @@ globalThis.localStorage = createLocalStorage();
 const storageModule = await import("../src/lib/storage.js");
 const {
   autoUpdateNovelProgress,
+  deleteNovel,
   exportNovelsJson,
+  getDeletedNovels,
   getNovels,
   getSyncState,
   importNovelsJson,
@@ -35,6 +37,7 @@ const {
   markAccountSynced,
   prepareSyncForAccount,
   saveChapterFromPage,
+  restoreNovel,
   saveSyncState,
   updateNovel,
   upsertNovel
@@ -905,4 +908,34 @@ test("saveChapterFromPage keeps a tracked novel's status, novel page and cover",
   assert.equal(result.status, "paused");
   assert.equal(result.novelHomeUrl, "https://example.com/novels/some-novel");
   assert.equal(result.coverImageUrl, "https://example.com/covers/some-novel.jpg");
+});
+
+test("getDeletedNovels lists restorable novels until restoreNovel brings them back", async () => {
+  globalThis.localStorage.clear();
+
+  const saved = await upsertNovel({
+    title: "Gone Tomorrow",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/9/gone-tomorrow",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/9/gone-tomorrow/chapter/3/three",
+    lastReadChapterLabel: "Chapter 3",
+    tags: ["keep"]
+  });
+  assert.deepEqual(await getDeletedNovels(), []);
+
+  await deleteNovel(saved.id);
+  assert.deepEqual(await getNovels(), []);
+
+  const [deleted] = await getDeletedNovels();
+  assert.equal(deleted.id, saved.id);
+  assert.equal(deleted.title, "Gone Tomorrow");
+  assert.equal(deleted.lastReadChapterLabel, "Chapter 3");
+  assert.deepEqual(deleted.tags, ["keep"]);
+  assert.equal(Date.parse(deleted.purgeAt) - Date.parse(deleted.deletedAt), 30 * 24 * 60 * 60 * 1000);
+
+  await restoreNovel(saved.id);
+  assert.deepEqual(await getDeletedNovels(), []);
+  const [restored] = await getNovels();
+  assert.equal(restored.id, saved.id);
+  assert.equal(restored.lastReadChapterUrl, "https://www.royalroad.com/fiction/9/gone-tomorrow/chapter/3/three");
 });

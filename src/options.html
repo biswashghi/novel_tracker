@@ -436,6 +436,19 @@
     ======================================================== -->
         <section id="library" class="library"></section>
 
+        <details id="trash" class="trash" hidden>
+            <summary>
+                <svg aria-hidden="true">
+                    <use href="#i-trash"></use>
+                </svg>
+                <span id="trash-summary">Recently deleted</span>
+            </summary>
+            <p class="trash-hint">Deleted novels are kept for 30 days, then removed for good.</p>
+            <div id="trash-list" class="trash-list"></div>
+        </details>
+
+        <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
     </main>
 
     <script type="module" src="options.js"></script>

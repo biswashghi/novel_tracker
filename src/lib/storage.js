@@ -4,9 +4,11 @@ import {
   enqueueLocalMutation,
   libraryChecksum,
   matchesNovelIdentity,
+  materializeNovel,
   materializeNovels,
   purgeExpiredTombstones,
-  stableHash
+  stableHash,
+  TOMBSTONE_RETENTION_MS
 } from "./sync-core.js";
 import { getStorageLocal } from "./extension-api.js";
 
@@ -742,6 +744,28 @@ export async function restoreNovel(id) {
   state = enqueue(state, { novelId: id, generation: raw.generation, type: "novel.restore", payload: {} });
   await saveSyncState(state);
   notifyPendingSync();
+}
+
+/**
+ * Deleted novels that can still be restored, newest deletion first.
+ *
+ * A delete leaves a tombstone that keeps every field for
+ * TOMBSTONE_RETENTION_MS before purgeExpiredTombstones drops it, so the
+ * library can offer those back until then. `purgeAt` is when that happens.
+ */
+export async function getDeletedNovels() {
+  const state = await getSyncState();
+  return Object.values(state.novels)
+    .filter((novel) => novel.lifecycle === "deleted")
+    .map((novel) => {
+      const deletedAtMs = Number(novel.deletedAtMs) || Date.now();
+      return {
+        ...materializeNovel({ ...novel, lifecycle: "active" }),
+        deletedAt: new Date(deletedAtMs).toISOString(),
+        purgeAt: new Date(deletedAtMs + TOMBSTONE_RETENTION_MS).toISOString()
+      };
+    })
+    .sort((left, right) => right.deletedAt.localeCompare(left.deletedAt));
 }
 
 export async function exportNovelsJson() {
