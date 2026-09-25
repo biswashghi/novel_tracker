@@ -898,18 +898,30 @@ body.existing-novel .current-page-icon {
 ========================================================= */
 
 .continue-reading {
-  padding:
-    2px
+  margin:
+    0
     14px
-    8px;
+    6px;
+
+  border-top:
+    1px solid var(--line);
 }
 
 .continue-reading[hidden] {
   display: none;
 }
 
-.continue-reading h2 {
-  margin: 0 0 6px;
+.continue-reading summary {
+  min-height: 33px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  cursor: pointer;
+
+  list-style: none;
 
   color: var(--muted);
 
@@ -917,6 +929,47 @@ body.existing-novel .current-page-icon {
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.continue-reading summary::-webkit-details-marker {
+  display: none;
+}
+
+.continue-count {
+  min-width: 17px;
+
+  padding: 1px 5px;
+
+  border-radius: 999px;
+
+  background: var(--copper-soft);
+  color: var(--copper-hover);
+
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.continue-chevron {
+  width: 14px;
+  height: 14px;
+
+  margin-left: auto;
+
+  transition: transform 150ms ease;
+}
+
+.continue-reading[open] .continue-chevron {
+  transform: rotate(180deg);
+}
+
+.continue-reading .continue-list {
+  padding-bottom: 4px;
+}
+
+/* No readable page: the disabled form has nothing to offer, so keep only
+   its explanation and give the room to the list. */
+body.no-page .tracker-form > :not(.status) {
+  display: none;
 }
 
 .continue-list {

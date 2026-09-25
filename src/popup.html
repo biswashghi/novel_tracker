@@ -379,10 +379,16 @@
     </form>
 
 
-    <section id="continue-reading" class="continue-reading" aria-labelledby="continue-heading" hidden>
-      <h2 id="continue-heading">Continue reading</h2>
+    <details id="continue-reading" class="continue-reading" hidden>
+      <summary>
+        <span class="continue-heading">Continue reading</span>
+        <span id="continue-count" class="continue-count"></span>
+        <svg class="continue-chevron" aria-hidden="true">
+          <use href="#i-chevron"></use>
+        </svg>
+      </summary>
       <ul id="continue-list" class="continue-list"></ul>
-    </section>
+    </details>
 
 
     <footer class="popup-footer">

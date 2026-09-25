@@ -192,6 +192,8 @@ test('popup lists recently read novels and reopens their chapter', async ({ cont
   const popupPage = await context.newPage();
   await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
   await expect(popupPage.locator('#site-pill')).toHaveText(/No novel page/);
+  await expect(popupPage.locator('#continue-reading')).toHaveAttribute('open', '');
+  await expect(popupPage.locator('#title')).toBeHidden();
 
   const item = popupPage.locator('#continue-list .continue-item', { hasText: 'Test Fiction' });
   await expect(item).toBeVisible();
@@ -206,4 +208,50 @@ test('popup lists recently read novels and reopens their chapter', async ({ cont
   await onChapter.goto(extensionUrl(extensionId, 'popup.html'));
   await expect(onChapter.locator('#status-message')).toContainText(/Already tracking/);
   await expect(onChapter.locator('#continue-reading')).toBeHidden();
+});
+
+test('popup stays within Chrome\'s 600px popup height with a full Continue reading list', async ({
+  context,
+  extensionId,
+  serviceWorker
+}) => {
+  const others = ['Alpha', 'Beta', 'Gamma', 'Delta'].map((title, index) => ({
+    title,
+    sourceSite: 'example.com',
+    novelHomeUrl: `https://example.com/${title.toLowerCase()}`,
+    lastReadChapterUrl: `https://example.com/${title.toLowerCase()}/chapter-${index + 2}`,
+    lastReadChapterLabel: `Chapter ${index + 2}`,
+    status: 'active',
+    updatedAt: new Date(Date.now() - index * 3600_000).toISOString()
+  }));
+  const seeder = await context.newPage();
+  await seeder.goto(extensionUrl(extensionId, 'options.html'));
+  await seeder.evaluate(
+    (text) => chrome.runtime.sendMessage({ type: 'novel-tracker:library-import', payload: { text } }),
+    JSON.stringify({ version: 1, novels: others })
+  );
+  await saveChapterViaPopup({ context, extensionId, serviceWorker });
+
+  const contentHeight = (page) => page.evaluate(() => document.documentElement.scrollHeight);
+
+  // Not a readable page: the form collapses and the list is open.
+  const idle = await context.newPage();
+  await idle.setViewportSize({ width: 390, height: 600 });
+  await idle.goto(extensionUrl(extensionId, 'popup.html'));
+  await expect(idle.locator('#continue-list .continue-item')).toHaveCount(3);
+  expect(await contentHeight(idle)).toBeLessThanOrEqual(600);
+
+  // On a chapter: the full form, with the list folded to one line.
+  const sitePage = await context.newPage();
+  await sitePage.goto(CHAPTER_URL);
+  const onChapter = await context.newPage();
+  await onChapter.setViewportSize({ width: 390, height: 600 });
+  await stubActiveTab(onChapter, serviceWorker, CHAPTER_URL);
+  await onChapter.goto(extensionUrl(extensionId, 'popup.html'));
+  await expect(onChapter.locator('#status-message')).toContainText(/Already tracking/);
+  const list = onChapter.locator('#continue-reading');
+  await expect(list).toBeVisible();
+  await expect(list).not.toHaveAttribute('open', '');
+  await expect(list.locator('#continue-count')).toHaveText('3');
+  expect(await contentHeight(onChapter)).toBeLessThanOrEqual(600);
 });
