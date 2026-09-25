@@ -255,3 +255,22 @@ test('popup stays within Chrome\'s 600px popup height with a full Continue readi
   await expect(list.locator('#continue-count')).toHaveText('3');
   expect(await contentHeight(onChapter)).toBeLessThanOrEqual(600);
 });
+
+test('reading activity heatmap counts the chapters read today', async ({ context, extensionId, serviceWorker }) => {
+  const optionsPage = await context.newPage();
+  await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
+  // Nothing read yet: the panel stays out of the way.
+  await expect(optionsPage.locator('#reading-activity')).toBeHidden();
+
+  await saveChapterViaPopup({ context, extensionId, serviceWorker });
+  await optionsPage.reload();
+
+  const activity = optionsPage.locator('#reading-activity');
+  await expect(activity).toBeVisible({ timeout: 15_000 });
+  await expect(activity.locator('#activity-summary')).toHaveText('1 chapter on 1 day in the last year');
+  const today = activity.locator('.activity-cell[data-level="4"]');
+  await expect(today).toHaveCount(1);
+
+  await today.hover();
+  await expect(activity.locator('#activity-summary')).toHaveText(/^1 chapter · /);
+});

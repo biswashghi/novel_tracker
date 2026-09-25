@@ -1995,6 +1995,151 @@ select {
 }
 
 /* =========================================================
+   READING ACTIVITY HEATMAP
+========================================================= */
+
+.activity {
+  margin-bottom: 16px;
+
+  padding:
+    14px
+    16px
+    12px;
+
+  background: var(--sheet);
+
+  border:
+    1px solid var(--line);
+
+  border-radius: 13px;
+
+  box-shadow: var(--shadow-small);
+}
+
+.activity[hidden] {
+  display: none;
+}
+
+.activity-head {
+  margin-bottom: 10px;
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+
+  gap: 4px 12px;
+}
+
+.activity-head h2 {
+  margin: 0;
+
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  font-size: 1rem;
+}
+
+.activity-head span {
+  color: var(--muted);
+
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.activity-scroll {
+  overflow-x: auto;
+
+  padding-bottom: 2px;
+}
+
+.activity-grid {
+  /* A label column, then one flexible column per week; cells stay square. */
+  min-width: calc(28px + var(--weeks, 52) * 12px);
+
+  display: grid;
+  grid-template-columns: 28px repeat(var(--weeks, 52), minmax(9px, 1fr));
+
+  gap: 3px;
+}
+
+.activity-label {
+  overflow: visible;
+
+  color: var(--faint);
+
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+
+  align-self: center;
+}
+
+.activity-cell {
+  aspect-ratio: 1;
+
+  border-radius: 3px;
+
+  background: var(--paper-deep);
+}
+
+.activity-legend i {
+  width: 11px;
+  height: 11px;
+
+  border-radius: 3px;
+
+  background: var(--paper-deep);
+}
+
+.activity-cell[title]:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.activity-cell.is-future {
+  visibility: hidden;
+}
+
+.activity [data-level="1"] {
+  background: color-mix(in srgb, var(--copper) 28%, var(--paper-deep));
+}
+
+.activity [data-level="2"] {
+  background: color-mix(in srgb, var(--copper) 52%, var(--paper-deep));
+}
+
+.activity [data-level="3"] {
+  background: color-mix(in srgb, var(--copper) 76%, var(--paper-deep));
+}
+
+.activity [data-level="4"] {
+  background: var(--copper);
+}
+
+.activity-legend {
+  margin-top: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 3px;
+
+  color: var(--faint);
+
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.activity-legend span {
+  margin: 0 3px;
+}
+
+/* =========================================================
    TABLET
 ========================================================= */
 

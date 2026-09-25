@@ -68,3 +68,55 @@ export function computeReadingStats(novels, { now = new Date() } = {}) {
     streakDays
   };
 }
+
+function localDayKey(date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Chapters read per local calendar day over the last `weeks` weeks, laid out
+ * as a calendar heatmap: `weeks` columns of seven days, Sunday first, ending
+ * with the week that contains `now`. Days after `now` in that last week are
+ * marked `future` so the grid stays rectangular without implying zero reads.
+ *
+ * `level` buckets each day's count into 0–4 relative to the busiest day in
+ * range, so one binge does not wash every other day out to the lowest shade.
+ */
+export function computeReadingHeatmap(novels, { now = new Date(), weeks = 26 } = {}) {
+  const counts = new Map();
+  for (const date of collectReadDates(Array.isArray(novels) ? novels : [])) {
+    const key = localDayKey(date);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const today = startOfDay(now);
+  const start = new Date(today);
+  start.setDate(start.getDate() - today.getDay() - (weeks - 1) * 7);
+
+  const columns = [];
+  let max = 0;
+  let total = 0;
+  let activeDays = 0;
+  const cursor = new Date(start);
+  for (let week = 0; week < weeks; week += 1) {
+    const days = [];
+    for (let weekday = 0; weekday < 7; weekday += 1) {
+      const future = cursor > today;
+      const count = future ? 0 : counts.get(localDayKey(cursor)) || 0;
+      days.push({ date: localDayKey(cursor), count, future });
+      max = Math.max(max, count);
+      total += count;
+      if (count) activeDays += 1;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    columns.push(days);
+  }
+
+  for (const day of columns.flat()) {
+    day.level = day.count === 0 || max === 0 ? 0 : Math.min(4, Math.ceil((day.count / max) * 4));
+  }
+
+  return { weeks: columns, max, total, activeDays };
+}
