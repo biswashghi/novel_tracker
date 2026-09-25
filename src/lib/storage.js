@@ -356,40 +356,76 @@ export function isLikelyChapterPage(input) {
   return hasChapterSignal(input?.lastReadChapterUrl, input?.lastReadChapterLabel, input?.novelHomeUrl);
 }
 
-/**
- * A comparable form of a novel page, or "" when the record has no real one.
- *
- * Ignores www., a trailing slash, the query and the fragment. A home that is
- * just the site root (Shin Translations' old parser) or equal to the chapter
- * it was saved with (the generic fallback, e.g. a Patreon post) is not a
- * novel page, so it counts as none.
- */
-function comparableNovelHome(record) {
-  const key = (value) => {
-    try {
-      const url = new URL(value);
-      const path = url.pathname.replace(/\/+$/, "");
-      return `${url.hostname.replace(/^www\./, "")}${path}`;
-    } catch {
-      return "";
-    }
-  };
-  const home = key(record?.novelHomeUrl);
-  if (!home || !home.includes("/")) return "";
-  return home === key(record?.lastReadChapterUrl) ? "" : home;
+function urlKey(value) {
+  try {
+    const url = new URL(value);
+    return `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return "";
+  }
 }
 
 /**
- * True when both records name a real novel page and those pages differ.
- * Parsers derive the novel page from the site's structure, so two different
- * ones mean two different novels, however alike their chapter URLs look:
- * /book/<a>/chapter-2 and /book/<b>/chapter-9 have the same shape. Only used
- * to veto the shape-based fallback; exact identity matches never reach it.
+ * urlKey cut after the first numeric id segment, so pages that carry an id
+ * compare by it: /fiction/21220/<any-slug> and /story/66766637-<any-title>
+ * stay the same novel when a site renames the slug.
  */
-function hasDifferentNovelHome(savedNovel, incoming) {
+function pageKey(value) {
+  const key = urlKey(value);
+  if (!key) return "";
+  const [host, ...segments] = key.split("/");
+  const kept = [];
+  for (const segment of segments) {
+    const id = segment.match(/^(\d+)(?:-.*)?$/);
+    if (id) {
+      kept.push(id[1]);
+      break;
+    }
+    kept.push(segment);
+  }
+  return [host, ...kept].join("/");
+}
+
+function isUnderPage(key, pageKeyValue) {
+  return key === pageKeyValue || key.startsWith(`${pageKeyValue}/`);
+}
+
+/**
+ * A comparable form of a record's novel page, or "" when it has no real one:
+ * just the site root (Shin Translations' old parser), or the very chapter it
+ * was saved from (the generic fallback, e.g. a Patreon post, or a site an
+ * older build had no parser for).
+ */
+function comparableNovelHome(record) {
+  const home = urlKey(record?.novelHomeUrl);
+  if (!home || !home.includes("/") || home === urlKey(record?.lastReadChapterUrl)) return "";
+  return pageKey(record.novelHomeUrl);
+}
+
+/**
+ * True when the two records are evidently different novels, whatever else
+ * matches (title, or a chapter URL of the same shape):
+ * - both name a real novel page, and those differ; or
+ * - one names a real novel page on a site that files chapters under it
+ *   (/novels/<slug>/<n>, /fiction/<id>/…, /works/<id>/chapters/…), and the
+ *   other's chapter on that site is not under it.
+ * The second case catches records with no usable novel page, like those an
+ * older build saved for Chikari's /novels/ route: without it, any chapter of
+ * any other novel on the site looked like that novel's next chapter.
+ */
+function belongToDifferentNovels(savedNovel, incoming) {
   const savedHome = comparableNovelHome(savedNovel);
   const incomingHome = comparableNovelHome(incoming);
-  return Boolean(savedHome && incomingHome && savedHome !== incomingHome);
+  if (savedHome && incomingHome) return savedHome !== incomingHome;
+
+  const chapterOutside = (home, own, other) => {
+    if (!home) return false;
+    const ownChapter = pageKey(own.lastReadChapterUrl);
+    const otherChapter = pageKey(other.lastReadChapterUrl);
+    if (!ownChapter || !otherChapter || !isUnderPage(ownChapter, home)) return false;
+    return otherChapter.split("/")[0] === home.split("/")[0] && !isUnderPage(otherChapter, home);
+  };
+  return chapterOutside(incomingHome, incoming, savedNovel) || chapterOutside(savedHome, savedNovel, incoming);
 }
 
 function hasSameNovelHome(savedNovel, incoming) {
@@ -459,7 +495,7 @@ function findTrackedNovelForAutoUpdate(novels, incoming) {
   return novels.find((novel) => {
     return (
       normalizeText(novel.sourceSite) === normalizeText(incoming.sourceSite) &&
-      !hasDifferentNovelHome(novel, incoming) &&
+      !belongToDifferentNovels(novel, incoming) &&
       matchesSavedChapterPattern(novel, incoming)
     );
   });
@@ -486,7 +522,7 @@ export function findExistingNovelForSave(novels, incoming) {
   return novels.find((novel) => {
     return (
       normalizeText(novel.sourceSite) === normalizeText(incoming.sourceSite) &&
-      !hasDifferentNovelHome(novel, incoming) &&
+      !belongToDifferentNovels(novel, incoming) &&
       matchesSavedChapterPattern(novel, incoming)
     );
   });
@@ -657,8 +693,14 @@ function mergeChapterHistories(left, right) {
   return normalizeChapterHistory([...(left || []), ...(right || [])]);
 }
 
+/**
+ * Same novel by identity (novel page, chapter URL, or title on the same
+ * site), unless the two are evidently different novels: two works with one
+ * title (a novel and its manhwa), or an old record whose only link to the
+ * incoming page is a shared site.
+ */
 export function matchesNovel(existing, incoming) {
-  return matchesNovelIdentity(existing, incoming);
+  return matchesNovelIdentity(existing, incoming) && !belongToDifferentNovels(existing, incoming);
 }
 
 

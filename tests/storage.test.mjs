@@ -1061,3 +1061,147 @@ test("importNovelsJson dates a read with an unusable timestamp at import time, n
   assert.ok(Date.parse(novel.chapterHistory[0].readAt) >= before, novel.chapterHistory[0].readAt);
   assert.ok(Date.parse(novel.updatedAt) >= before, novel.updatedAt);
 });
+
+// A Chikari novel saved by a build that had no parser for /novels/ routes:
+// the generic fallback stored the chapter URL itself as the novel page, and
+// kept doing so as the reader moved on. (Real case: The Alchemist's Path to
+// Eternity, ~1100 chapters, then The Academy's Weapon Replicator.)
+function legacyChikariAlchemist() {
+  const home = "https://chikari.moe/novels/the-alchemists-path-to-eternity";
+  const history = [1098, 1099, 1100].map((n, index) => ({
+    url: `${home}/${n}`,
+    label: `Chapter ${n - 1}`,
+    readAt: new Date(Date.UTC(2026, 7, 1 + index)).toISOString()
+  }));
+  return {
+    title: "The Alchemist’s Path to Eternity",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: `${home}/1100`,
+    lastReadChapterUrl: `${home}/1100`,
+    lastReadChapterLabel: "Chapter 1099",
+    status: "active",
+    chapterHistory: history,
+    updatedAt: history.at(-1).readAt
+  };
+}
+
+const academyChapter = (n) => ({
+  title: "The Academy’s Weapon Replicator",
+  sourceSite: "chikari.moe",
+  novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator",
+  lastReadChapterUrl: `https://chikari.moe/novels/the-academys-weapon-replicator/${n}`,
+  lastReadChapterLabel: `Chapter ${n - 1} (1) - The Academy's Weapon Replicator`
+});
+
+test("reading another Chikari novel never adds its chapters to an old record with no novel page", async () => {
+  globalThis.localStorage.clear();
+  await importNovelsJson(JSON.stringify({ version: 1, novels: [legacyChikariAlchemist()] }));
+
+  for (const n of [2, 3]) {
+    const result = await autoUpdateNovelProgress(academyChapter(n));
+    assert.equal(result.updated, false, `auto-progress on Academy ${n} must not touch Alchemist`);
+  }
+
+  // Saving Academy (shortcut or popup) makes a novel of its own.
+  const saved = await saveChapterFromPage(academyChapter(3));
+  const novels = await getNovels();
+  assert.equal(novels.length, 2);
+  const alchemist = novels.find((novel) => novel.id !== saved.id);
+  assert.equal(alchemist.title, "The Alchemist’s Path to Eternity");
+  assert.deepEqual(
+    alchemist.chapterHistory.map((entry) => entry.url.split("/").pop()),
+    ["1098", "1099", "1100"]
+  );
+  assert.equal(saved.title, "The Academy’s Weapon Replicator");
+  assert.deepEqual(saved.chapterHistory.map((entry) => entry.url.split("/").pop()), ["3"]);
+});
+
+test("an old record with no novel page still follows its own novel's chapters", async () => {
+  globalThis.localStorage.clear();
+  await importNovelsJson(JSON.stringify({ version: 1, novels: [legacyChikariAlchemist()] }));
+
+  const result = await autoUpdateNovelProgress({
+    title: "The Alchemist’s Path to Eternity",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/the-alchemists-path-to-eternity",
+    lastReadChapterUrl: "https://chikari.moe/novels/the-alchemists-path-to-eternity/1101",
+    lastReadChapterLabel: "Chapter 1100"
+  });
+
+  assert.equal(result.updated, true, result.reason);
+  assert.equal(result.novel.chapterHistory.length, 4);
+  // The record now carries the real novel page, so it is safe from here on.
+  assert.equal(result.novel.novelHomeUrl, "https://chikari.moe/novels/the-alchemists-path-to-eternity");
+});
+
+test("two works with one title on the same site stay separate", async () => {
+  globalThis.localStorage.clear();
+
+  const novel = await upsertNovel({
+    title: "The Academy’s Weapon Replicator",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/novels/the-academys-weapon-replicator",
+    lastReadChapterUrl: "https://chikari.moe/novels/the-academys-weapon-replicator/40",
+    lastReadChapterLabel: "Chapter 39"
+  });
+  const manhwaChapter = {
+    title: "The Academy’s Weapon Replicator",
+    sourceSite: "chikari.moe",
+    novelHomeUrl: "https://chikari.moe/series/the-academys-weapon-replicator",
+    lastReadChapterUrl: "https://chikari.moe/series/the-academys-weapon-replicator/2",
+    lastReadChapterLabel: "Chapter 2"
+  };
+
+  assert.equal((await autoUpdateNovelProgress(manhwaChapter)).updated, false);
+  const manhwa = await saveChapterFromPage(manhwaChapter);
+  assert.notEqual(manhwa.id, novel.id);
+  const stored = (await getNovels()).find((item) => item.id === novel.id);
+  assert.equal(stored.lastReadChapterLabel, "Chapter 39");
+  assert.equal(stored.chapterHistory.length, 1);
+});
+
+test("a renamed Royal Road slug still tracks the same fiction by its id", async () => {
+  globalThis.localStorage.clear();
+
+  const saved = await upsertNovel({
+    title: "Old Name",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/21220/old-name",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/21220/old-name/chapter/301778/one",
+    lastReadChapterLabel: "Chapter 1"
+  });
+  const result = await autoUpdateNovelProgress({
+    title: "New Name",
+    sourceSite: "royalroad.com",
+    novelHomeUrl: "https://www.royalroad.com/fiction/21220/new-name",
+    lastReadChapterUrl: "https://www.royalroad.com/fiction/21220/new-name/chapter/301781/two",
+    lastReadChapterLabel: "Chapter 2"
+  });
+
+  assert.equal(result.updated, true, result.reason);
+  assert.equal(result.novel.id, saved.id);
+});
+
+test("importing a backup keeps two same-titled works with different novel pages apart", async () => {
+  globalThis.localStorage.clear();
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [
+      {
+        title: "Solo Leveling",
+        sourceSite: "chikari.moe",
+        novelHomeUrl: "https://chikari.moe/novels/solo-leveling",
+        lastReadChapterUrl: "https://chikari.moe/novels/solo-leveling/10"
+      },
+      {
+        title: "Solo Leveling",
+        sourceSite: "chikari.moe",
+        novelHomeUrl: "https://chikari.moe/series/solo-leveling",
+        lastReadChapterUrl: "https://chikari.moe/series/solo-leveling/4"
+      }
+    ]
+  }));
+
+  assert.equal((await getNovels()).length, 2);
+});
