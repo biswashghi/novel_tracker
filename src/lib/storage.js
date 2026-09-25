@@ -487,6 +487,26 @@ export function findExistingNovelForSave(novels, incoming) {
   });
 }
 
+/**
+ * The record a save of `source` (page metadata or the popup's form) would
+ * produce, so a preview lookup and the save itself use exactly the same
+ * values. `status` is left undefined when the caller has none, so saving an
+ * already tracked novel keeps its status.
+ */
+export function buildSaveCandidate(source) {
+  const chapterUrl = String(source.lastReadChapterUrl || "").trim();
+
+  return {
+    title: String(source.title || "").trim(),
+    sourceSite: getHostname(chapterUrl),
+    novelHomeUrl: String(source.novelHomeUrl || "").trim() || chapterUrl,
+    lastReadChapterUrl: chapterUrl,
+    lastReadChapterLabel: String(source.lastReadChapterLabel || "").trim(),
+    coverImageUrl: String(source.coverImageUrl || "").trim(),
+    status: source.status || undefined
+  };
+}
+
 export function normalizeUrl(url) {
   if (!url) {
     return "";

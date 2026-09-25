@@ -58,3 +58,9 @@ test("every site parser on disk is registered in the shared parser list", async 
   const listed = PARSER_FILES.filter((file) => file.startsWith("lib/site-parsers/"));
   assert.deepEqual([...listed].sort(), onDisk.sort());
 });
+
+test("manifest offers a save shortcut and the context-menu permission it needs", () => {
+  assert.equal(manifest.commands["save-chapter"].suggested_key.default, "Alt+Shift+S");
+  assert.ok(manifest.commands["save-chapter"].description);
+  assert.ok(manifest.permissions.includes("contextMenus"));
+});

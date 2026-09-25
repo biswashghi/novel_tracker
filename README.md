@@ -10,7 +10,8 @@ can be corrected.
 
 ## Features
 
-- Save the current chapter URL from the active browser tab.
+- Save the current chapter URL from the active browser tab, from the popup,
+  with Alt+Shift+S, or from the page's right-click menu.
 - Capture novel title, source site, chapter label, cover image URL, and reading status.
 - Automatically update tracked novels when matching chapter URLs change.
 - Browse, search, sort, edit, delete, and reopen novels from the library page.

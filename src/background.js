@@ -1,5 +1,6 @@
 import {
   autoUpdateNovelProgress,
+  buildSaveCandidate,
   deleteNovel,
   hasLocalLibraryData,
   importNovelsJson,
@@ -8,6 +9,7 @@ import {
   upsertNovel
 } from "./lib/storage.js";
 import { getExtensionApi } from "./lib/extension-api.js";
+import { PARSER_FILES } from "./lib/site-parser-files.js";
 import {
   cancelPendingAccount,
   confirmPendingAccount,
@@ -117,3 +119,88 @@ extensionApi.runtime.onInstalled?.addListener(() => {
 extensionApi.alarms?.onAlarm.addListener((alarm) => {
   if (alarm.name === "novel-tracker:sync") syncNow().catch(() => {});
 });
+
+/* =========================================================
+   SAVE WITHOUT THE POPUP (keyboard shortcut, context menu)
+========================================================= */
+
+// Both entry points grant activeTab for the tab they were used in, which is
+// all executeScript needs. Neither API exists on Safari for iOS, so each is
+// feature-detected; there the popup remains the way to save.
+const SAVE_COMMAND = "save-chapter";
+const SAVE_MENU_ID = "novel-tracker:save-chapter";
+const BADGE_MS = 4000;
+
+async function readTabMetadata(tabId) {
+  await extensionApi.scripting.executeScript({ target: { tabId }, files: [...PARSER_FILES] });
+  const [result] = await extensionApi.scripting.executeScript({
+    target: { tabId },
+    func: () => globalThis.NovelTrackerPageMetadata.extractPageMetadata()
+  });
+  return result?.result;
+}
+
+async function showSaveResult(tabId, ok, title) {
+  const action = extensionApi.action;
+  if (!action?.setBadgeText) return;
+  try {
+    await action.setBadgeBackgroundColor?.({ tabId, color: ok ? "#597565" : "#aa4e46" });
+    await action.setBadgeText({ tabId, text: ok ? "✓" : "!" });
+    await action.setTitle?.({ tabId, title });
+    setTimeout(() => {
+      action.setBadgeText({ tabId, text: "" }).catch?.(() => {});
+      action.setTitle?.({ tabId, title: "" })?.catch?.(() => {});
+    }, BADGE_MS);
+  } catch {
+    // The tab may have closed; the save itself already happened.
+  }
+}
+
+async function saveChapterFromTab(tab) {
+  if (!tab?.id || !/^https?:/.test(tab.url || "")) return null;
+  try {
+    const metadata = await readTabMetadata(tab.id);
+    if (!metadata?.lastReadChapterUrl) throw new Error("No chapter information on this page");
+    const saved = await runLibraryWrite(upsertNovel, buildSaveCandidate(metadata));
+    const label = [saved?.title, saved?.lastReadChapterLabel].filter(Boolean).join(" · ");
+    await showSaveResult(tab.id, true, `Saved to Novel Tracker: ${label}`);
+    return saved;
+  } catch (error) {
+    console.warn("Novel Tracker could not save this tab", error);
+    await showSaveResult(tab.id, false, "Novel Tracker could not read this page. Try the popup instead.");
+    return null;
+  }
+}
+
+function createSaveMenu() {
+  const menus = extensionApi.contextMenus;
+  if (!menus?.create) return;
+  // removeAll first: onInstalled and onStartup can both run in one session,
+  // and creating an existing id throws.
+  menus.removeAll(() => {
+    menus.create({ id: SAVE_MENU_ID, title: "Save chapter to Novel Tracker", contexts: ["page"] }, () => {
+      void extensionApi.runtime.lastError;
+    });
+  });
+}
+
+extensionApi.commands?.onCommand?.addListener((command, tab) => {
+  if (command !== SAVE_COMMAND) return;
+  if (tab) {
+    saveChapterFromTab(tab);
+    return;
+  }
+  // Older Firefox releases do not pass the tab to onCommand.
+  extensionApi.tabs.query({ active: true, currentWindow: true }).then(([active]) => saveChapterFromTab(active));
+});
+
+extensionApi.contextMenus?.onClicked?.addListener((info, tab) => {
+  if (info.menuItemId === SAVE_MENU_ID) saveChapterFromTab(tab);
+});
+
+// Playwright can press neither extension shortcuts nor browser context-menu
+// items, so the e2e suite drives the shared handler through this instead.
+globalThis.novelTrackerSaveChapterFromTab = saveChapterFromTab;
+
+extensionApi.runtime.onInstalled?.addListener(createSaveMenu);
+extensionApi.runtime.onStartup?.addListener(createSaveMenu);

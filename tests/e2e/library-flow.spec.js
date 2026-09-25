@@ -103,3 +103,39 @@ test('export downloads a JSON backup and import restores it', async ({ context, 
   await optionsPage.setInputFiles('#import-file', backupPath);
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
 });
+
+test('the save shortcut and context menu save the tab without opening the popup', async ({
+  context,
+  extensionId,
+  serviceWorker
+}) => {
+  const sitePage = await context.newPage();
+  await mockSitePage(context, CHAPTER_URL, CHAPTER_HTML);
+  await sitePage.goto(CHAPTER_URL);
+
+  // The menu item is registered for page right-clicks.
+  // (chrome.contextMenus has no getter; creating the same id again must fail.)
+  const duplicate = await serviceWorker.evaluate(
+    () =>
+      new Promise((resolve) => {
+        chrome.contextMenus.create({ id: 'novel-tracker:save-chapter', title: 'x' }, () =>
+          resolve(chrome.runtime.lastError?.message || '')
+        );
+      })
+  );
+  expect(duplicate).toMatch(/duplicate/i);
+
+  const commands = await serviceWorker.evaluate(() => chrome.commands.getAll());
+  expect(commands.find((command) => command.name === 'save-chapter')?.description).toBeTruthy();
+
+  const saved = await serviceWorker.evaluate(async (url) => {
+    const [tab] = (await chrome.tabs.query({})).filter((candidate) => candidate.url === url);
+    const result = await globalThis.novelTrackerSaveChapterFromTab(tab);
+    return { title: result?.title, badge: await chrome.action.getBadgeText({ tabId: tab.id }) };
+  }, CHAPTER_URL);
+  expect(saved).toEqual({ title: 'Test Fiction', badge: '✓' });
+
+  const optionsPage = await context.newPage();
+  await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
+  await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
+});
