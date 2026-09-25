@@ -481,7 +481,8 @@ test("extractPageMetadataFromRoot maps ReadNovelFull chapters to the novel's .ht
   const root = createRoot({
     selectors: {
       ".novel-title": { textContent: "Second World" },
-      ".chr-title": { textContent: "Chapter 1 - 1.  Beta Test" }
+      // What a phone-width page serves: abbreviated text, full title attribute.
+      ".chr-title": { textContent: "C1 - 1.  Beta Test", title: "Chapter 1 - 1.  Beta Test" }
     }
   });
 
@@ -493,4 +494,19 @@ test("extractPageMetadataFromRoot maps ReadNovelFull chapters to the novel's .ht
   assert.equal(metadata.title, "Second World");
   assert.equal(metadata.novelHomeUrl, "https://readnovelfull.com/second-world.html");
   assert.equal(metadata.lastReadChapterLabel, "Chapter 1 - 1. Beta Test");
+});
+
+test("extractPageMetadataFromRoot ignores a Webnovel bot-check page's heading", () => {
+  const root = createRoot({
+    title: "Just a moment...",
+    selectors: { "h1": { textContent: "www.webnovel.com" } }
+  });
+
+  const metadata = extractPageMetadataFromRoot(
+    root,
+    "https://www.webnovel.com/book/supreme-magus_12820870105509205/a-new-beginning_34415834751367671"
+  );
+
+  assert.equal(metadata.title, "Supreme Magus");
+  assert.equal(metadata.lastReadChapterLabel, "A New Beginning");
 });

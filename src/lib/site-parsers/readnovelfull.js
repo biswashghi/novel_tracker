@@ -13,7 +13,10 @@
       return {
         title: clean(core.firstText(root, [".novel-title", "h1 a", "h1"])) || core.titleCaseFromSlug(novelSlug),
         novelHomeUrl: core.normalizePathUrl(url.toString(), `/${novelSlug}.html`),
+        // On narrow screens the visible text shortens "Chapter 1" to "C1";
+        // the link's title attribute always carries the full label.
         lastReadChapterLabel:
+          clean(root.querySelector(".chr-title")?.title) ||
           clean(core.firstText(root, [".chr-title", ".chr-text", "h2"])) ||
           core.titleCaseFromSlug(segments[1].replace(/\.html$/, "")),
         coverImageUrl: ogImage || ""
