@@ -114,11 +114,11 @@ test('two devices signed into the same account converge on the same novel state'
     await cardB.locator('form[data-form="edit"] button[type="submit"]').click();
     // The submit handler's updateNovel()+refresh() (options.js) run async
     // after the click event dispatches; Playwright's click() only waits for
-    // dispatch, not for that chain to finish. Wait for the card's own status
-    // text to reflect "paused" (refresh() re-renders it from storage) before
+    // dispatch, not for that chain to finish. Wait for the card's status pill
+    // to reflect "paused" (refresh() re-renders it from storage) before
     // triggering sync, or sync-now can race ahead of the mutation actually
     // landing in storage.
-    await expect(cardB).toContainText('paused', { timeout: 10_000 });
+    await expect(cardB.locator('.status-pill')).toHaveAttribute('data-status', 'paused', { timeout: 10_000 });
     await optionsB.locator('#sync-now').click();
     await waitForSynced(optionsB);
 
