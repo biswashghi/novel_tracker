@@ -893,6 +893,145 @@ body.existing-novel .current-page-icon {
    FOOTER
 ========================================================= */
 
+/* =========================================================
+   CONTINUE READING
+========================================================= */
+
+.continue-reading {
+  padding:
+    2px
+    14px
+    8px;
+}
+
+.continue-reading[hidden] {
+  display: none;
+}
+
+.continue-reading h2 {
+  margin: 0 0 6px;
+
+  color: var(--muted);
+
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.continue-list {
+  margin: 0;
+  padding: 0;
+
+  display: grid;
+
+  gap: 5px;
+
+  list-style: none;
+}
+
+.continue-item {
+  appearance: none;
+
+  width: 100%;
+
+  border:
+    1px solid var(--line);
+
+  border-radius: 10px;
+
+  padding: 6px 9px 6px 6px;
+
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  align-items: center;
+
+  gap: 9px;
+
+  background: var(--sheet);
+  color: var(--ink);
+
+  text-align: left;
+
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.continue-item:hover {
+  border-color: var(--copper);
+}
+
+.continue-item:active {
+  transform: scale(0.985);
+}
+
+.continue-cover {
+  position: relative;
+
+  width: 28px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  overflow: hidden;
+
+  border-radius: 3px 5px 5px 3px;
+
+  background: linear-gradient(145deg, #c98656, #82492d);
+  color: white;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.continue-cover img {
+  position: absolute;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.continue-copy {
+  min-width: 0;
+
+  display: grid;
+
+  gap: 1px;
+}
+
+.continue-copy strong,
+.continue-copy span {
+  overflow: hidden;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.continue-copy strong {
+  font-size: 0.76rem;
+}
+
+.continue-copy span {
+  color: var(--muted);
+
+  font-size: 0.66rem;
+}
+
+.continue-arrow {
+  width: 14px;
+  height: 14px;
+
+  color: var(--subtle);
+
+  transform: rotate(-90deg);
+}
+
 .popup-footer {
   padding:
     0

@@ -183,3 +183,27 @@ test('CSV export downloads one spreadsheet row per novel', async ({ context, ext
   expect(row).toContain(CHAPTER_URL);
   expect(trailing).toBe('');
 });
+
+test('popup lists recently read novels and reopens their chapter', async ({ context, extensionId, serviceWorker }) => {
+  await saveChapterViaPopup({ context, extensionId, serviceWorker });
+
+  // Opened directly, the popup's "active tab" is itself — not a readable page —
+  // which is exactly when the jump-back-in list matters most.
+  const popupPage = await context.newPage();
+  await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
+  await expect(popupPage.locator('#site-pill')).toHaveText(/No novel page/);
+
+  const item = popupPage.locator('#continue-list .continue-item', { hasText: 'Test Fiction' });
+  await expect(item).toBeVisible();
+  await expect(item).toContainText(/Chapter 7/);
+
+  const [chapterTab] = await Promise.all([context.waitForEvent('page'), item.click()]);
+  await expect.poll(() => chapterTab.url()).toBe(CHAPTER_URL);
+
+  // On the novel's own chapter the list leaves it out: you are already there.
+  const onChapter = await context.newPage();
+  await stubActiveTab(onChapter, serviceWorker, CHAPTER_URL);
+  await onChapter.goto(extensionUrl(extensionId, 'popup.html'));
+  await expect(onChapter.locator('#status-message')).toContainText(/Already tracking/);
+  await expect(onChapter.locator('#continue-reading')).toBeHidden();
+});

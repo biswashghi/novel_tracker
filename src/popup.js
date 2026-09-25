@@ -23,6 +23,8 @@ const statusMessage = document.querySelector("#status-message");
 const saveButton = document.querySelector("#save-button");
 const openLibraryButton = document.querySelector("#open-library");
 const openLibraryFooterButton = document.querySelector("#open-library-footer");
+const continueSection = document.querySelector("#continue-reading");
+const continueList = document.querySelector("#continue-list");
 
 const fields = {
   title: document.querySelector("#title"),
@@ -166,6 +168,79 @@ function saveCandidate(source) {
 }
 
 /* =========================================================
+   CONTINUE READING
+========================================================= */
+
+const CONTINUE_LIMIT = 3;
+
+function relativeTime(value) {
+  const minutes = Math.floor((Date.now() - new Date(value).getTime()) / 60000);
+  if (!Number.isFinite(minutes)) return "";
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days < 30 ? `${days}d ago` : new Date(value).toLocaleDateString();
+}
+
+function continueItem(novel) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "continue-item";
+  button.title = novel.lastReadChapterUrl;
+
+  const cover = document.createElement("span");
+  cover.className = "continue-cover";
+  cover.setAttribute("aria-hidden", "true");
+  if (novel.coverImageUrl) {
+    const image = document.createElement("img");
+    image.src = novel.coverImageUrl;
+    image.alt = "";
+    // Fall back to initials when a cover fails to load.
+    image.addEventListener("error", () => image.remove());
+    cover.append(image);
+  }
+  cover.append(document.createTextNode((novel.title || "?").trim().charAt(0).toUpperCase()));
+
+  const copy = document.createElement("span");
+  copy.className = "continue-copy";
+  const title = document.createElement("strong");
+  title.textContent = novel.title;
+  const detail = document.createElement("span");
+  detail.textContent = [novel.lastReadChapterLabel || "Saved page", relativeTime(novel.updatedAt)]
+    .filter(Boolean)
+    .join(" · ");
+  copy.append(title, detail);
+
+  button.append(cover, copy, icon("chevron", "continue-arrow"));
+  button.addEventListener("click", async () => {
+    // tabs.create needs no permission; the popup closes once focus moves.
+    await extensionApi.tabs.create({ url: novel.lastReadChapterUrl });
+    window.close();
+  });
+
+  item.append(button);
+  return item;
+}
+
+/**
+ * The most recently read novels other than the one on this page, so the
+ * popup doubles as a jump-back-in list when you are not on a chapter.
+ */
+function renderContinueReading(novels, currentNovelId = "") {
+  const recent = novels
+    .filter((novel) => novel.id !== currentNovelId && novel.lastReadChapterUrl?.startsWith("http"))
+    .filter((novel) => novel.status !== "completed" && novel.status !== "dropped")
+    .sort((left, right) => new Date(right.updatedAt) - new Date(left.updatedAt))
+    .slice(0, CONTINUE_LIMIT);
+
+  continueList.replaceChildren(...recent.map(continueItem));
+  continueSection.hidden = recent.length === 0;
+}
+
+/* =========================================================
    LOAD CURRENT PAGE
 ========================================================= */
 
@@ -217,6 +292,7 @@ async function loadCurrentPage() {
     const novels = await getNovels();
 
     existingNovel = findExistingNovelForSave(novels, saveCandidate(metadata)) || null;
+    renderContinueReading(novels, existingNovel?.id);
 
     if (existingNovel) {
       fields.status.value =
@@ -376,4 +452,8 @@ openLibraryFooterButton?.addEventListener(
    START
 ========================================================= */
 
+// Render the list straight away so it is there even when the current tab is
+// not a readable page; loadCurrentPage refines it once it knows which novel
+// (if any) this tab belongs to.
+getNovels().then((novels) => renderContinueReading(novels)).catch(() => {});
 loadCurrentPage();
