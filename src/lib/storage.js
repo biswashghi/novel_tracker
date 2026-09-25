@@ -8,7 +8,8 @@ import {
   materializeNovels,
   purgeExpiredTombstones,
   stableHash,
-  TOMBSTONE_RETENTION_MS
+  TOMBSTONE_RETENTION_MS,
+  tickClock
 } from "./sync-core.js";
 import { getStorageLocal } from "./extension-api.js";
 
@@ -246,6 +247,8 @@ function normalizeChapterHistory(history) {
     }
 
     seen.set(url, {
+      // Keep an event's id so re-importing a backup does not duplicate it.
+      ...(entry?.id ? { id: String(entry.id) } : {}),
       url,
       label: String(entry?.label || "").trim(),
       readAt: String(entry?.readAt || "").trim() || new Date().toISOString()
@@ -599,11 +602,16 @@ async function saveNovels(novels) {
   // account or force every already-synced novel through a full resync.
   const previous = await getSyncState();
   let state = { ...previous, novels: {}, pendingMutations: [], appliedMutations: {} };
-  // Each imported mutation carries the clock of the read it records, the way
-  // the legacy migration in getSyncState does. Queueing them through the
-  // local clock instead (enqueue) stamped every chapter with the import time:
-  // an HLC never moves backwards, so a historical `now` was clamped forward,
-  // and restoring a backup made a year of reading look like one afternoon.
+  // Field values and chapter reads are clocked differently:
+  // - Fields (title, status, rating, notes…) get a fresh local clock, as any
+  //   local edit does, so values restored from a backup and edits not yet
+  //   synced are not overruled by older server values.
+  // - Each chapter read is its own checkpoint carrying the clock of when it
+  //   was read, as the legacy migration in getSyncState does. Queueing those
+  //   through the local clock (enqueue) stamped every chapter with the import
+  //   time: an HLC never moves backwards, so a restored library looked like a
+  //   year of reading done in one afternoon. A read with no usable date falls
+  //   back to the import time rather than 1970.
   const record = (novelId, type, clock, payload) => {
     const mutation = {
       mutationId: globalThis.crypto.randomUUID(),
@@ -617,20 +625,28 @@ async function saveNovels(novels) {
     state = applyMutation(state, mutation);
     state.pendingMutations.push(mutation);
   };
+  const localClock = () => tickClock(state.clock, state.deviceId);
+  const readClock = (readAt) => {
+    const wallMs = Date.parse(readAt || "");
+    return Number.isFinite(wallMs) && wallMs > 0 ? { wallMs, logical: 0, actorId: state.deviceId } : localClock();
+  };
 
   for (const novel of novels) {
     const novelId = novel.id || globalThis.crypto.randomUUID();
     const history = normalizeChapterHistory(novel.chapterHistory);
-    const event = toEvent(history[history.length - 1] || {
+    const reads = history.length ? history : [{
       url: novel.lastReadChapterUrl,
       label: novel.lastReadChapterLabel,
       readAt: novel.updatedAt
-    }, novelId, history.length - 1, state.deviceId);
-    record(novelId, "novel.create", event.readAt, { ...novel, event });
-    for (const [index, historyEntry] of history.entries()) {
-      const importedEvent = toEvent(historyEntry, novelId, index, state.deviceId);
-      if (importedEvent.id === event.id) continue;
-      record(novelId, "checkpoint.record", importedEvent.readAt, { event: importedEvent });
+    }];
+    // No `event` in the create: its checkpoint would take the create's (fresh)
+    // clock. The server still matches the novel by its URLs and title.
+    const { chapterHistory: _history, event: _event, ...fields } = novel;
+    record(novelId, "novel.create", localClock(), fields);
+    for (const [index, read] of reads.entries()) {
+      const event = toEvent(read, novelId, index, state.deviceId);
+      if (!event.url) continue;
+      record(novelId, "checkpoint.record", readClock(read.readAt), { event });
     }
   }
   await saveSyncState(state);

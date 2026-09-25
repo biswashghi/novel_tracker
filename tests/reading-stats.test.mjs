@@ -120,3 +120,25 @@ test("computeReadingHeatmap counts chapters per local day and scales levels to t
   assert.equal(byDate["2026-09-25"].count, 0);
   assert.deepEqual({ max: heatmap.max, total: heatmap.total, activeDays: heatmap.activeDays }, { max: 4, total: 6, activeDays: 3 });
 });
+
+test("computeReadingHeatmap keeps today where daylight saving starts at midnight", () => {
+  // Chile moved clocks from 00:00 to 01:00 on 2026-09-06, so that day has no
+  // local midnight. Node re-reads TZ when it changes.
+  const previousTz = process.env.TZ;
+  process.env.TZ = "America/Santiago";
+  try {
+    const now = new Date(2026, 8, 24, 20, 0, 0);
+    const heatmap = computeReadingHeatmap(
+      [novel({ chapterHistory: [{ readAt: new Date(2026, 8, 24, 9, 0, 0).toISOString() }] })],
+      { now, weeks: 4 }
+    );
+    const today = heatmap.weeks.flat().find((day) => day.date === "2026-09-24");
+    assert.equal(today.future, false);
+    assert.equal(today.count, 1);
+    assert.equal(heatmap.total, 1);
+    assert.equal(new Set(heatmap.weeks.flat().map((day) => day.date)).size, 28);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
+});

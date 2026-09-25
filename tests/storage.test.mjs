@@ -1005,5 +1005,59 @@ test("importNovelsJson keeps each chapter's original read time", async () => {
   // The local clock still moves forward, so the next real read sorts after them.
   const state = await getSyncState();
   assert.ok(state.clock.wallMs >= Date.parse("2025-05-03T10:00:00.000Z"));
-  assert.equal(state.pendingMutations.length, 3);
+  // One create for the fields, one checkpoint per read.
+  assert.equal(state.pendingMutations.length, 4);
+});
+
+test("importNovelsJson clocks field values as a fresh edit so older server values cannot overrule them", async () => {
+  globalThis.localStorage.clear();
+  const before = Date.now();
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [{
+      title: "Rated In A Backup",
+      sourceSite: "example.com",
+      novelHomeUrl: "https://example.com/rated",
+      lastReadChapterUrl: "https://example.com/rated/2",
+      rating: 5,
+      status: "paused",
+      updatedAt: "2025-01-02T10:00:00.000Z",
+      chapterHistory: [
+        { id: "evt-1", url: "https://example.com/rated/1", label: "Chapter 1", readAt: "2025-01-01T10:00:00.000Z" },
+        { id: "evt-2", url: "https://example.com/rated/2", label: "Chapter 2", readAt: "2025-01-02T10:00:00.000Z" }
+      ]
+    }]
+  }));
+
+  const state = await getSyncState();
+  const [novel] = Object.values(state.novels);
+  // A server register written last month (after the backup's reads) must
+  // lose to the value the reader just chose to restore.
+  assert.ok(novel.fields.rating.clock.wallMs >= before, "rating carries the import's clock");
+  assert.ok(novel.fields.status.clock.wallMs >= before, "status carries the import's clock");
+  // Reads keep their own time, and their ids, so a re-import adds nothing.
+  assert.deepEqual(Object.keys(novel.chapterHistory).sort(), ["evt-1", "evt-2"]);
+  assert.equal(novel.chapterHistory["evt-1"].readAt.wallMs, Date.parse("2025-01-01T10:00:00.000Z"));
+});
+
+test("importNovelsJson dates a read with an unusable timestamp at import time, not 1970", async () => {
+  globalThis.localStorage.clear();
+  const before = Date.now();
+
+  await importNovelsJson(JSON.stringify({
+    version: 1,
+    novels: [{
+      title: "Hand Edited",
+      sourceSite: "example.com",
+      novelHomeUrl: "https://example.com/edited",
+      lastReadChapterUrl: "https://example.com/edited/1",
+      updatedAt: "not a date",
+      chapterHistory: [{ url: "https://example.com/edited/1", label: "Chapter 1", readAt: "sometime" }]
+    }]
+  }));
+
+  const [novel] = await getNovels();
+  assert.ok(Date.parse(novel.chapterHistory[0].readAt) >= before, novel.chapterHistory[0].readAt);
+  assert.ok(Date.parse(novel.updatedAt) >= before, novel.updatedAt);
 });
