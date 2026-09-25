@@ -279,7 +279,7 @@ function renderActivity(items) {
   const cells = [element("span")];
 
   // Row-major: a header row of month labels, then one row per weekday.
-  let previousMonth = parseDayKey(heatmap.weeks[0][0].date).getMonth();
+  let previousMonth = -1; // so the first column is labelled too
   for (const week of heatmap.weeks) {
     const firstDay = parseDayKey(week[0].date);
     const startsMonth = firstDay.getMonth() !== previousMonth;

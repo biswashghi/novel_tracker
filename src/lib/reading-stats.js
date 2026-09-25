@@ -91,25 +91,28 @@ export function computeReadingHeatmap(novels, { now = new Date(), weeks = 26 } =
     counts.set(key, (counts.get(key) || 0) + 1);
   }
 
-  const today = startOfDay(now);
-  const start = new Date(today);
-  start.setDate(start.getDate() - today.getDay() - (weeks - 1) * 7);
+  // Step by calendar date at local noon, and compare day keys, never
+  // midnight timestamps: where daylight saving starts at midnight (Chile,
+  // the Azores, Cuba) that day has no 00:00, and midnight arithmetic drifted
+  // to 01:00 and marked today as a future day.
+  const todayKey = localDayKey(now);
+  const firstDay = now.getDate() - now.getDay() - (weeks - 1) * 7;
 
   const columns = [];
   let max = 0;
   let total = 0;
   let activeDays = 0;
-  const cursor = new Date(start);
   for (let week = 0; week < weeks; week += 1) {
     const days = [];
     for (let weekday = 0; weekday < 7; weekday += 1) {
-      const future = cursor > today;
-      const count = future ? 0 : counts.get(localDayKey(cursor)) || 0;
-      days.push({ date: localDayKey(cursor), count, future });
+      const date = new Date(now.getFullYear(), now.getMonth(), firstDay + week * 7 + weekday, 12);
+      const key = localDayKey(date);
+      const future = key > todayKey;
+      const count = future ? 0 : counts.get(key) || 0;
+      days.push({ date: key, count, future });
       max = Math.max(max, count);
       total += count;
       if (count) activeDays += 1;
-      cursor.setDate(cursor.getDate() + 1);
     }
     columns.push(days);
   }
