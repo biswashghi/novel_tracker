@@ -746,26 +746,41 @@ export async function restoreNovel(id) {
   notifyPendingSync();
 }
 
+// Offer a restore only until a day before the tombstone could be purged, so
+// a Restore never reaches a server that has already dropped the novel.
+const RESTORE_SAFETY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Deleted novels that can still be restored, newest deletion first.
  *
- * A delete leaves a tombstone that keeps every field for
- * TOMBSTONE_RETENTION_MS before purgeExpiredTombstones drops it, so the
- * library can offer those back until then. `purgeAt` is when that happens.
+ * Timed from the delete's own clock (the same on every device), not from
+ * when this device happened to apply it: a device that pulls a delete late
+ * would otherwise offer it for longer than the server keeps it. Tombstones
+ * with no fields (a delete for a novel this device never saw) are left out.
  */
-export async function getDeletedNovels() {
-  const state = await getSyncState();
+function deletedNovelsFrom(state, now = Date.now()) {
   return Object.values(state.novels)
-    .filter((novel) => novel.lifecycle === "deleted")
+    .filter((novel) => novel.lifecycle === "deleted" && Object.keys(novel.fields || {}).length)
     .map((novel) => {
-      const deletedAtMs = Number(novel.deletedAtMs) || Date.now();
+      const deletedAtMs = Number(novel.deletedAt?.wallMs) || Number(novel.deletedAtMs) || now;
       return {
         ...materializeNovel({ ...novel, lifecycle: "active" }),
         deletedAt: new Date(deletedAtMs).toISOString(),
-        purgeAt: new Date(deletedAtMs + TOMBSTONE_RETENTION_MS).toISOString()
+        purgeAt: new Date(deletedAtMs + TOMBSTONE_RETENTION_MS - RESTORE_SAFETY_MS).toISOString()
       };
     })
+    .filter((novel) => Date.parse(novel.purgeAt) > now)
     .sort((left, right) => right.deletedAt.localeCompare(left.deletedAt));
+}
+
+export async function getDeletedNovels() {
+  return deletedNovelsFrom(await getSyncState());
+}
+
+/** Active and restorable novels from a single read of the library. */
+export async function getLibraryView() {
+  const state = await getSyncState();
+  return { novels: materializeNovels(state), deleted: deletedNovelsFrom(state) };
 }
 
 export async function exportNovelsJson() {

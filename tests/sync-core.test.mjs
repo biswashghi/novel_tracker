@@ -4,6 +4,7 @@ import {
   applyMutation,
   applyMutationBatch,
   createSyncState,
+  materializeNovels,
   findCanonicalNovelId,
   materializeNovel,
   purgeExpiredTombstones,
@@ -205,4 +206,21 @@ test("an out-of-order checkpoint does not steal the head from a newer read", () 
   assert.equal(materializeNovel(state.novels["novel-1"]).lastReadChapterUrl, "https://example.test/newest");
   state = applyMutation(state, record("newer-still", 9000));
   assert.equal(materializeNovel(state.novels["novel-1"]).lastReadChapterUrl, "https://example.test/newer-still");
+});
+
+test("restoring a novel the state does not have is a no-op, not a blank novel", () => {
+  const state = createSyncState({ deviceId: "device-a", now: 1000 });
+  const next = applyMutation(state, {
+    mutationId: "restore-ghost",
+    deviceId: "device-b",
+    novelId: "purged-novel",
+    generation: 1,
+    clock: { wallMs: 2000, logical: 0, actorId: "device-b" },
+    type: "novel.restore",
+    payload: {}
+  });
+
+  assert.equal(next.novels["purged-novel"], undefined);
+  assert.deepEqual(materializeNovels(next), []);
+  assert.equal(next.appliedMutations["restore-ghost"], true);
 });
