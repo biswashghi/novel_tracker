@@ -262,6 +262,31 @@ export const SITE_LAYOUT_FIXTURES = [
     ]
   },
   {
+    // The phone site serves a different reader (m.webnovel.com, chosen by
+    // user agent): headings beside #content-<chapterId>, no [data-cid].
+    site: "Webnovel (phone)",
+    use: {
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+      viewport: { width: 390, height: 844 }
+    },
+    layout: ['[id^="content-"]', "h1"],
+    novels: [
+      {
+        url: "https://m.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305/0881-finished_91676865864990682",
+        title: "Harry Potter: The Golden Viper",
+        novelHomeUrl: "https://www.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305",
+        lastReadChapterLabel: "Chapter 883: 0881 Finished?"
+      },
+      {
+        url: "https://m.webnovel.com/book/shadow-slave_22196546206090805/nightmare-begins_59583457017254387",
+        title: "Shadow Slave",
+        novelHomeUrl: "https://www.webnovel.com/book/shadow-slave_22196546206090805",
+        lastReadChapterLabel: "Chapter 1: Nightmare Begins"
+      }
+    ]
+  },
+  {
     site: "NovelFire",
     layout: [".booktitle", ".chapter-title", "#content"],
     novels: [

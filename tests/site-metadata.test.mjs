@@ -460,6 +460,72 @@ test("extractPageMetadataFromRoot reads the Webnovel chapter the URL names", () 
   assert.equal(metadata.lastReadChapterLabel, "Chapter 1: Nightmare Begins");
 });
 
+test("extractPageMetadataFromRoot reads the Webnovel phone reader's chapter in view, not the first one", () => {
+  // m.webnovel.com after scrolling from 0881 into 0882: the URL and document
+  // title follow the chapter in view; the first <h1>, the canonical link and
+  // og:title are still 0881's.
+  const url = "https://m.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305/0882-the-conclusion_91701528104072340";
+  const chapterBlock = (heading) => ({ parentElement: { querySelector: (selector) => (selector === "h1" ? { textContent: heading } : null) } });
+  const root = createRoot({
+    title: "Harry Potter: The Golden Viper Chapter 884 - 0882 The Conclusion - WebNovel",
+    selectors: {
+      "#content-91701528104072340": chapterBlock("0882 The Conclusion"),
+      "#content-91676865864990682": chapterBlock("0881 Finished?"),
+      "h1": { textContent: "0881 Finished?" },
+      'link[rel="canonical"]': { href: "https://m.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305/0881-finished_91676865864990682" },
+      'meta[property="og:title"]': { content: "Harry Potter: The Golden Viper Chapter 883 - 0881 Finished? - WebNovel" }
+    }
+  });
+
+  const metadata = extractPageMetadataFromRoot(root, url);
+
+  // Numbered from the document title, as the desktop reader's heading is.
+  assert.equal(metadata.lastReadChapterLabel, "Chapter 884: 0882 The Conclusion");
+  assert.equal(metadata.lastReadChapterUrl, url);
+  assert.equal(metadata.title, "Harry Potter: The Golden Viper");
+  // Filed with the desktop site's reads of the same book.
+  assert.equal(metadata.novelHomeUrl, "https://www.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305");
+  assert.equal(metadata.sourceSite, "webnovel.com");
+});
+
+test("extractPageMetadataFromRoot falls back to the Webnovel document title, then the URL, for the chapter", () => {
+  const url = "https://m.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305/0882-the-conclusion_91701528104072340";
+  const staleHeading = { "h1": { textContent: "0881 Finished?" } };
+
+  const fromTitle = extractPageMetadataFromRoot(
+    createRoot({ title: "Harry Potter: The Golden Viper Chapter 884 - 0882 The Conclusion - WebNovel", selectors: staleHeading }),
+    url
+  );
+  assert.equal(fromTitle.lastReadChapterLabel, "Chapter 884: 0882 The Conclusion");
+
+  // A title still naming another chapter never numbers this one's heading.
+  const staleTitle = extractPageMetadataFromRoot(
+    createRoot({
+      title: "Harry Potter: The Golden Viper Chapter 883 - 0881 Finished? - WebNovel",
+      selectors: {
+        ...staleHeading,
+        "#content-91701528104072340": { parentElement: { querySelector: () => ({ textContent: "0882 The Conclusion" }) } }
+      }
+    }),
+    url
+  );
+  assert.equal(staleTitle.lastReadChapterLabel, "0882 The Conclusion");
+
+  const fromUrl = extractPageMetadataFromRoot(createRoot({ title: "WebNovel", selectors: staleHeading }), url);
+  assert.equal(fromUrl.lastReadChapterLabel, "0882 The Conclusion");
+  assert.equal(fromUrl.title, "Harry Potter The Golden Viper");
+});
+
+test("extractPageMetadataFromRoot files a Webnovel phone-site novel page under the www page", () => {
+  const metadata = extractPageMetadataFromRoot(
+    createRoot({}),
+    "https://m.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305"
+  );
+
+  assert.equal(metadata.isChapterPage, false);
+  assert.equal(metadata.novelHomeUrl, "https://www.webnovel.com/book/harry-potter-the-golden-viper_26628589806966305");
+});
+
 test("extractPageMetadataFromRoot uses the NovelFire book link and chapter title", () => {
   const root = createRoot({
     selectors: {
