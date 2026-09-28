@@ -52,15 +52,20 @@
   function extractPageMetadataFromRoot(root, pageUrl) {
     const context = createParseContext(root, pageUrl);
     const fallback = createFallbackMetadata(context);
+    // A site's parser also covers its subdomains (Webnovel's phone site is
+    // m.webnovel.com), and names the site the same way on each of them.
+    const siteHostname = (candidate) => candidate.hostnames?.find((name) => {
+      return context.hostname === name || context.hostname.endsWith(`.${name}`);
+    });
     const parser = context.core.getSiteParsers().find((candidate) => {
-      return !candidate.hostnames || candidate.hostnames.includes(context.hostname);
+      return !candidate.hostnames || siteHostname(candidate);
     });
     const specific = parser?.parse(context) || null;
 
     return {
       ...fallback,
       ...specific,
-      sourceSite: context.hostname,
+      sourceSite: (parser && siteHostname(parser)) || context.hostname,
       lastReadChapterUrl: context.pageUrl
     };
   }

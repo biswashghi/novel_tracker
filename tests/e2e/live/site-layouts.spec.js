@@ -59,6 +59,8 @@ async function extractMetadata(page) {
 
 for (const site of SITE_LAYOUT_FIXTURES) {
   test.describe(site.site, () => {
+    // Per-site browser settings, e.g. a phone user agent for a mobile site.
+    if (site.use) test.use(site.use);
     for (const novel of site.novels) {
       test(novel.url, async ({ page }) => {
         // Navigation (45s) + readiness (30s) + selectors + parse poll (30s) must
