@@ -18,6 +18,7 @@ import {
   signOut
 } from "./lib/auth.js";
 import { createSerialQueue, deleteAccount, getSyncStatus, syncNow } from "./lib/sync-service.js";
+import { reportLastTracked } from "./lib/last-tracked.js";
 
 const extensionApi = getExtensionApi();
 
@@ -56,13 +57,29 @@ async function runLibraryWrite(write, payload) {
   return result ?? { ok: true };
 }
 
+// The Safari app shows the most recent chapter as "Last tracked"; tell it
+// about saves and followed chapters, not edits, deletes or imports.
+const TRACKING_WRITES = new Map([
+  ["novel-tracker:auto-progress", (result) => (result?.updated ? [result.novel, "auto"] : null)],
+  ["novel-tracker:library-upsert", (result) => [result, "manual"]]
+]);
+
+function reportTracking(type, result) {
+  const tracked = TRACKING_WRITES.get(type)?.(result);
+  if (tracked) reportLastTracked(...tracked);
+}
+
 async function accountSnapshot() {
   return { account: await getAccountStatus(), sync: await getSyncStatus() };
 }
 
 async function handleMessage(message) {
   const libraryWrite = LIBRARY_WRITES.get(message?.type);
-  if (libraryWrite) return runLibraryWrite(libraryWrite, message.payload);
+  if (libraryWrite) {
+    const result = await runLibraryWrite(libraryWrite, message.payload);
+    reportTracking(message.type, result);
+    return result;
+  }
 
   switch (message?.type) {
     case "novel-tracker:account-status":
@@ -166,6 +183,7 @@ async function saveChapterFromTab(tab) {
     const metadata = await readTabMetadata(tab.id);
     if (!metadata?.lastReadChapterUrl) throw new Error("No chapter information on this page");
     const saved = await runLibraryWrite(saveChapterFromPage, metadata);
+    reportLastTracked(saved, "manual");
     const label = [saved?.title, saved?.lastReadChapterLabel].filter(Boolean).join(" · ");
     await showSaveResult(tab.id, true, `Saved to Novel Tracker: ${label}`);
     return saved;

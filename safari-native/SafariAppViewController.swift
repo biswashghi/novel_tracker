@@ -31,6 +31,71 @@ private enum AppTheme {
 #endif
 
 private let extensionBundleIdentifier = "app.noveltracker.extension.Extension"
+
+/// Sites the content script follows chapter to chapter, as readers know
+/// them. tests/safari-app-sites.test.mjs keeps the domains in step with the
+/// manifest's content_scripts.
+private let autoTrackedSites: [(name: String, domain: String)] = [
+    ("Royal Road", "royalroad.com"),
+    ("Webnovel", "webnovel.com"),
+    ("Scribble Hub", "scribblehub.com"),
+    ("Wuxiaworld", "wuxiaworld.com"),
+    ("Archive of Our Own", "archiveofourown.org"),
+    ("Wattpad", "wattpad.com"),
+    ("NovelBin", "novelbin.com"),
+    ("NovelFire", "novelfire.net"),
+    ("ReadNovelFull", "readnovelfull.com"),
+    ("Patreon", "patreon.com"),
+    ("Creative Novels", "creativenovels.com"),
+    ("Light Novels Translations", "lightnovelstranslations.com"),
+    ("Shin Translations", "shintranslations.com"),
+    ("Chikari", "chikari.moe")
+]
+
+/// Written by the extension (SafariWebExtensionHandler's LastTrackedStore)
+/// after each save or followed chapter.
+private struct LastTracked {
+    let title: String
+    let chapterLabel: String
+    let chapterURL: URL
+    let automatic: Bool
+    let at: Date
+
+    static func read() -> LastTracked? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "app.noveltracker.status",
+            kSecAttrAccount as String: "last-tracked",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        if let group = Bundle.main.object(forInfoDictionaryKey: "NovelTrackerKeychainAccessGroup") as? String, !group.isEmpty {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data,
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let url = value["chapterUrl"].flatMap(URL.init(string:)),
+              let at = value["at"].flatMap({ ISO8601DateFormatter.withFractionalSeconds.date(from: $0) })
+        else { return nil }
+        return LastTracked(
+            title: value["title"] ?? "",
+            chapterLabel: value["chapterLabel"] ?? "",
+            chapterURL: url,
+            automatic: value["source"] == "auto",
+            at: at
+        )
+    }
+}
+
+private extension ISO8601DateFormatter {
+    static let withFractionalSeconds: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+}
 private let issuer = "https://auth.novel.bghimire.com/realms/novel-tracker"
 private let apiBaseURL = "https://api.novel.bghimire.com"
 private let apiVersion = "v1"
@@ -113,6 +178,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     private let extensionDetailLabel = UILabel()
     private let extensionActionButton = UIButton(type: .system)
     private var enableStepBadge: UILabel?
+    private let lastTrackedCard = UIView()
+    private let lastTrackedKicker = UILabel()
+    private let lastTrackedTitle = UILabel()
+    private let lastTrackedDetail = UILabel()
+    private let lastTrackedButton = UIButton(type: .system)
+    private var lastTracked: LastTracked?
+    private var extensionEnabled: Bool?
     private let statusCard = UIView()
     private let statusIconView = UIImageView()
     private let statusTitleLabel = UILabel()
@@ -130,12 +202,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         configureIOSView()
         refreshIOSView()
-        refreshExtensionState()
-        // Readers leave for Settings or Safari to switch the extension on;
-        // show the result when they come back.
+        refreshFromSafari()
+        // Readers leave for Settings or Safari to switch the extension on and
+        // read; show the result when they come back.
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(refreshExtensionState),
+            selector: #selector(refreshFromSafari),
             name: UIApplication.didBecomeActiveNotification,
             object: nil
         )
@@ -248,6 +320,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         // it is switched on is the first thing this screen answers.
         configureExtensionCard()
         contentStack.addArrangedSubview(extensionCard)
+
+        // MARK: - Last tracked
+
+        configureLastTrackedCard()
+        contentStack.addArrangedSubview(lastTrackedCard)
 
         // MARK: - Account status card
 
@@ -523,7 +600,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     /// iOS 26.2 lets the app ask Safari whether the extension is switched on,
     /// so the card can say so instead of always showing setup. Earlier
     /// versions can't tell; there the card points at the steps below.
-    @objc private func refreshExtensionState() {
+    @objc private func refreshFromSafari() {
+        lastTracked = LastTracked.read()
+        applyLastTracked()
+        refreshExtensionState()
+    }
+
+    private func refreshExtensionState() {
         guard #available(iOS 26.2, *) else { return applyExtensionState(nil) }
         SFSafariExtensionManager.getStateOfExtension(withIdentifier: extensionBundleIdentifier) { [weak self] state, error in
             DispatchQueue.main.async {
@@ -533,7 +616,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
     /// `true`: on; `false`: installed but switched off; `nil`: unknown.
-    private func applyExtensionState(_ enabled: Bool?) {
+    private func applyExtensionState(_ reported: Bool?) {
+        extensionEnabled = reported
+        // Before iOS 26.2 Safari can't be asked, but a chapter the extension
+        // reported is proof enough that it has been switched on.
+        let enabled = reported ?? (lastTracked == nil ? nil : true)
         switch enabled {
         case true?:
             extensionIconView.image = UIImage(systemName: "checkmark.circle.fill")
@@ -561,6 +648,85 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         enableStepBadge?.text = done ? "\u{2713}" : "1"
         enableStepBadge?.backgroundColor = done ? AppTheme.success : AppTheme.copperDark
         enableStepBadge?.accessibilityLabel = done ? "Done" : "Step 1"
+    }
+
+    private func configureLastTrackedCard() {
+        lastTrackedCard.backgroundColor = AppTheme.sheet
+        lastTrackedCard.layer.cornerRadius = 14
+        lastTrackedCard.layer.borderWidth = 1
+        lastTrackedCard.layer.borderColor = AppTheme.line.cgColor
+        lastTrackedCard.layer.cornerCurve = .continuous
+
+        lastTrackedKicker.font = .systemFont(ofSize: 12, weight: .bold)
+        lastTrackedKicker.textColor = AppTheme.copperDark
+
+        lastTrackedTitle.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: UIFont(name: "Georgia-Bold", size: 20) ?? .preferredFont(forTextStyle: .title3))
+        lastTrackedTitle.adjustsFontForContentSizeCategory = true
+        lastTrackedTitle.textColor = AppTheme.ink
+        lastTrackedTitle.numberOfLines = 0
+
+        lastTrackedDetail.font = .preferredFont(forTextStyle: .subheadline)
+        lastTrackedDetail.adjustsFontForContentSizeCategory = true
+        lastTrackedDetail.textColor = AppTheme.muted
+        lastTrackedDetail.numberOfLines = 0
+
+        var config = UIButton.Configuration.tinted()
+        config.imagePadding = 8
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = 9
+        config.baseBackgroundColor = AppTheme.copper
+        config.baseForegroundColor = AppTheme.copperDark
+        config.image = UIImage(systemName: "safari")
+        config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+        lastTrackedButton.configuration = config
+        lastTrackedButton.addTarget(self, action: #selector(openLastTrackedInSafari), for: .touchUpInside)
+
+        let stack = UIStackView(arrangedSubviews: [lastTrackedKicker, lastTrackedTitle, lastTrackedDetail, lastTrackedButton])
+        stack.axis = .vertical
+        stack.spacing = 6
+        stack.setCustomSpacing(14, after: lastTrackedDetail)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        lastTrackedCard.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: lastTrackedCard.topAnchor, constant: 18),
+            stack.leadingAnchor.constraint(equalTo: lastTrackedCard.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: lastTrackedCard.trailingAnchor, constant: -18),
+            stack.bottomAnchor.constraint(equalTo: lastTrackedCard.bottomAnchor, constant: -18)
+        ])
+    }
+
+    private func applyLastTracked() {
+        if let tracked = lastTracked {
+            lastTrackedKicker.text = "LAST TRACKED"
+            lastTrackedTitle.text = tracked.title.isEmpty ? tracked.chapterURL.host ?? "Your novel" : tracked.title
+            let when = RelativeDateTimeFormatter().localizedString(for: tracked.at, relativeTo: Date())
+            let how = tracked.automatic ? "followed automatically" : "saved"
+            lastTrackedDetail.text = [tracked.chapterLabel, "\(how) \(when)"]
+                .filter { !$0.isEmpty }
+                .joined(separator: " \u{00B7} ")
+            lastTrackedButton.configuration?.title = "Continue in Safari"
+        } else {
+            lastTrackedKicker.text = "NOTHING TRACKED YET"
+            lastTrackedTitle.text = "Try it on a chapter"
+            let names = autoTrackedSites.map(\.name)
+            lastTrackedDetail.text = "Novel Tracker follows you chapter to chapter on \(ListFormatter.localizedString(byJoining: names)). On other sites, save each chapter from the popup."
+            lastTrackedButton.configuration?.title = "Try It in Safari"
+        }
+        // Re-apply with the new evidence, keeping what Safari last reported.
+        applyExtensionState(extensionEnabled)
+    }
+
+    /// Opens the last chapter, or a supported site to try it on, in Safari
+    /// specifically: the extension only runs there, and a plain https link
+    /// would go to whatever the reader's default browser is.
+    @objc private func openLastTrackedInSafari() {
+        let target = lastTracked?.chapterURL ?? URL(string: "https://www.royalroad.com/fictions/best-rated")!
+        let inSafari = URL(string: "x-safari-\(target.absoluteString)")
+        guard let inSafari else { return UIApplication.shared.open(target) }
+        UIApplication.shared.open(inSafari) { opened in
+            if !opened { UIApplication.shared.open(target) }
+        }
     }
 
     /// Opens Novel Tracker's own page under Settings, Apps, Safari,

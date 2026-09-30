@@ -2,6 +2,52 @@ import AuthenticationServices
 import SafariServices
 import Security
 
+/// The chapter most recently saved or followed, for the containing app's
+/// "Last tracked" card. The app can't read the extension's storage, so the
+/// extension hands it over through the same shared keychain group.
+enum LastTrackedStore {
+    static let service = "app.noveltracker.status"
+    static let account = "last-tracked"
+
+    static func validated(_ value: Any?) -> [String: String]? {
+        guard let status = value as? [String: Any],
+              Set(status.keys).isSubset(of: ["title", "chapterLabel", "chapterUrl", "source", "at"]),
+              let title = status["title"] as? String, title.count <= 300,
+              let chapterLabel = status["chapterLabel"] as? String, chapterLabel.count <= 300,
+              let chapterUrl = status["chapterUrl"] as? String, chapterUrl.count <= 2048,
+              let url = URL(string: chapterUrl), ["http", "https"].contains(url.scheme ?? ""),
+              let source = status["source"] as? String, ["auto", "manual"].contains(source),
+              let at = status["at"] as? String, at.count <= 40
+        else { return nil }
+        return ["title": title, "chapterLabel": chapterLabel, "chapterUrl": chapterUrl, "source": source, "at": at]
+    }
+
+    static func write(_ status: [String: String]) throws {
+        let data = try JSONSerialization.data(withJSONObject: status)
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        if let group = Bundle.main.object(forInfoDictionaryKey: "NovelTrackerKeychainAccessGroup") as? String,
+           !group.isEmpty {
+            query[kSecAttrAccessGroup as String] = group
+        }
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            attributes.forEach { query[$0.key] = $0.value }
+            let addStatus = SecItemAdd(query as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(addStatus)) }
+        } else if status != errSecSuccess {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+}
+
 private enum SharedSessionStore {
     static let service = "app.noveltracker.auth"
     static let account = "keycloak-session"
@@ -93,6 +139,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling, ASW
         case "novel-tracker.auth.get": readSession(context)
         case "novel-tracker.auth.store": storeSession(message, context: context)
         case "novel-tracker.auth.clear": clearSession(context)
+        case "novel-tracker.status.store": storeLastTracked(message, context: context)
         default: complete(context, error: "Unsupported native message")
         }
     }
@@ -138,6 +185,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling, ASW
 
     private func clearSession(_ context: NSExtensionContext) {
         do { try SharedSessionStore.clear(); complete(context, payload: ["cleared": true]) }
+        catch { complete(context, error: error.localizedDescription) }
+    }
+
+    private func storeLastTracked(_ message: [String: Any], context: NSExtensionContext) {
+        guard let status = LastTrackedStore.validated(message["status"]) else {
+            return complete(context, error: "Invalid tracking status")
+        }
+        do { try LastTrackedStore.write(status); complete(context, payload: ["stored": true]) }
         catch { complete(context, error: error.localizedDescription) }
     }
 

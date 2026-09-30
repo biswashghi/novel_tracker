@@ -142,6 +142,10 @@ if ! grep -q 'novel-tracker.auth.get' "$handler_path"; then
   echo "ERROR: Generated Safari handler does not contain authentication bridge"
   exit 1
 fi
+if ! grep -q 'novel-tracker.status.store' "$handler_path"; then
+  echo "ERROR: Generated Safari handler does not accept the app's tracking status"
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Shared Keychain
