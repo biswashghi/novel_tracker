@@ -3,6 +3,12 @@
 Novel Tracker works without an account. When used locally, reading data remains
 in the browser's extension storage and is not sent to Novel Tracker servers.
 
+On iPhone and iPad, the Safari extension also shares the most recently tracked
+chapter (novel title, chapter label, chapter URL and when it was read) with the
+Novel Tracker app on the same device, through that device's keychain, so the app
+can show it. It is replaced on each save, never leaves the device, and is not
+sent to Novel Tracker servers.
+
 If a reader chooses **Sign in with Google** or **Sign in with Apple**, Novel
 Tracker receives the account identifier, name, and email supplied through
 Keycloak. Readers who use Sign in with Apple may choose Apple's private email
