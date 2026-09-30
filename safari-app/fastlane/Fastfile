@@ -1,8 +1,18 @@
-# Archives and uploads the Safari containing apps produced by
-# `npm run package:safari` (scripts/package-safari.sh) to App Store Connect:
-# macOS to the App Store as an unreleased draft (not submitted for review),
-# iOS to TestFlight. Run by scripts/publish-safari.mjs from
-# .github/workflows/release.yml.
+# Archives the Safari containing apps produced by `npm run package:safari`
+# (scripts/package-safari.sh) and sends both platforms to App Store Connect.
+# By default each is submitted for App Review with its "What's New", and
+# released as soon as Apple approves it; the build is on TestFlight too. A
+# version can stop at TestFlight instead. scripts/publish-safari.mjs decides
+# which, from docs/release/notes/<version>/ (scripts/release-plan.mjs), and
+# passes it in:
+#
+#   NOVEL_TRACKER_APPLE_DISTRIBUTION  "app-store" (default) or "testflight"
+#   NOVEL_TRACKER_RELEASE_NOTES       path to this platform's notes
+#   NOVEL_TRACKER_SCREENSHOTS         optional, ":"-separated directories of
+#                                     screenshots to replace the listing's
+#                                     with (only when they changed)
+#
+# Run from .github/workflows/release.yml.
 #
 # Two constraints shape the lanes:
 # - `xcrun safari-web-extension-converter` writes no .xcscheme files, so
@@ -19,6 +29,7 @@
 # the macOS upload independently of anything here.
 
 require "base64"
+require "fileutils"
 require "open3"
 require "tmpdir"
 require_relative "installer_certificate"
@@ -97,6 +108,77 @@ def configure_distribution_signing(target, profile_name)
   )
 end
 
+def release_notes
+  path = ENV["NOVEL_TRACKER_RELEASE_NOTES"].to_s
+  path.empty? ? "" : File.read(path).strip
+end
+
+# Stages the screenshot directories into the single <language>/ folder
+# deliver expects, prefixing each file with its directory so the iPhone and
+# iPad sets (which share file names) don't collide. deliver tells devices
+# apart by pixel size and orders each set by file name.
+def staged_screenshots(language)
+  sources = ENV["NOVEL_TRACKER_SCREENSHOTS"].to_s.split(":").reject(&:empty?)
+  return nil if sources.empty?
+
+  staging = File.join(Dir.mktmpdir("novel-tracker-screenshots"), language)
+  FileUtils.mkdir_p(staging)
+  sources.each do |source|
+    Dir.glob(File.join(source, "*.{jpg,jpeg,png}")).sort.each do |file|
+      FileUtils.cp(file, File.join(staging, "#{File.basename(source)}-#{File.basename(file)}"))
+    end
+  end
+  File.dirname(staging)
+end
+
+def publish_build(platform:, binary:)
+  if ENV["NOVEL_TRACKER_APPLE_DISTRIBUTION"] == "testflight"
+    UI.important("TestFlight only for this version (release.json); not submitting for App Review.")
+    notes = release_notes
+    upload_to_testflight(
+      app_platform: platform,
+      **binary,
+      changelog: notes.empty? ? nil : notes,
+      skip_waiting_for_build_processing: notes.empty?,
+      distribute_external: false
+    )
+    return
+  end
+
+  notes = release_notes
+  UI.user_error!("No release notes for this version; see scripts/release-plan.mjs") if notes.empty?
+
+  # Screenshots go under the listing's own language, so nothing here can
+  # add a language the listing doesn't have.
+  app = Spaceship::ConnectAPI::App.find(APP_BUNDLE_ID)
+  UI.user_error!("No App Store Connect app for #{APP_BUNDLE_ID}") unless app
+  screenshots_path = staged_screenshots(app.primary_locale)
+
+  upload_to_app_store(
+    platform: platform,
+    **binary,
+    # "default" fills every language the version already has; release notes
+    # are the only metadata sent (an empty metadata folder carries nothing).
+    skip_metadata: false,
+    metadata_path: Dir.mktmpdir("novel-tracker-metadata"),
+    release_notes: { "default" => notes },
+    skip_screenshots: screenshots_path.nil?,
+    screenshots_path: screenshots_path,
+    overwrite_screenshots: !screenshots_path.nil?,
+    submit_for_review: true,
+    automatic_release: true,
+    # Export compliance normally comes from ITSAppUsesNonExemptEncryption in
+    # Info.plist (scripts/package-safari.sh); this only fills a gap. The
+    # listing's content-rights answer is left as it is.
+    submission_information: { export_compliance_uses_encryption: false, add_id_info_uses_idfa: false },
+    # App Review is the check that matters; precheck's metadata heuristics
+    # would only add a way for an unattended release to fail.
+    run_precheck_before_submit: false,
+    precheck_include_in_app_purchases: false,
+    force: true
+  )
+end
+
 def restore_installer_certificate
   # Local releases can continue using an identity already in their keychain.
   installer_p12_path = ENV["NOVEL_TRACKER_INSTALLER_P12_PATH"]
@@ -131,7 +213,7 @@ def restore_installer_certificate
 end
 
 platform :mac do
-  desc "Archive and upload the macOS Safari extension app to App Store Connect"
+  desc "Archive the macOS Safari extension app and submit it for App Review"
   lane :release do
     api_key = connect_api_key
     restore_installer_certificate
@@ -170,18 +252,12 @@ platform :mac do
       skip_profile_detection: true
     )
 
-    upload_to_app_store(
-      skip_screenshots: true,
-      skip_metadata: true,
-      submit_for_review: false,
-      force: true,
-      precheck_include_in_app_purchases: false
-    )
+    publish_build(platform: "osx", binary: { pkg: lane_context[SharedValues::PKG_OUTPUT_PATH] })
   end
 end
 
 platform :ios do
-  desc "Archive and upload the iOS Safari extension app to TestFlight"
+  desc "Archive the iOS Safari extension app and submit it for App Review"
   lane :release do
     api_key = connect_api_key
     certificate_id = distribution_certificate_id(api_key, "ios")
@@ -219,13 +295,6 @@ platform :ios do
       skip_profile_detection: true
     )
 
-    # TestFlight, not a direct App Store submission — matches how this app
-    # has been distributed on iOS so far (manually, through Xcode/TestFlight).
-    # Internal testers only by default; widen with distribute_external: true
-    # once there's an external testing group set up in App Store Connect.
-    upload_to_testflight(
-      skip_waiting_for_build_processing: true,
-      distribute_external: false
-    )
+    publish_build(platform: "ios", binary: { ipa: lane_context[SharedValues::IPA_OUTPUT_PATH] })
   end
 end

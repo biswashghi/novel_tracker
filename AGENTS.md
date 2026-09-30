@@ -17,7 +17,9 @@ release identity across all four stores:
   (`CFBundleShortVersionString`) for both the macOS and iOS Safari targets.
 
 Bump it with `npm version patch|minor|major --no-git-tag-version` in the pull
-request that ships the change, never by hand. Merging a bump is the release:
+request that ships the change, never by hand, and add that version's release
+notes (and optional `release.json`) in `docs/release/notes/<version>/`; the PR
+gate checks them. Merging a bump is the release:
 `.github/workflows/release.yml` publishes any `main` version that has no
 `vX.Y.Z` tag yet and creates the tag once every store accepted it. See
 [docs/release.md](docs/release.md) for the runbook.
