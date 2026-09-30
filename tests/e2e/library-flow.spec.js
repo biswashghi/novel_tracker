@@ -124,6 +124,7 @@ test('export downloads a JSON backup and import restores it', async ({ context, 
   await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
 
+  await optionsPage.locator('#data-menu > summary').click();
   const [download] = await Promise.all([
     optionsPage.waitForEvent('download'),
     optionsPage.locator('#export-json').click()
@@ -190,6 +191,7 @@ test('CSV export downloads one spreadsheet row per novel', async ({ context, ext
   await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
   await expect(optionsPage.locator('.card', { hasText: 'Test Fiction' })).toBeVisible({ timeout: 15_000 });
 
+  await optionsPage.locator('#data-menu > summary').click();
   const [download] = await Promise.all([
     optionsPage.waitForEvent('download'),
     optionsPage.locator('#export-csv').click()
@@ -293,4 +295,53 @@ test('reading activity heatmap counts the chapters read today', async ({ context
 
   await today.hover();
   await expect(activity.locator('#activity-summary')).toHaveText(/^1 chapter · /);
+});
+
+test('on a phone the library leads with the novels and names its backup actions', async ({
+  context,
+  extensionId,
+  serviceWorker
+}) => {
+  await saveChapterViaPopup({ context, extensionId, serviceWorker });
+
+  const optionsPage = await context.newPage();
+  await optionsPage.setViewportSize({ width: 402, height: 874 });
+  await optionsPage.goto(extensionUrl(extensionId, 'options.html'));
+  const card = optionsPage.locator('.card', { hasText: 'Test Fiction' });
+  await expect(card).toBeVisible();
+
+  // The first novel is on the first screen, and the stats come after the list.
+  const cardBox = await card.boundingBox();
+  const statsBox = await optionsPage.locator('#stats-bar').boundingBox();
+  expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(874);
+  expect(statsBox.y).toBeGreaterThan(cardBox.y);
+
+  // The top bar has no room for the account pill; its state shows under the heading.
+  await expect(optionsPage.locator('.account-summary')).toBeHidden();
+  await expect(optionsPage.locator('#sync-line')).toBeVisible();
+  await expect(optionsPage.locator('#sync-line-text')).toHaveText('Stored locally · No account required');
+
+  // Import and export are one named menu, each choice described.
+  const menu = optionsPage.locator('#data-menu');
+  await expect(menu.locator('summary')).toHaveText('Backup');
+  await menu.locator('summary').click();
+  await expect(menu.locator('#export-json')).toContainText('Export a backup');
+  await expect(menu.locator('#export-csv')).toContainText('Export as a spreadsheet');
+  await expect(menu.locator('#import-json')).toContainText('Import a backup');
+
+  await optionsPage.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open', '');
+  await expect(menu.locator('summary')).toBeFocused();
+
+  // A tap anywhere outside closes it (the open panel covers the heading on
+  // a phone, so tap the page margin).
+  await menu.locator('summary').click();
+  await optionsPage.mouse.click(6, 600);
+  await expect(menu).not.toHaveAttribute('open', '');
+
+  // Choosing an action closes the menu behind it.
+  await menu.locator('summary').click();
+  const [download] = await Promise.all([optionsPage.waitForEvent('download'), menu.locator('#export-json').click()]);
+  expect(download.suggestedFilename()).toMatch(/^novel-tracker-backup-/);
+  await expect(menu).not.toHaveAttribute('open', '');
 });

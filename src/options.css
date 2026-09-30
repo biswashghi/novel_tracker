@@ -276,6 +276,97 @@ svg {
   border-left: 1px solid var(--line);
 }
 
+/* Backup menu: import and export, each with a sentence saying what it does */
+.data-menu {
+  position: relative;
+}
+
+.data-menu-toggle {
+  cursor: pointer;
+  list-style: none;
+}
+
+.data-menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.data-menu[open] .data-menu-toggle {
+  border-color: var(--faint);
+  background: var(--sheet-hover);
+}
+
+.data-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+
+  width: max-content;
+  max-width: min(300px, calc(100vw - 28px));
+
+  display: grid;
+  gap: 2px;
+
+  padding: 6px;
+
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+
+  background: var(--sheet);
+  box-shadow: var(--shadow-float);
+
+  animation: rise var(--base) var(--ease-out) both;
+}
+
+.data-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+
+  padding: 10px 12px;
+
+  border: 0;
+  border-radius: var(--radius-sm);
+
+  background: transparent;
+  color: var(--ink);
+
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.data-menu-item:hover,
+.data-menu-item:focus-visible {
+  background: var(--sheet-hover);
+}
+
+.data-menu-item svg {
+  width: 17px;
+  height: 17px;
+
+  flex: none;
+  margin-top: 1px;
+
+  color: var(--copper);
+}
+
+.data-menu-item span {
+  display: grid;
+  gap: 2px;
+}
+
+.data-menu-item strong {
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.data-menu-item small {
+  color: var(--muted);
+
+  font-size: 0.74rem;
+}
+
 /* Text buttons in the bar: sign in, sync */
 .top-action {
   height: 34px;
@@ -430,6 +521,23 @@ a.top-action {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
+}
+
+/* Phones only; the account pill in the top bar covers everywhere else. */
+.sync-line {
+  margin: 10px 0 0;
+
+  display: none;
+  align-items: center;
+  gap: 9px;
+
+  color: var(--muted);
+
+  font-size: 0.78rem;
+}
+
+.sync-line .sync-indicator {
+  margin-left: 3px;
 }
 
 @keyframes rise {
@@ -1750,8 +1858,44 @@ a.top-action {
     display: none;
   }
 
+  .sync-line {
+    display: flex;
+  }
+
+  /* On a phone the reader came to continue a novel: put the list first and
+     the stats after it, instead of four stat cards and a year-long heatmap
+     pushing the first novel below the fold. */
   .workspace {
     padding: 22px 14px 80px;
+
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero {
+    order: 0;
+  }
+
+  .filter-bar {
+    order: 1;
+  }
+
+  .library {
+    order: 2;
+  }
+
+  .trash {
+    order: 3;
+  }
+
+  .stats-bar {
+    order: 4;
+
+    margin-top: 28px;
+  }
+
+  .activity {
+    order: 5;
   }
 
   /* A stuck bar would cover a third of a phone screen. */

@@ -269,26 +269,49 @@
                     </svg>
                 </button>
 
-                <button type="button" id="import-json" class="icon-action" aria-label="Import library"
-                    title="Import library">
-                    <svg>
-                        <use href="#i-import"></use>
-                    </svg>
-                </button>
+                <!-- Three bare arrow icons read as "download" and "upload" on a
+                     phone, with no hover titles to tell them apart. One named
+                     menu with a sentence per choice instead. -->
+                <details id="data-menu" class="data-menu">
+                    <summary class="top-action data-menu-toggle">
+                        <svg>
+                            <use href="#i-export"></use>
+                        </svg>
+                        <span>Backup</span>
+                    </summary>
 
-                <button type="button" id="export-json" class="icon-action" aria-label="Export library"
-                    title="Export library">
-                    <svg>
-                        <use href="#i-export"></use>
-                    </svg>
-                </button>
+                    <div class="data-menu-panel">
+                        <button type="button" id="export-json" class="data-menu-item">
+                            <svg aria-hidden="true">
+                                <use href="#i-export"></use>
+                            </svg>
+                            <span>
+                                <strong>Export a backup</strong>
+                                <small>A file you can import again later</small>
+                            </span>
+                        </button>
 
-                <button type="button" id="export-csv" class="icon-action" aria-label="Export library as CSV"
-                    title="Export as CSV (spreadsheet)">
-                    <svg>
-                        <use href="#i-table"></use>
-                    </svg>
-                </button>
+                        <button type="button" id="export-csv" class="data-menu-item">
+                            <svg aria-hidden="true">
+                                <use href="#i-table"></use>
+                            </svg>
+                            <span>
+                                <strong>Export as a spreadsheet</strong>
+                                <small>CSV, for Excel, Numbers or Sheets</small>
+                            </span>
+                        </button>
+
+                        <button type="button" id="import-json" class="data-menu-item">
+                            <svg aria-hidden="true">
+                                <use href="#i-import"></use>
+                            </svg>
+                            <span>
+                                <strong>Import a backup</strong>
+                                <small>Add novels from an exported file</small>
+                            </span>
+                        </button>
+                    </div>
+                </details>
 
                 <input type="file" id="import-file" accept="application/json,.json" hidden>
 
@@ -307,6 +330,12 @@
         <section class="hero">
             <p class="hero-kicker">Your library</p>
             <h1>Pick up where you left off.</h1>
+            <!-- Phones only: the account pill in the top bar has no room
+                 there, so its state is repeated here (options.js mirrors it). -->
+            <p id="sync-line" class="sync-line">
+                <span id="sync-line-dot" class="sync-indicator signed-out" aria-hidden="true"></span>
+                <span id="sync-line-text">Stored locally · No account required</span>
+            </p>
         </section>
 
 
