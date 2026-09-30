@@ -307,6 +307,11 @@ svg {
   height: 15px;
 }
 
+/* iOS: a link to the app rather than a button, styled the same. */
+a.top-action {
+  text-decoration: none;
+}
+
 .top-action:hover {
   border-color: var(--faint);
   background: var(--sheet-hover);

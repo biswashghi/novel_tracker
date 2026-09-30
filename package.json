@@ -26,7 +26,7 @@
     "test:coverage": "node --experimental-test-coverage --test --test-coverage-lines=88 --test-coverage-branches=74 --test-coverage-functions=85",
     "test:integration": "NOVEL_TRACKER_REQUIRE_STACK=1 node --test tests/server-sync-api.test.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:package": "playwright test tests/e2e/extension-smoke.spec.js tests/e2e/auto-progress.spec.js tests/e2e/library-flow.spec.js",
+    "test:e2e:package": "playwright test tests/e2e/extension-smoke.spec.js tests/e2e/auto-progress.spec.js tests/e2e/library-flow.spec.js tests/e2e/library-live-refresh.spec.js",
     "test:e2e:live": "playwright test --config=playwright.live.config.js",
     "test:e2e:layouts": "playwright test --config=playwright.live.config.js tests/e2e/live/site-layouts.spec.js --workers=4",
     "test:e2e:headed": "playwright test --headed",

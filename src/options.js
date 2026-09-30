@@ -3,8 +3,11 @@
 import {
   exportNovelsJson,
   getLibraryView,
+  LIBRARY_STORAGE_KEYS,
   normalizeTags
 } from "./lib/storage.js";
+import { AUTH_STORAGE_KEY } from "./lib/auth.js";
+import { SYNC_META_KEY } from "./lib/sync-service.js";
 
 import { computeReadingHeatmap, computeReadingStats } from "./lib/reading-stats.js";
 import { novelsToCsv } from "./lib/csv.js";
@@ -719,6 +722,11 @@ function showUndoToast(novel) {
 
 function render() {
   const filtered = sortNovels(novels.filter(matchesFilters), sortSelect.value);
+  // A re-render can come from storage changing underneath the page, not only
+  // from the reader; don't fold away a history they had opened.
+  const openHistories = new Set(
+    [...library.querySelectorAll(".card:has(details.history[open])")].map((card) => card.dataset.id)
+  );
   library.replaceChildren();
 
   if (!filtered.length) {
@@ -729,6 +737,7 @@ function render() {
 
   filtered.forEach((novel, index) => {
     const card = createCard(novel);
+    if (openHistories.has(novel.id)) card.querySelector("details.history")?.setAttribute("open", "");
     if (animateEntrance) {
       // Stagger only the first screenful, only once: re-renders while
       // searching or sorting should feel instant, not replay the intro.
@@ -793,6 +802,7 @@ library.addEventListener("click", async (event) => {
 
   if (action === "cancel") {
     card.classList.remove("editing");
+    catchUpAfterEditing();
     return;
   }
 
@@ -931,22 +941,52 @@ async function startSignIn(provider) {
   await refresh();
 }
 
-for (const provider of AUTH_PROVIDERS) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.id = `sign-in-${provider.id}`;
-  button.className = "top-action primary-action sign-in-button";
-  button.dataset.provider = provider.id;
-  // The visible label is hidden on narrow screens; keep the button named.
-  button.setAttribute("aria-label", provider.label);
+function renderProviderButtons() {
+  for (const provider of AUTH_PROVIDERS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = `sign-in-${provider.id}`;
+    button.className = "top-action primary-action sign-in-button";
+    button.dataset.provider = provider.id;
+    // The visible label is hidden on narrow screens; keep the button named.
+    button.setAttribute("aria-label", provider.label);
+
+    const label = document.createElement("span");
+    label.textContent = provider.label;
+    button.append(icon(provider.icon || "user"), label);
+
+    button.addEventListener("click", () => withBusy(button, () => startSignIn(provider.id)));
+    signInActions.append(button);
+  }
+}
+
+// Safari on iOS can't run a sign-in from the extension (SafariWebExtension-
+// Handler refuses it and points at the app), so offering Google and Apple
+// buttons there only leads to an error. Send the reader to the app instead:
+// it registers noveltracker://, and the extension picks up the session the
+// app stores in the shared keychain.
+function renderAppSignInLink() {
+  const link = document.createElement("a");
+  link.id = "sign-in-app";
+  link.className = "top-action primary-action app-sign-in";
+  link.href = "noveltracker://sign-in";
+  link.title = "Sign in from the Novel Tracker app to sync this library";
 
   const label = document.createElement("span");
-  label.textContent = provider.label;
-  button.append(icon(provider.icon || "user"), label);
-
-  button.addEventListener("click", () => withBusy(button, () => startSignIn(provider.id)));
-  signInActions.append(button);
+  label.textContent = "Sign in with the app";
+  link.append(icon("user"), label);
+  signInActions.append(link);
 }
+
+async function isIOSSafari() {
+  try {
+    return (await getExtensionApi()?.runtime?.getPlatformInfo?.())?.os === "ios";
+  } catch {
+    return false;
+  }
+}
+
+isIOSSafari().then((iOS) => (iOS ? renderAppSignInLink() : renderProviderButtons()));
 
 /* =========================================================
    SYNC
@@ -1044,6 +1084,55 @@ themeToggle.addEventListener("click", () => {
 });
 
 applyThemeChoice(readThemeChoice());
+
+/* =========================================================
+   LIVE UPDATES
+========================================================= */
+
+// The library tab is often left open while the reader keeps reading in
+// another tab, where auto-progress and sync change storage underneath it.
+// Re-read whenever the library or account state changes, and when the tab
+// comes back into view (Safari may have suspended it in the meantime).
+const LIBRARY_KEYS = new Set(LIBRARY_STORAGE_KEYS);
+const ACCOUNT_KEYS = new Set([AUTH_STORAGE_KEY, SYNC_META_KEY]);
+const REFRESH_DELAY_MS = 250;
+let refreshTimer = null;
+let refreshHeldForEdit = false;
+
+function isEditing() {
+  return Boolean(library.querySelector(".card.editing"));
+}
+
+function scheduleRefresh() {
+  window.clearTimeout(refreshTimer);
+  refreshTimer = window.setTimeout(() => {
+    // Re-rendering would throw away what the reader is typing into an edit
+    // form. Hold the refresh until they save or cancel.
+    if (isEditing()) {
+      refreshHeldForEdit = true;
+      return;
+    }
+    refreshHeldForEdit = false;
+    refresh().catch((error) => console.warn("Novel Tracker could not refresh the library", error));
+  }, REFRESH_DELAY_MS);
+}
+
+function catchUpAfterEditing() {
+  if (refreshHeldForEdit) scheduleRefresh();
+}
+
+getExtensionApi()?.storage?.onChanged?.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  const keys = Object.keys(changes);
+  if (keys.some((key) => LIBRARY_KEYS.has(key))) scheduleRefresh();
+  if (keys.some((key) => ACCOUNT_KEYS.has(key))) refreshAccount();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  scheduleRefresh();
+  refreshAccount();
+});
 
 /* =========================================================
    INITIAL LOAD
