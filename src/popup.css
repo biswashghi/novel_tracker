@@ -480,6 +480,29 @@ body.existing-novel .current-page-icon {
   color: var(--danger);
 }
 
+/* After-save guidance: a sentence to read rather than a glanceable state,
+   so it gets a tinted box and body weight instead of bold status text. */
+.status.tracking,
+.status.manual {
+  padding: 9px 11px;
+
+  border-radius: var(--radius-sm);
+
+  color: var(--ink);
+
+  font-size: 0.8rem;
+
+  animation: rise var(--base) var(--ease-out) both;
+}
+
+.status.tracking {
+  background: var(--ok-soft);
+}
+
+.status.manual {
+  background: var(--warn-soft);
+}
+
 /* Save */
 .save-button {
   height: 42px;
