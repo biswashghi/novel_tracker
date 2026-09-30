@@ -5,12 +5,13 @@ import Security
 import WebKit
 
 
+import SafariServices
+
 #if os(iOS)
 import UIKit
 typealias PlatformViewController = UIViewController
 #else
 import Cocoa
-import SafariServices
 typealias PlatformViewController = NSViewController
 #endif
 
@@ -106,6 +107,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     private let iconImageView = UIImageView()
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
+    private let extensionCard = UIView()
+    private let extensionIconView = UIImageView()
+    private let extensionTitleLabel = UILabel()
+    private let extensionDetailLabel = UILabel()
+    private let extensionActionButton = UIButton(type: .system)
+    private var enableStepBadge: UILabel?
     private let statusCard = UIView()
     private let statusIconView = UIImageView()
     private let statusTitleLabel = UILabel()
@@ -123,6 +130,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #if os(iOS)
         configureIOSView()
         refreshIOSView()
+        refreshExtensionState()
+        // Readers leave for Settings or Safari to switch the extension on;
+        // show the result when they come back.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshExtensionState),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
 #else
         webView.navigationDelegate = self
         webView.configuration.userContentController.add(self, name: "controller")
@@ -208,7 +224,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         titleLabel.textAlignment = .center
         titleLabel.textColor = AppTheme.ink
 
-        subtitleLabel.text = "Keep your reading list synced between Safari and your Novel Tracker account."
+        subtitleLabel.text = "Remembers where you stopped reading on novel sites in Safari, and takes you back there."
         subtitleLabel.font = .preferredFont(forTextStyle: .body)
         subtitleLabel.textColor = AppTheme.muted
         subtitleLabel.textAlignment = .center
@@ -225,6 +241,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         heroStack.alignment = .fill
 
         contentStack.addArrangedSubview(heroStack)
+
+        // MARK: - Extension status
+
+        // The reading features all live in the Safari extension, so whether
+        // it is switched on is the first thing this screen answers.
+        configureExtensionCard()
+        contentStack.addArrangedSubview(extensionCard)
 
         // MARK: - Account status card
 
@@ -274,7 +297,6 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             statusRow.bottomAnchor.constraint(equalTo: statusCard.bottomAnchor, constant: -18)
         ])
 
-        contentStack.addArrangedSubview(statusCard)
 
         // MARK: - Sign-in buttons
 
@@ -318,7 +340,6 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         }
 
         signInButtons.forEach(signInStack.addArrangedSubview)
-        contentStack.addArrangedSubview(signInStack)
 
         // Keep this guidance short enough for compact iPhone layouts. The
         // account-switch confirmation carries the fuller explanation only
@@ -333,7 +354,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
         // MARK: - Safari setup
 
-        setupTitleLabel.text = "Finish setup in Safari"
+        setupTitleLabel.text = "Set up in Safari"
         setupTitleLabel.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: UIFont(name: "Georgia-Bold", size: 20) ?? .preferredFont(forTextStyle: .title2))
         setupTitleLabel.adjustsFontForContentSizeCategory = true
         setupTitleLabel.numberOfLines = 0
@@ -343,59 +364,46 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         setupStack.spacing = 14
 
         // Novel Tracker's reading features live in the Safari extension, so a
-        // reader who stops at this screen never reaches them. Spelling the path
-        // out — through to the library and what it contains — is what App
-        // Review needed and could not find on iPad.
-        setupStack.addArrangedSubview(
-            makeSetupRow(
-                number: "1",
-                title: "Enable the extension",
-                detail: "Open Settings → Apps → Safari → Extensions, then turn on Novel Tracker."
-            )
+        // reader who stops at this screen never reaches them. Each step names
+        // what to tap, in the order Safari shows it. The Manage Extensions
+        // route from the page menu is shorter than Settings and leads
+        // straight into the permission prompt, and the last step reaches the
+        // library, which App Review needed to find.
+        let enableRow = makeSetupRow(
+            number: "1",
+            title: "Turn on Novel Tracker",
+            detail: "In Safari, tap the page menu button in the address bar, choose Manage Extensions, and switch on Novel Tracker."
         )
+        enableStepBadge = enableRow.badge
+        setupStack.addArrangedSubview(enableRow.view)
 
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "2",
-                title: "Allow your reading sites",
-                detail: "Give Novel Tracker access to the novel sites you read."
-            )
+                title: "Always allow it on your reading sites",
+                detail: "Tap Novel Tracker in that menu, then Always Allow, then Always Allow on Every Website. It only reads the novel sites it supports. \u{201C}Allow for One Day\u{201D} stops tracking tomorrow."
+            ).view
         )
 
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "3",
-                title: "Save a chapter",
-                detail: "On a chapter page, tap the extensions button in Safari's address bar, then Novel Tracker."
-            )
+                title: "Save your first chapter",
+                detail: "On a chapter, open Novel Tracker from the page menu and tap Save bookmark. From then on it follows you from chapter to chapter by itself."
+            ).view
         )
 
         setupStack.addArrangedSubview(
             makeSetupRow(
                 number: "4",
                 title: "Open your library",
-                detail: "Tap the archive button in the Novel Tracker popup to browse, search, sort, edit, delete, and reopen novels, and to export or import JSON backups."
-            )
+                detail: "Tap the library button at the top of the Novel Tracker popup to see everything you\u{2019}re reading, search it, and export a backup."
+            ).view
         )
 
-        // A gear beside the heading rather than a full-width button under the
-        // steps: it sits next to the step that needs it and costs no height.
-        var settingsConfig = UIButton.Configuration.tinted()
-        settingsConfig.image = UIImage(systemName: "gear")
-        settingsConfig.cornerStyle = .capsule
-        settingsConfig.baseForegroundColor = AppTheme.copperDark
-        settingsConfig.baseBackgroundColor = AppTheme.copper
-
-        let openSettingsButton = UIButton(type: .system)
-        openSettingsButton.configuration = settingsConfig
-        openSettingsButton.accessibilityLabel = "Open Settings"
-        openSettingsButton.setContentHuggingPriority(.required, for: .horizontal)
-        openSettingsButton.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
-
-        let setupHeader = UIStackView(arrangedSubviews: [setupTitleLabel, openSettingsButton])
+        let setupHeader = UIStackView(arrangedSubviews: [setupTitleLabel])
         setupHeader.axis = .horizontal
         setupHeader.alignment = .center
-        setupHeader.spacing = 12
 
         let setupContainer = UIStackView(arrangedSubviews: [
             setupHeader,
@@ -405,6 +413,35 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         setupContainer.spacing = 16
 
         contentStack.addArrangedSubview(setupContainer)
+
+        // MARK: - Optional sync
+
+        let accountTitleLabel = UILabel()
+        accountTitleLabel.text = "Sync across devices"
+        accountTitleLabel.font = setupTitleLabel.font
+        accountTitleLabel.adjustsFontForContentSizeCategory = true
+        accountTitleLabel.numberOfLines = 0
+        accountTitleLabel.textColor = AppTheme.ink
+
+        let accountNoteLabel = UILabel()
+        accountNoteLabel.text = "Optional. Your library works without an account; sign in to keep it in step on your other devices and browsers."
+        accountNoteLabel.font = .preferredFont(forTextStyle: .subheadline)
+        accountNoteLabel.adjustsFontForContentSizeCategory = true
+        accountNoteLabel.textColor = AppTheme.muted
+        accountNoteLabel.numberOfLines = 0
+
+        let accountContainer = UIStackView(arrangedSubviews: [
+            accountTitleLabel,
+            accountNoteLabel,
+            statusCard,
+            signInStack
+        ])
+        accountContainer.axis = .vertical
+        accountContainer.spacing = 12
+        accountContainer.setCustomSpacing(16, after: accountNoteLabel)
+        accountContainer.setCustomSpacing(16, after: statusCard)
+
+        contentStack.addArrangedSubview(accountContainer)
 
         // MARK: - Sign out and account deletion
 
@@ -425,7 +462,121 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         contentStack.addArrangedSubview(deleteAccountButton)
     }
 
-    @objc private func openSettings() {
+    private func configureExtensionCard() {
+        extensionCard.backgroundColor = AppTheme.sheet
+        extensionCard.layer.cornerRadius = 14
+        extensionCard.layer.borderWidth = 1
+        extensionCard.layer.borderColor = AppTheme.line.cgColor
+        extensionCard.layer.cornerCurve = .continuous
+
+        extensionIconView.translatesAutoresizingMaskIntoConstraints = false
+        extensionIconView.contentMode = .scaleAspectFit
+
+        extensionTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        extensionTitleLabel.textColor = AppTheme.ink
+        extensionTitleLabel.numberOfLines = 0
+
+        extensionDetailLabel.font = .preferredFont(forTextStyle: .subheadline)
+        extensionDetailLabel.adjustsFontForContentSizeCategory = true
+        extensionDetailLabel.textColor = AppTheme.muted
+        extensionDetailLabel.numberOfLines = 0
+
+        var config = UIButton.Configuration.filled()
+        config.title = "Turn On in Settings"
+        config.image = UIImage(systemName: "gear")
+        config.imagePadding = 8
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = 9
+        config.baseBackgroundColor = AppTheme.copperDark
+        config.baseForegroundColor = .white
+        config.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
+        extensionActionButton.configuration = config
+        extensionActionButton.addTarget(self, action: #selector(openExtensionSettings), for: .touchUpInside)
+
+        let textStack = UIStackView(arrangedSubviews: [extensionTitleLabel, extensionDetailLabel])
+        textStack.axis = .vertical
+        textStack.spacing = 4
+
+        let row = UIStackView(arrangedSubviews: [extensionIconView, textStack])
+        row.axis = .horizontal
+        row.spacing = 14
+        row.alignment = .center
+
+        let stack = UIStackView(arrangedSubviews: [row, extensionActionButton])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        extensionCard.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            extensionIconView.widthAnchor.constraint(equalToConstant: 32),
+            extensionIconView.heightAnchor.constraint(equalToConstant: 32),
+            stack.topAnchor.constraint(equalTo: extensionCard.topAnchor, constant: 18),
+            stack.leadingAnchor.constraint(equalTo: extensionCard.leadingAnchor, constant: 18),
+            stack.trailingAnchor.constraint(equalTo: extensionCard.trailingAnchor, constant: -18),
+            stack.bottomAnchor.constraint(equalTo: extensionCard.bottomAnchor, constant: -18)
+        ])
+
+        applyExtensionState(nil)
+    }
+
+    /// iOS 26.2 lets the app ask Safari whether the extension is switched on,
+    /// so the card can say so instead of always showing setup. Earlier
+    /// versions can't tell; there the card points at the steps below.
+    @objc private func refreshExtensionState() {
+        guard #available(iOS 26.2, *) else { return applyExtensionState(nil) }
+        SFSafariExtensionManager.getStateOfExtension(withIdentifier: extensionBundleIdentifier) { [weak self] state, error in
+            DispatchQueue.main.async {
+                self?.applyExtensionState(error == nil ? state?.isEnabled : nil)
+            }
+        }
+    }
+
+    /// `true`: on; `false`: installed but switched off; `nil`: unknown.
+    private func applyExtensionState(_ enabled: Bool?) {
+        switch enabled {
+        case true?:
+            extensionIconView.image = UIImage(systemName: "checkmark.circle.fill")
+            extensionIconView.tintColor = AppTheme.success
+            extensionTitleLabel.text = "Novel Tracker is on in Safari"
+            extensionDetailLabel.text = "Open a chapter on a supported novel site, tap the page menu button in the address bar, then Novel Tracker."
+            extensionActionButton.isHidden = true
+        case false?:
+            extensionIconView.image = UIImage(systemName: "exclamationmark.circle.fill")
+            extensionIconView.tintColor = AppTheme.copper
+            extensionTitleLabel.text = "Novel Tracker is off in Safari"
+            extensionDetailLabel.text = "It\u{2019}s installed but switched off, so nothing is being tracked yet. Turn it on, then allow it on your reading sites."
+            extensionActionButton.isHidden = false
+        case nil:
+            extensionIconView.image = UIImage(systemName: "safari")
+            extensionIconView.tintColor = AppTheme.muted
+            extensionTitleLabel.text = "Turn on Novel Tracker in Safari"
+            extensionDetailLabel.text = "Follow the steps below once. Safari keeps it on after that."
+            // Before iOS 26.2 the only settings link lands on the top of the
+            // Settings app, which is a dead end; the steps give the Safari route.
+            extensionActionButton.isHidden = true
+        }
+
+        let done = enabled == true
+        enableStepBadge?.text = done ? "\u{2713}" : "1"
+        enableStepBadge?.backgroundColor = done ? AppTheme.success : AppTheme.copperDark
+        enableStepBadge?.accessibilityLabel = done ? "Done" : "Step 1"
+    }
+
+    /// Opens Novel Tracker's own page under Settings, Apps, Safari,
+    /// Extensions (iOS 26.2+), where it can be switched on and allowed on
+    /// every website in one place.
+    @objc private func openExtensionSettings() {
+        if #available(iOS 26.2, *) {
+            SFSafariSettings.openExtensionsSettings(forIdentifiers: [extensionBundleIdentifier]) { [weak self] error in
+                if error != nil { self?.openAppSettings() }
+            }
+        } else {
+            openAppSettings()
+        }
+    }
+
+    private func openAppSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
     }
@@ -434,7 +585,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         number: String,
         title: String,
         detail: String
-    ) -> UIView {
+    ) -> (view: UIView, badge: UILabel) {
         let numberLabel = UILabel()
         numberLabel.text = number
         numberLabel.textAlignment = .center
@@ -477,7 +628,7 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         row.spacing = 12
         row.alignment = .top
 
-        return row
+        return (row, numberLabel)
     }
 
     private func refreshIOSView(message: String? = nil) {
