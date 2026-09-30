@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SCREENSHOT_SETS, loadReleasePlan, packageVersion, shouldUploadScreenshots } from './release-plan.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -45,11 +46,12 @@ if (fastlaneCheck.error || fastlaneCheck.status !== 0) {
   process.exit(1);
 }
 
-// macOS goes to the App Store (unreleased draft, not submitted for review);
-// iOS goes to TestFlight (matches how this app has been distributed on iOS
-// so far). Independent platforms/lanes — run both by default, don't let
-// one's failure stop the other from being attempted, but fail the whole
-// script if either did.
+// Both platforms are submitted for App Review with their "What's New" from
+// docs/release/notes/<version>/, and released automatically once approved.
+// A version whose release.json says { "apple": "testflight" } stops at
+// TestFlight on both instead (see scripts/release-plan.mjs). Independent
+// platforms/lanes — run both by default, don't let one's failure stop the
+// other from being attempted, but fail the whole script if either did.
 //
 // Override with NOVEL_TRACKER_SAFARI_PLATFORMS (comma-separated: "mac",
 // "ios", or "mac,ios") to publish just one — e.g. when the other platform's
@@ -68,13 +70,37 @@ if (invalidPlatforms.length > 0) {
   process.exit(1);
 }
 
+const plan = loadReleasePlan(packageVersion());
+if (plan.errors.length) {
+  console.error(`Cannot publish Safari ${plan.version}; its release plan is incomplete:`);
+  for (const error of plan.errors) console.error(`  - ${error}`);
+  process.exit(1);
+}
+console.log(plan.apple === 'testflight'
+  ? `Safari ${plan.version}: TestFlight only (release.json).`
+  : `Safari ${plan.version}: submitting for App Review, released on approval.`);
+
 let exitCode = 0;
 for (const platform of requestedPlatforms) {
+  // TestFlight builds don't touch the listing, so screenshots only go with
+  // an App Store submission.
+  const screenshots = plan.apple === 'app-store' && shouldUploadScreenshots(plan, platform)
+    ? SCREENSHOT_SETS[platform].map((directory) => path.join(root, directory)).join(':')
+    : '';
+  console.log(screenshots
+    ? `${platform}: replacing App Store screenshots from ${SCREENSHOT_SETS[platform].join(', ')}.`
+    : `${platform}: keeping the listing's current screenshots.`);
   console.log(`Running fastlane ${platform} release from ${fastlaneDir} (safari-app/fastlane/Fastfile)...`);
   const result = spawnSync('bundle', ['exec', 'fastlane', platform, 'release'], {
     cwd: fastlaneDir,
     stdio: 'inherit',
-    env: { ...process.env, BUNDLE_GEMFILE: path.join(root, 'Gemfile') }
+    env: {
+      ...process.env,
+      BUNDLE_GEMFILE: path.join(root, 'Gemfile'),
+      NOVEL_TRACKER_APPLE_DISTRIBUTION: plan.apple,
+      NOVEL_TRACKER_RELEASE_NOTES: plan.notePaths[platform] || '',
+      NOVEL_TRACKER_SCREENSHOTS: screenshots
+    }
   });
 
   if (result.error) throw result.error;

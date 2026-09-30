@@ -42,6 +42,11 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "unreleased=$unreleased" >> "$GITHUB_OUTPUT"
+      # Notes and screenshot choices live in docs/release/notes/<version>/;
+      # stop here, before anything is built or approved, if they're missing.
+      - name: Check the release plan
+        if: steps.detect.outputs.unreleased == 'true'
+        run: node scripts/release-plan.mjs check
 
   build-browser:
     name: Browser packages
@@ -154,6 +159,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-candidate
@@ -165,6 +172,15 @@ jobs:
           CHROME_WEB_STORE_CLIENT_SECRET: ${{ secrets.CHROME_WEB_STORE_CLIENT_SECRET }}
           CHROME_WEB_STORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEB_STORE_REFRESH_TOKEN }}
         run: node scripts/publish-chrome.mjs release-candidate/chrome/*.zip
+      # The Chrome listing is the one manual store step: the API can't edit
+      # it. Put the text in the run summary and the screenshots in an artifact.
+      - name: Prepare the Chrome listing update
+        run: node scripts/chrome-listing.mjs chrome-listing
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrome-listing
+          path: chrome-listing
+          if-no-files-found: ignore
 
   publish-firefox:
     name: Publish to Firefox AMO
@@ -233,7 +249,7 @@ jobs:
           mkdir -p build/safari-xcode
           unzip -q release-candidate/safari/*.zip -d build/safari-xcode
           test -f 'build/safari-xcode/Novel Tracker/Novel Tracker.xcodeproj/project.pbxproj'
-      - name: Upload to TestFlight and the App Store
+      - name: Submit to App Review (or TestFlight, per the release plan)
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}

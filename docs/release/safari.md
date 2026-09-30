@@ -60,16 +60,25 @@ workflows), because the Apple build number is `git rev-list --count HEAD`.
 The packaging script rejects shallow clones before generating any artifacts,
 preventing an accidental build-number reset to `1`.
 
-- **macOS** (`fastlane mac release`) archives, exports, and uploads to App
-  Store Connect as a new unreleased draft version. Does **not** submit for
-  review — that stays a manual step. Verified locally: archive/export/sign
-  all succeed; the actual upload only goes through once App Store Connect's
-  current macOS version isn't sitting on unresolved review feedback (push it
-  back to "Waiting for Review" there first if it is — the API can't do that
-  part for you).
-- **iOS** (`fastlane ios release`) archives and uploads to TestFlight
-  (internal testers only by default), matching how this app has been
-  distributed on iOS so far. Verified working end-to-end for real.
+Both lanes (`fastlane mac release`, `fastlane ios release`) archive, export,
+and send the build to App Store Connect, then by default:
+
+- submit it for App Review with the version's "What's New" from
+  `docs/release/notes/<version>/app-store-{mac,ios}.txt`;
+- replace the listing's screenshots from `store-assets/app-store/` when they
+  changed since the previous release (iPhone and iPad for iOS, Mac for
+  macOS), under the listing's primary language;
+- release it automatically as soon as Apple approves it.
+
+A version whose `release.json` says `{ "apple": "testflight" }` stops at
+TestFlight on both platforms (internal testers), with the notes as "What to
+Test" when present, and leaves the listing alone.
+`scripts/publish-safari.mjs` reads the plan (`scripts/release-plan.mjs`) and
+passes it to the lanes; see [../release.md](../release.md#cutting-a-release).
+
+A platform whose current App Store version is sitting on unresolved review
+feedback can't take a new version until that's answered in App Store
+Connect; the API can't do that part.
 
 Both run by default; set `NOVEL_TRACKER_SAFARI_PLATFORMS=mac` or `=ios` for
 `publish-safari.mjs` to publish just one — useful when the other platform's

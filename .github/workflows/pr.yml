@@ -38,6 +38,9 @@ jobs:
       - name: Run source and unit checks
         run: npm run verify:quick
 
+      - name: Check the release plan when the version changes
+        run: node scripts/release-plan.mjs check --base-ref="origin/${{ github.base_ref }}"
+
       - name: Prevent API contract removal or unsafe retirement
         run: npm run api:compatibility -- --base-ref="origin/${{ github.base_ref }}"
 

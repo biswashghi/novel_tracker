@@ -33,6 +33,20 @@ that carries the change (or in its own pull request when batching):
 npm version patch --no-git-tag-version   # or: minor | major
 ```
 
+The same pull request adds the version's release plan in
+`docs/release/notes/<version>/`; the `PR Gate` fails without it:
+
+| File | Used for |
+|---|---|
+| `app-store-ios.txt` | "What's New" for iPhone and iPad |
+| `app-store-mac.txt` | "What's New" for the Mac |
+| `firefox.txt` | Release notes on the Firefox Add-ons version |
+| `chrome.txt` (optional) | Text to paste into the Chrome listing; the release summary shows it |
+| `release.json` (optional) | `{ "apple": "testflight" }` to stop at TestFlight; `{ "screenshots": true \| false }` to always or never replace store screenshots |
+
+Keep each file under 4,000 characters (the App Store's limit), written for
+readers rather than for the code. `scripts/release-plan.mjs` checks them.
+
 Commit `package.json` and `package-lock.json` with the rest of the change and
 merge through the usual `PR Gate`. Nothing else is run by hand: `.github/
 workflows/release.yml` runs on every push to `main`, does nothing while the
@@ -42,8 +56,18 @@ version already has a `v<version>` tag, and otherwise:
 2. binds all three ZIPs to the version and commit in `release-manifest.json`;
 3. waits for approval of the `production` GitHub environment (Actions → the
    run → *Review deployments*) — one approval covers every store;
-4. publishes: Chrome Web Store review (usually minutes), Firefox AMO review,
-   iOS to TestFlight, macOS as an unsubmitted App Store draft;
+4. publishes:
+   - **Chrome Web Store**: the package goes to review (usually minutes). The
+     API can't edit the listing, so the run's summary shows `chrome.txt` to
+     paste in, and a `chrome-listing` artifact holds 1280×800 screenshots
+     when they changed;
+   - **Firefox AMO**: the package with `firefox.txt` as its release notes,
+     and the listing's screenshots replaced when they changed;
+   - **App Store (iOS and macOS)**: each is submitted for App Review with its
+     "What's New" and screenshots (when they changed), and released
+     automatically once Apple approves it. The build is on TestFlight too.
+     With `{ "apple": "testflight" }` both platforms stop at TestFlight
+     instead, with the notes as "What to Test";
 5. creates the `v<version>` tag and a GitHub Release holding the manifest and
    the three ZIPs.
 
@@ -54,7 +78,19 @@ duplicate) does the fix need another bump.
 
 Every store submission is the same commit and the same `package.json`
 version. There is no separate beta channel: a bump made only to get an iOS
-build to TestFlight also submits Chrome and Firefox builds.
+build to TestFlight (`"apple": "testflight"`) still submits Chrome and
+Firefox builds.
+
+Screenshots come from `store-assets/app-store/{ios,ipad,macos}/` (see the
+`app-store-screenshots` project skill); Firefox and Chrome use the Mac set
+at 1280×800. A listing's screenshots are replaced only when its set changed
+since the previous `v*` tag, since App Store Connect and AMO keep them
+from one version to the next.
+
+App Review is the one step no automation skips. A rejection is answered in
+App Store Connect; until it is, that platform can't take the next version,
+and its publish step fails on the next release (the other stores are
+unaffected).
 
 The API server is deployed independently; see
 [operations.md](operations.md#deploy).
