@@ -12,6 +12,7 @@ const nativeLog = [];
 const logouts = [];
 let refreshGate = null;
 let issued = 0;
+let os = "ios";
 
 function jwt(payload) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -63,6 +64,9 @@ globalThis.browser = {
     }
   },
   runtime: {
+    async getPlatformInfo() {
+      return { os };
+    },
     async sendNativeMessage(_applicationId, message) {
       nativeLog.push({ type: message.type, localSubject: store.get("novel-tracker:auth")?.active?.subject || "" });
       switch (message.type) {
@@ -97,6 +101,7 @@ test.beforeEach(() => {
   nativeLog.length = 0;
   logouts.length = 0;
   refreshGate = null;
+  os = "ios";
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -147,14 +152,34 @@ test("with nothing to keep, a keychain error still surfaces", async () => {
   await assert.rejects(() => auth.getAccountStatus(), /errSecInteractionNotAllowed/);
 });
 
-test("a sign-in from the extension stores the shared session before its own copy", async () => {
+test("a macOS sign-in from the extension shares the session with the app", async () => {
+  os = "mac";
   await auth.signIn({ provider: "apple" });
-
-  const storeCall = nativeLog.find((entry) => entry.type === "novel-tracker.auth.store");
-  assert.ok(storeCall, "the session reaches the keychain");
-  assert.equal(storeCall.localSubject, "", "the keychain is written first");
   assert.equal(keychain.subject, "signed-in-here");
   assert.equal((await auth.getAccountStatus()).signedIn, true);
+});
+
+test("on macOS, where the extension signs itself in, an empty keychain doesn't sign it out", async () => {
+  os = "mac";
+  keychain = session("mac-reader");
+  await auth.getAccountStatus();
+
+  keychain = null;
+  assert.equal((await auth.getAccountStatus()).signedIn, true);
+  assert.ok(await auth.getAccessToken());
+  await settle();
+  assert.deepEqual(logouts, []);
+});
+
+test("on macOS a refresh writes the rotated tokens back even if the keychain had lost them", async () => {
+  os = "mac";
+  keychain = session("mac-reader", { expiresAt: Date.now() - 1000 });
+  await auth.getAccountStatus();
+  keychain = null;
+
+  const token = await auth.getAccessToken();
+  assert.ok(token);
+  assert.equal(keychain.accessToken, token);
 });
 
 test("a token refresh that finishes after the app signed out doesn't sign the app back in", async () => {
