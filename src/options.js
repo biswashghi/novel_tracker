@@ -91,6 +91,26 @@ function setVisible(element, visible) {
   element.classList.toggle("is-hidden", !visible);
 }
 
+// On phones the account pill in the top bar is hidden for lack of room, and
+// a short line under the heading carries its state instead. Mirror the pill
+// rather than render both, so every path that updates it (sign-in, sync,
+// errors) keeps the two in step.
+const syncLineText = document.querySelector("#sync-line-text");
+const syncLineDot = document.querySelector("#sync-line-dot");
+
+function mirrorSyncLine() {
+  syncLineText.textContent = `${accountTitle.textContent.trim()} · ${syncDetail.textContent.trim()}`;
+  syncLineDot.className = syncIndicator.className;
+}
+
+new MutationObserver(mirrorSyncLine).observe(document.querySelector(".account-summary"), {
+  subtree: true,
+  childList: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ["class"]
+});
+
 function providerName(providerId) {
   const provider = AUTH_PROVIDERS.find((candidate) => candidate.id === providerId);
   // Labels read "Sign in with Google"; the bare name is what reads well mid-sentence.
@@ -867,6 +887,32 @@ sortSelect.addEventListener("change", () => {
     // Not remembered, still applied.
   }
   render();
+});
+
+/* =========================================================
+   BACKUP MENU
+========================================================= */
+
+const dataMenu = document.querySelector("#data-menu");
+
+function closeDataMenu() {
+  dataMenu.open = false;
+}
+
+// A choice has been made, so get out of the way of the file picker or
+// download that follows.
+dataMenu.querySelector(".data-menu-panel").addEventListener("click", (event) => {
+  if (event.target.closest("button")) closeDataMenu();
+});
+
+document.addEventListener("click", (event) => {
+  if (dataMenu.open && !dataMenu.contains(event.target)) closeDataMenu();
+});
+
+dataMenu.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !dataMenu.open) return;
+  closeDataMenu();
+  dataMenu.querySelector("summary").focus();
 });
 
 /* =========================================================
