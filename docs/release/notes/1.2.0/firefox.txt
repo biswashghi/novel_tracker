@@ -1,0 +1,6 @@
+• After your first save, Novel Tracker tells you that it now follows you from chapter to chapter by itself. On sites it doesn't follow automatically, it tells you to save each chapter.
+• The library updates by itself while it's open, so progress made in another tab shows up right away.
+• The popup's Save button now sits directly under the title and chapter. Page links and the cover image are under "More details".
+• Import and export are now one "Backup" menu, with each option described.
+• On phones (including Firefox for Android), the library puts your novels first and shows your sync status, and the popup fills the screen.
+• Clearer message when a page can't be read.

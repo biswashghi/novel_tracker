@@ -1,0 +1,22 @@
+Novel Tracker does more, and five more sites are supported.
+
+FIVE MORE SITES
+Archive of Our Own, Wattpad, Webnovel, NovelFire and ReadNovelFull are now followed chapter by chapter, joining Royal Road, Scribble Hub, Wuxiaworld and more.
+
+SAVE FASTER
+• Save the chapter you're on with Option-Shift-S, or right-click the page and choose "Save chapter to Novel Tracker".
+• After your first save, Novel Tracker tells you that from then on it follows you from chapter to chapter by itself.
+
+A BETTER LIBRARY
+• Refreshed design, with a dark theme.
+• A reading-activity heatmap of the past year.
+• Recently deleted, with undo.
+• New sorts: Least recent, Newly added, Most chapters read.
+• "Continue reading" in the popup jumps back into your latest novels.
+• Export your library as a spreadsheet (CSV), or back it up and restore it from the Backup menu.
+• The library updates by itself while it's open.
+
+FIXES
+• Different novels on the same site are no longer mixed together, and your bookmark no longer jumps to a novel's contents page.
+• Webnovel's phone reader is tracked chapter by chapter.
+• Signing out now ends your session on our servers as well.

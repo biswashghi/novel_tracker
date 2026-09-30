@@ -1,0 +1,6 @@
+What's new in 1.2.0
+• After your first save, Novel Tracker tells you that it now follows you from chapter to chapter by itself.
+• The library updates by itself while it's open.
+• The popup's Save button sits right under the title and chapter; page links are under "More details".
+• Import and export are now one "Backup" menu.
+• A phone-friendly library layout.
