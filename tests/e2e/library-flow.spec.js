@@ -80,7 +80,8 @@ test('library page lists, edits, and deletes a saved novel', async ({ context, e
   await expect(optionsPage.locator('#status-filter option[value="active"]')).toHaveText('Reading');
   // Sign-in buttons keep a name when their visible label is hidden.
   await optionsPage.setViewportSize({ width: 600, height: 800 });
-  await expect(optionsPage.locator('.sign-in-button')).toHaveCount(2);
+  // They render once the platform check resolves; the local stack has one provider, production two.
+  await expect(optionsPage.locator('.sign-in-button').first()).toBeVisible();
   for (const button of await optionsPage.locator('.sign-in-button').all()) {
     await expect(button).toHaveAttribute('aria-label', /^Sign in/);
   }
