@@ -1,4 +1,4 @@
-import { getStorageLocal } from "./extension-api.js";
+import { getExtensionApi, getStorageLocal } from "./extension-api.js";
 import { getAuthPlatform } from "./auth-platform.js";
 import { platformFetch } from "./platform-http.js";
 import { AUTH_PROVIDERS, AUTH_ISSUER } from "./config.js";
@@ -149,14 +149,28 @@ function endServerSession(refreshToken) {
 }
 
 /**
+ * On iOS the app is the only place to sign in or out (Safari there can't run
+ * an OAuth flow from the extension), so the session it keeps in the shared
+ * keychain is authoritative. On macOS the extension signs itself in and the
+ * keychain copy is a side effect, so an empty keychain there proves nothing.
+ */
+async function appOwnsSession(platform) {
+  if (platform.kind !== "safari-native") return false;
+  try {
+    return (await getExtensionApi()?.runtime?.getPlatformInfo?.())?.os === "ios";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * On Safari the containing app and the extension share one session through
- * the keychain, and on iOS the app is where readers sign in and out. The
- * extension keeps its own copy so it can sync while the app isn't running,
- * and that copy used to outlive the app's: signing out (or deleting the
- * account) in the app left the extension signed in and syncing, while the
- * app said "Cloud sync is off". The shared session is the source of truth:
- * adopt it when the extension has none, and drop ours when it is gone or
- * belongs to another account.
+ * the keychain. The extension keeps its own copy so it can sync while the
+ * app isn't running, and on iOS that copy used to outlive the app's: signing
+ * out (or deleting the account) in the app left the extension signed in and
+ * syncing, while the app said "Cloud sync is off". Adopt the shared session
+ * when the extension has none, and on iOS drop ours when the app's is gone
+ * or belongs to another account.
  */
 async function syncSafariSession(auth, platform = getAuthPlatform()) {
   if (platform.kind !== "safari-native") return auth;
@@ -171,7 +185,8 @@ async function syncSafariSession(auth, platform = getAuthPlatform()) {
     throw error;
   }
 
-  if (auth.active?.accessToken && (!shared?.accessToken || shared.subject !== auth.active.subject)) {
+  const appSessionEnded = !shared?.accessToken || shared.subject !== auth.active?.subject;
+  if (auth.active?.accessToken && appSessionEnded && await appOwnsSession(platform)) {
     const refreshToken = auth.active.refreshToken;
     auth.active = null;
     auth.pending = null;
@@ -262,28 +277,26 @@ async function activateTokens(tokens, hasLocalData, platform) {
     };
   }
 
-  // Shared session first: syncSafariSession drops a local session the
-  // keychain doesn't have, and a status check can land between the writes.
-  await persistSafariSession(tokens, platform);
   auth.active = tokens;
   auth.pending = null;
   auth.lastSubject = tokens.subject;
   auth.lastEmail = tokens.email;
   auth.lastProvider = tokens.provider;
   await writeAuth(auth);
+  await persistSafariSession(tokens, platform);
   return publicAccount(auth);
 }
 
 export async function confirmPendingAccount() {
   const auth = await readAuth();
   if (!auth.pending) throw new Error("No account change is waiting for confirmation");
-  await persistSafariSession(auth.pending, getAuthPlatform());
   auth.active = auth.pending;
   auth.pending = null;
   auth.lastSubject = auth.active.subject;
   auth.lastEmail = auth.active.email;
   auth.lastProvider = auth.active.provider;
   await writeAuth(auth);
+  await persistSafariSession(auth.active, getAuthPlatform());
   return publicAccount(auth);
 }
 
@@ -324,7 +337,7 @@ export async function getAccessToken() {
 }
 
 async function sharedSessionWasEnded(tokens, platform) {
-  if (platform.kind !== "safari-native") return false;
+  if (!(await appOwnsSession(platform))) return false;
   try {
     const shared = await platform.sharedSession();
     return !shared?.accessToken || shared.subject !== tokens.subject;
