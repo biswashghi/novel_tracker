@@ -206,6 +206,37 @@ test('CSV export downloads one spreadsheet row per novel', async ({ context, ext
   expect(trailing).toBe('');
 });
 
+test('the first save on a followed site explains automatic tracking, once', async ({
+  context,
+  extensionId,
+  serviceWorker
+}) => {
+  const sitePage = await context.newPage();
+  await mockSitePage(context, CHAPTER_URL, CHAPTER_HTML);
+  await sitePage.goto(CHAPTER_URL);
+
+  async function saveFromPopup() {
+    const popupPage = await context.newPage();
+    await stubActiveTab(popupPage, serviceWorker, CHAPTER_URL);
+    await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
+    await expect(popupPage.locator('#title')).toHaveValue('Test Fiction');
+    await popupPage.locator('#save-button').click();
+    const status = popupPage.locator('#status-message');
+    await expect(status).toContainText(/Added to your library|Bookmark updated/);
+    return { popupPage, status };
+  }
+
+  const first = await saveFromPopup();
+  await expect(first.status).toContainText('just keep reading');
+  await expect(first.status).toContainText('royalroad.com');
+  await expect(first.status).toHaveClass(/\btracking\b/);
+  await first.popupPage.close();
+
+  const second = await saveFromPopup();
+  await expect(second.status).toHaveText('Bookmark updated.');
+  await expect(second.status).toHaveClass(/\bsuccess\b/);
+});
+
 test('popup lists recently read novels and reopens their chapter', async ({ context, extensionId, serviceWorker }) => {
   await saveChapterViaPopup({ context, extensionId, serviceWorker });
 

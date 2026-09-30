@@ -5,8 +5,9 @@ import {
   getHostname
 } from "./lib/storage.js";
 
-import { getExtensionApi } from "./lib/extension-api.js";
+import { getExtensionApi, getStorageLocal, isSafariExtension } from "./lib/extension-api.js";
 import { PARSER_FILES } from "./lib/site-parser-files.js";
+import { isAutoTrackedUrl } from "./lib/supported-sites.js";
 
 const extensionApi = getExtensionApi();
 
@@ -166,6 +167,60 @@ function populateForm(data) {
 
 function saveCandidate(source) {
   return { ...buildSaveCandidate(source), status: source.status || "active" };
+}
+
+/* =========================================================
+   AFTER-SAVE GUIDANCE
+========================================================= */
+
+// Per-browser, never synced: it records what this install has already told
+// the reader, not anything about their library.
+const ONBOARDING_KEY = "novel-tracker:onboarding";
+
+async function readOnboarding() {
+  try {
+    return (await getStorageLocal()?.get(ONBOARDING_KEY))?.[ONBOARDING_KEY] || {};
+  } catch {
+    return {};
+  }
+}
+
+async function markOnboarding(patch) {
+  try {
+    await getStorageLocal()?.set({ [ONBOARDING_KEY]: { ...(await readOnboarding()), ...patch } });
+  } catch {
+    // Worst case the reader sees the explanation once more.
+  }
+}
+
+/**
+ * What to say after a save. Readers otherwise assume they have to come back
+ * and save every chapter by hand, which is the chore this extension exists
+ * to remove, so the first save on a followed site says that it's automatic
+ * from here. On a site the content script doesn't run on, every save says
+ * the opposite, because there it's true every time.
+ */
+async function savedMessage(chapterUrl, wasExisting) {
+  const saved = wasExisting ? "Bookmark updated." : "Added to your library.";
+  const autoTracked = isAutoTrackedUrl(chapterUrl);
+  const site = getHostname(chapterUrl) || "this site";
+
+  if (autoTracked === false) {
+    return {
+      text: `${saved} ${site} isn't followed automatically, so save here again when you move on to a new chapter.`,
+      type: "manual"
+    };
+  }
+
+  if (autoTracked && !(await readOnboarding()).autoTrackExplained) {
+    await markOnboarding({ autoTrackExplained: true });
+    return {
+      text: `${saved} From here on, just keep reading: your place updates by itself each time you open a new chapter on ${site}.`,
+      type: "tracking"
+    };
+  }
+
+  return { text: saved, type: "success" };
 }
 
 /* =========================================================
@@ -369,8 +424,13 @@ async function loadCurrentPage() {
 
     setSitePill("Page unavailable", "error");
 
+    // On Safari the usual cause is a site permission the reader hasn't given
+    // (or gave only "for one day"), which they can fix; elsewhere it's a page
+    // that doesn't let extensions in at all.
     setStatus(
-      "Could not read this page. The site may block extension page inspection.",
+      isSafariExtension()
+        ? "Novel Tracker isn't allowed to read this page yet. Close this, tap Novel Tracker in Safari's page menu again, and choose Always Allow."
+        : "Novel Tracker can't read this page. Some sites and browser pages don't let extensions in.",
       "error"
     );
 
@@ -426,12 +486,8 @@ form.addEventListener("submit", async (event) => {
     // have merged into an entry that already existed under a different URL.
     existingNovel = saved?.id ? saved : existingNovel;
 
-    setStatus(
-      wasExisting
-        ? "Bookmark updated."
-        : "Added to your library.",
-      "success"
-    );
+    const message = await savedMessage(chapterUrl, wasExisting);
+    setStatus(message.text, message.type);
 
     setSaveButton({
       text: "Saved",
