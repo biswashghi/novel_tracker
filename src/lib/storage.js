@@ -17,6 +17,8 @@ import { getStorageLocal } from "./extension-api.js";
 
 const STORAGE_KEY = "novel-tracker:novels";
 const SYNC_STORAGE_KEY = "novel-tracker:sync-state";
+// Every key a library read depends on, for pages that re-read on change.
+export const LIBRARY_STORAGE_KEYS = Object.freeze([STORAGE_KEY, SYNC_STORAGE_KEY]);
 const IMPORT_VERSION = 1;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
