@@ -113,7 +113,9 @@ async function exchangeToken(parameters) {
 
 function tokenRecord(tokens, previous = {}, requestedProvider = "") {
   const claims = decodeJwtPayload(tokens.id_token || tokens.access_token);
-  const expiresIn = Number(tokens.expires_in || 300);
+  // `?? 300`, not `|| 300`: a session imported from the app's keychain can
+  // arrive with 0 seconds left, and must refresh rather than pass as fresh.
+  const expiresIn = Number(tokens.expires_in ?? 300);
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token || previous.refreshToken || "",
@@ -130,10 +132,54 @@ function tokenRecord(tokens, previous = {}, requestedProvider = "") {
   };
 }
 
-async function importSafariSession(auth, platform = getAuthPlatform()) {
-  if (platform.kind !== "safari-native" || auth.active?.accessToken) return auth;
-  const shared = await platform.sharedSession();
-  if (!shared?.accessToken) return auth;
+/**
+ * Ends the identity provider's session for a refresh token we are letting
+ * go of. Best effort: the local sign-out has already happened either way.
+ */
+function endServerSession(refreshToken) {
+  if (!refreshToken) return;
+  platformFetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/logout`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    // A string, not URLSearchParams: Safari's native HTTP bridge forwards
+    // only string bodies, so the object used to arrive empty and the
+    // server never ended the session.
+    body: new URLSearchParams({ client_id: AUTH_CONFIG.clientId, refresh_token: refreshToken }).toString()
+  }).catch(() => {});
+}
+
+/**
+ * On Safari the containing app and the extension share one session through
+ * the keychain, and on iOS the app is where readers sign in and out. The
+ * extension keeps its own copy so it can sync while the app isn't running,
+ * and that copy used to outlive the app's: signing out (or deleting the
+ * account) in the app left the extension signed in and syncing, while the
+ * app said "Cloud sync is off". The shared session is the source of truth:
+ * adopt it when the extension has none, and drop ours when it is gone or
+ * belongs to another account.
+ */
+async function syncSafariSession(auth, platform = getAuthPlatform()) {
+  if (platform.kind !== "safari-native") return auth;
+
+  let shared;
+  try {
+    shared = await platform.sharedSession();
+  } catch (error) {
+    // Can't read the keychain right now: keep what we have rather than
+    // signing the reader out over a transient native-messaging failure.
+    if (auth.active?.accessToken) return auth;
+    throw error;
+  }
+
+  if (auth.active?.accessToken && (!shared?.accessToken || shared.subject !== auth.active.subject)) {
+    const refreshToken = auth.active.refreshToken;
+    auth.active = null;
+    auth.pending = null;
+    await writeAuth(auth);
+    endServerSession(refreshToken);
+  }
+
+  if (auth.active?.accessToken || !shared?.accessToken) return auth;
   auth.active = tokenRecord({
     access_token: shared.accessToken,
     refresh_token: shared.refreshToken,
@@ -152,7 +198,7 @@ async function persistSafariSession(session, platform) {
 }
 
 export async function getAccountStatus() {
-  return publicAccount(await importSafariSession(await readAuth()));
+  return publicAccount(await syncSafariSession(await readAuth()));
 }
 
 export async function signIn({ provider: providerId = "", hasLocalData = false } = {}) {
@@ -216,26 +262,28 @@ async function activateTokens(tokens, hasLocalData, platform) {
     };
   }
 
+  // Shared session first: syncSafariSession drops a local session the
+  // keychain doesn't have, and a status check can land between the writes.
+  await persistSafariSession(tokens, platform);
   auth.active = tokens;
   auth.pending = null;
   auth.lastSubject = tokens.subject;
   auth.lastEmail = tokens.email;
   auth.lastProvider = tokens.provider;
   await writeAuth(auth);
-  await persistSafariSession(tokens, platform);
   return publicAccount(auth);
 }
 
 export async function confirmPendingAccount() {
   const auth = await readAuth();
   if (!auth.pending) throw new Error("No account change is waiting for confirmation");
+  await persistSafariSession(auth.pending, getAuthPlatform());
   auth.active = auth.pending;
   auth.pending = null;
   auth.lastSubject = auth.active.subject;
   auth.lastEmail = auth.active.email;
   auth.lastProvider = auth.active.provider;
   await writeAuth(auth);
-  await persistSafariSession(auth.active, getAuthPlatform());
   return publicAccount(auth);
 }
 
@@ -256,7 +304,7 @@ let refreshInFlight = null;
 
 export async function getAccessToken() {
   const platform = getAuthPlatform();
-  const auth = await importSafariSession(await readAuth(), platform);
+  const auth = await syncSafariSession(await readAuth(), platform);
   if (!auth.active?.accessToken) return "";
   if (auth.active.expiresAt > Date.now() + TOKEN_EXPIRY_SKEW_MS) return auth.active.accessToken;
   if (!auth.active.refreshToken) {
@@ -275,6 +323,16 @@ export async function getAccessToken() {
   }
 }
 
+async function sharedSessionWasEnded(tokens, platform) {
+  if (platform.kind !== "safari-native") return false;
+  try {
+    const shared = await platform.sharedSession();
+    return !shared?.accessToken || shared.subject !== tokens.subject;
+  } catch {
+    return false;
+  }
+}
+
 async function refreshTokens(refreshToken, platform) {
   const auth = await readAuth();
   try {
@@ -283,7 +341,18 @@ async function refreshTokens(refreshToken, platform) {
       client_id: AUTH_CONFIG.clientId,
       refresh_token: refreshToken
     });
-    auth.active = tokenRecord(refreshed, auth.active || { refreshToken });
+    const next = tokenRecord(refreshed, auth.active || { refreshToken });
+    // If the app signed out while this refresh was in flight, writing the
+    // new tokens back would put its session back in the keychain and sign
+    // the app in again behind the reader's back.
+    if (await sharedSessionWasEnded(next, platform)) {
+      auth.active = null;
+      auth.pending = null;
+      await writeAuth(auth);
+      endServerSession(next.refreshToken);
+      return "";
+    }
+    auth.active = next;
     auth.lastSubject = auth.active.subject;
     auth.lastEmail = auth.active.email;
     auth.lastProvider = auth.active.provider;
@@ -309,12 +378,6 @@ export async function signOut() {
   auth.pending = null;
   await writeAuth(auth);
   if (platform.kind === "safari-native") await platform.clearSharedSession();
-  if (refreshToken) {
-    platformFetch(`${AUTH_CONFIG.issuer}/protocol/openid-connect/logout`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: AUTH_CONFIG.clientId, refresh_token: refreshToken })
-    }).catch(() => {});
-  }
+  endServerSession(refreshToken);
   return publicAccount(auth);
 }
