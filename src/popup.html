@@ -276,23 +276,27 @@
       </div>
 
 
-      <label class="field">
-        <span>Current page</span>
+      <!-- Status and Save sit above the optional fields so the one action
+           most readers came for stays visible in Safari's half-height sheet
+           on iPhone, without scrolling. -->
+      <div
+        id="status-message"
+        class="status"
+        aria-live="polite"
+      ></div>
 
-        <div class="field-with-icon">
-          <svg aria-hidden="true">
-            <use href="#i-link"></use>
-          </svg>
 
-          <input
-            id="chapter-url"
-            type="url"
-            autocomplete="off"
-            placeholder="https://…"
-            required
-          >
-        </div>
-      </label>
+      <button
+        type="submit"
+        id="save-button"
+        class="save-button"
+      >
+        <svg aria-hidden="true">
+          <use href="#i-bookmark"></use>
+        </svg>
+
+        <span>Save bookmark</span>
+      </button>
 
 
       <details class="more-details">
@@ -307,7 +311,7 @@
           </span>
 
           <span class="summary-hint">
-            Optional
+            Page links, cover
           </span>
 
           <svg class="summary-chevron" aria-hidden="true">
@@ -317,6 +321,25 @@
 
 
         <div class="optional-fields">
+
+          <label class="field">
+            <span>Current page</span>
+
+            <div class="field-with-icon">
+              <svg aria-hidden="true">
+                <use href="#i-link"></use>
+              </svg>
+
+              <input
+                id="chapter-url"
+                type="url"
+                autocomplete="off"
+                placeholder="https://…"
+                required
+              >
+            </div>
+          </label>
+
 
           <label class="field">
             <span>Novel home</span>
@@ -357,25 +380,6 @@
 
       </details>
 
-
-      <div
-        id="status-message"
-        class="status"
-        aria-live="polite"
-      ></div>
-
-
-      <button
-        type="submit"
-        id="save-button"
-        class="save-button"
-      >
-        <svg aria-hidden="true">
-          <use href="#i-bookmark"></use>
-        </svg>
-
-        <span>Save bookmark</span>
-      </button>
 
     </form>
 

@@ -448,6 +448,24 @@ async function loadCurrentPage() {
    SAVE
 ========================================================= */
 
+// The page link lives in the collapsed "More details". A browser can't
+// point at an invalid field it can't show, and by the time `invalid` fires
+// it has already given up on this attempt. Open the section without its
+// animation (the content stays hidden, and unfocusable, while it plays),
+// then move focus there and show the browser's message.
+form.addEventListener("invalid", (event) => {
+  const field = event.target;
+  const details = field.closest("details");
+  if (!details || details.open) return;
+  details.classList.add("instant");
+  details.open = true;
+  setTimeout(() => {
+    field.focus();
+    field.reportValidity();
+    details.classList.remove("instant");
+  });
+}, true);
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 

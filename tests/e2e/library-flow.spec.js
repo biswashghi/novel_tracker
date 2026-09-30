@@ -263,6 +263,41 @@ test('popup lists recently read novels and reopens their chapter', async ({ cont
   await expect(onChapter.locator('#continue-reading')).toBeHidden();
 });
 
+test('popup keeps Save within the first screenful and shows a hidden invalid field', async ({
+  context,
+  extensionId,
+  serviceWorker
+}) => {
+  const sitePage = await context.newPage();
+  await mockSitePage(context, CHAPTER_URL, CHAPTER_HTML);
+  await sitePage.goto(CHAPTER_URL);
+
+  const popupPage = await context.newPage();
+  await popupPage.setViewportSize({ width: 390, height: 600 });
+  await stubActiveTab(popupPage, serviceWorker, CHAPTER_URL);
+  await popupPage.goto(extensionUrl(extensionId, 'popup.html'));
+  await expect(popupPage.locator('#title')).toHaveValue('Test Fiction');
+
+  // Safari's half-height sheet on iPhone shows roughly the popup's top
+  // 390px; Save has to be inside that without scrolling.
+  const save = await popupPage.locator('#save-button').boundingBox();
+  expect(save.y + save.height).toBeLessThanOrEqual(390);
+
+  // The page link is filled in for the reader and folded under More details.
+  const details = popupPage.locator('.more-details');
+  await expect(details).not.toHaveAttribute('open', '');
+  await expect(details.locator('#chapter-url')).toHaveValue(CHAPTER_URL);
+
+  // If it is ever invalid, saving opens the section so the browser can
+  // point at the field instead of failing silently.
+  await popupPage.bringToFront();
+  await popupPage.locator('#chapter-url').evaluate((input) => { input.value = 'not a url'; });
+  await popupPage.locator('#save-button').click();
+  await expect(details).toHaveAttribute('open', '');
+  await expect.poll(() => popupPage.evaluate(() => document.activeElement?.id)).toBe('chapter-url');
+  await expect(popupPage.locator('#status-message')).not.toContainText(/Added to your library/);
+});
+
 test('popup stays within Chrome\'s 600px popup height with a full Continue reading list', async ({
   context,
   extensionId,

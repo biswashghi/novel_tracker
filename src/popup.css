@@ -24,6 +24,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Safari on iPhone shows the popup as a sheet the full width of the screen
+   (375–440pt), so a fixed 390px leaves an uneven gutter or overflows.
+   Match the sheet there instead. Keyed to the physical screen, not the
+   viewport: on iPad the popup is a popover sized from this page, and
+   desktop popups likewise size to it, so both keep the fixed width. */
+@media (pointer: coarse) and (max-device-width: 500px) {
+  html,
+  body {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 body {
   min-height: 100%;
 
@@ -372,6 +385,8 @@ body.existing-novel .current-page-icon {
 
 /* More details */
 .more-details {
+  margin-top: 2px;
+
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 
@@ -444,6 +459,11 @@ body.existing-novel .current-page-icon {
 
 .more-details[open]::details-content {
   height: auto;
+}
+
+/* Opened to show an invalid field: no animation, so it can take focus now. */
+.more-details.instant::details-content {
+  transition: none;
 }
 
 .optional-fields {
