@@ -1,0 +1,27 @@
+Novel Tracker is easier to set up, and it does more.
+
+EASIER TO GET STARTED
+• On iOS 26.2 and later, the app shows whether Novel Tracker is switched on in Safari, and one tap opens its settings.
+• Clearer setup steps, including the "Always Allow on Every Website" choice. "Allow for One Day" stops tracking the next day.
+• The app shows the last chapter it tracked, with a button that takes you straight back to it in Safari.
+• After your first save, Novel Tracker tells you that from then on it follows you from chapter to chapter by itself.
+• In the popup, the Save button is now visible without scrolling.
+
+FIVE MORE SITES
+Archive of Our Own, Wattpad, Webnovel, NovelFire and ReadNovelFull are now followed chapter by chapter, joining Royal Road, Scribble Hub, Wuxiaworld and more.
+
+A BETTER LIBRARY
+• Refreshed design, with a dark theme.
+• Novels come first on your phone, with your reading stats below.
+• A reading-activity heatmap of the past year.
+• Recently deleted, with undo.
+• New sorts: Least recent, Newly added, Most chapters read.
+• "Continue reading" in the popup jumps back into your latest novels.
+• Export your library as a spreadsheet (CSV), or back it up and restore it from the Backup menu.
+• The library updates by itself while it's open.
+
+SYNC AND FIXES
+• Signing out in the app now signs out Safari too.
+• "Sign in with the app" in the library replaces sign-in buttons that couldn't work in Safari on iPhone.
+• Different novels on the same site are no longer mixed together, and your bookmark no longer jumps to a novel's contents page.
+• Webnovel's phone reader is tracked chapter by chapter.
