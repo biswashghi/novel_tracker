@@ -30,8 +30,10 @@
 
 require "base64"
 require "fileutils"
+require "json"
 require "open3"
 require "tmpdir"
+require_relative "app_store_release"
 require_relative "installer_certificate"
 
 default_platform(:mac)
@@ -108,6 +110,26 @@ def configure_distribution_signing(target, profile_name)
   )
 end
 
+RELEASE_VERSION = JSON.parse(File.read(File.expand_path("../../package.json", __dir__))).fetch("version")
+
+def api_platform(platform)
+  platform == "osx" ? Spaceship::ConnectAPI::Platform::MAC_OS : Spaceship::ConnectAPI::Platform::IOS
+end
+
+# A release is re-run when another store failed; the same version must not
+# be archived and submitted twice. TestFlight builds are always uploaded:
+# each run has its own build number.
+def already_submitted?(platform)
+  return false if ENV["NOVEL_TRACKER_APPLE_DISTRIBUTION"] == "testflight"
+
+  app = Spaceship::ConnectAPI::App.find(APP_BUNDLE_ID)
+  version = app && AppStoreRelease.submitted_version(app, api_platform(platform), RELEASE_VERSION)
+  return false unless version
+
+  UI.success("App Store Connect already has #{RELEASE_VERSION} for #{platform} (#{version.app_version_state}); skipping it.")
+  true
+end
+
 def release_notes
   path = ENV["NOVEL_TRACKER_RELEASE_NOTES"].to_s
   path.empty? ? "" : File.read(path).strip
@@ -153,15 +175,17 @@ def publish_build(platform:, binary:)
   app = Spaceship::ConnectAPI::App.find(APP_BUNDLE_ID)
   UI.user_error!("No App Store Connect app for #{APP_BUNDLE_ID}") unless app
   screenshots_path = staged_screenshots(app.primary_locale)
+  languages = AppStoreRelease.listing_languages(app, api_platform(platform))
+  UI.message("Setting \"What's New\" for #{languages.join(', ')}")
 
   upload_to_app_store(
     platform: platform,
     **binary,
-    # "default" fills every language the version already has; release notes
-    # are the only metadata sent (an empty metadata folder carries nothing).
+    # Release notes are the only metadata sent (an empty metadata folder
+    # carries nothing), in every language the listing has.
     skip_metadata: false,
     metadata_path: Dir.mktmpdir("novel-tracker-metadata"),
-    release_notes: { "default" => notes },
+    release_notes: AppStoreRelease.release_notes(languages, notes),
     skip_screenshots: screenshots_path.nil?,
     screenshots_path: screenshots_path,
     overwrite_screenshots: !screenshots_path.nil?,
@@ -216,6 +240,8 @@ platform :mac do
   desc "Archive the macOS Safari extension app and submit it for App Review"
   lane :release do
     api_key = connect_api_key
+    next if already_submitted?("osx")
+
     restore_installer_certificate
     certificate_id = distribution_certificate_id(api_key, "macos")
     app_profile = app_store_profile(
@@ -260,6 +286,8 @@ platform :ios do
   desc "Archive the iOS Safari extension app and submit it for App Review"
   lane :release do
     api_key = connect_api_key
+    next if already_submitted?("ios")
+
     certificate_id = distribution_certificate_id(api_key, "ios")
     app_profile = app_store_profile(
       api_key,

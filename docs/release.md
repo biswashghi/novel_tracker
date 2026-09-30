@@ -72,9 +72,14 @@ version already has a `v<version>` tag, and otherwise:
    the three ZIPs.
 
 The tag is created **last**. If a publish step fails, no tag exists, so the fix
-is an ordinary pull request to `main` — the same version runs again on merge.
-Only if a store already accepted the version (and would now refuse it as a
-duplicate) does the fix need another bump.
+is an ordinary pull request to `main` — the same version runs again on merge
+(approve it again). Each store's step checks what the store already has and
+skips what went through last time: the Chrome Web Store upload if its latest
+upload is this version, the AMO upload if AMO has this version (screenshots
+are still brought up to date), and an Apple platform whose version is already
+waiting for review, in review, approved or live. So only the failed parts are
+done again, and no bump is needed. AMO throttles bursts of requests; the
+release waits as long as AMO asks and retries.
 
 Every store submission is the same commit and the same `package.json`
 version. There is no separate beta channel: a bump made only to get an iOS

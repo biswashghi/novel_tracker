@@ -16,13 +16,39 @@ export function amoToken(key, secret, now = Math.floor(Date.now() / 1000)) {
   return `${header}.${payload}.${signature}`;
 }
 
-export function createAmoClient({ key, secret, addonId, fetchImpl = fetch }) {
-  async function request(method, path, body) {
-    const response = await fetchImpl(`${AMO_API}/addons/addon/${encodeURIComponent(addonId)}${path}`, {
-      method,
-      headers: { Authorization: `JWT ${amoToken(key, secret)}` },
-      body
-    });
+const MAX_ATTEMPTS = 6;
+const MAX_WAIT_SECONDS = 120;
+
+/**
+ * How long AMO asked us to wait before trying again, in seconds. It says so
+ * in Retry-After and in the body ("Expected available in 58 seconds.").
+ */
+export function throttleDelay(response, body) {
+  const header = Number(response.headers?.get?.("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header;
+  const match = /available in (\d+) second/.exec(body || "");
+  return match ? Number(match[1]) : 30;
+}
+
+const sleep = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+
+export function createAmoClient({ key, secret, addonId, fetchImpl = fetch, wait = sleep }) {
+  async function request(method, path, body, { allow = [] } = {}) {
+    let response;
+    for (let attempt = 1; ; attempt += 1) {
+      // A fresh token per attempt: a throttled wait can outlive the last one.
+      response = await fetchImpl(`${AMO_API}/addons/addon/${encodeURIComponent(addonId)}${path}`, {
+        method,
+        headers: { Authorization: `JWT ${amoToken(key, secret)}` },
+        body
+      });
+      if (response.status !== 429 || attempt === MAX_ATTEMPTS) break;
+      // AMO throttles bursts of uploads (a release's screenshots hit it).
+      const seconds = Math.min(throttleDelay(response, await response.text().catch(() => "")), MAX_WAIT_SECONDS);
+      console.log(`AMO throttled ${method} ${path || "/"}; retrying in ${seconds}s (attempt ${attempt + 1} of ${MAX_ATTEMPTS}).`);
+      await wait(seconds);
+    }
+    if (allow.includes(response.status)) return { status: response.status };
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       throw new Error(`AMO ${method} ${path || "/"} failed (${response.status}): ${detail.slice(0, 200)}`);
@@ -32,6 +58,12 @@ export function createAmoClient({ key, secret, addonId, fetchImpl = fetch }) {
 
   return {
     getAddon: () => request("GET", "/"),
+
+    /** Whether AMO already has this version (a re-run of its release). */
+    async hasVersion(version) {
+      const result = await request("GET", `/versions/v${encodeURIComponent(version)}/`, undefined, { allow: [404] });
+      return result?.status !== 404;
+    },
 
     /**
      * Makes the listing's screenshots exactly `images` ({ name, data }), in

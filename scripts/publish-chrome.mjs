@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const required = [
   'CHROME_WEB_STORE_EXTENSION_ID',
@@ -47,6 +51,23 @@ const tokenData = await tokenResponse.json();
 const accessToken = tokenData.access_token;
 if (!accessToken) {
   throw new Error('Chrome Web Store token response did not include an access token.');
+}
+
+// A re-run of a release (because another store failed) finds this version
+// already uploaded, and the Web Store would refuse it as a duplicate. The
+// item's latest uploaded version is its DRAFT projection's crxVersion.
+const version = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8')).version;
+const itemResponse = await fetch(
+  `https://www.googleapis.com/chromewebstore/v1.1/items/${extensionId}?projection=DRAFT`,
+  { headers: { Authorization: `Bearer ${accessToken}` } },
+);
+if (!itemResponse.ok) {
+  throw new Error(`Chrome Web Store item lookup failed: ${itemResponse.status} ${await itemResponse.text()}`);
+}
+const { crxVersion } = await itemResponse.json();
+if (crxVersion === version) {
+  console.log(`The Chrome Web Store already has ${version}; not uploading or publishing it again.`);
+  process.exit(0);
 }
 
 const zipBuffer = await readFile(zipPath);

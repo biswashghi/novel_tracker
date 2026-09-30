@@ -256,7 +256,9 @@ jobs:
         run: npm ci
 
       - name: Test Apple installer certificate matching
-        run: bundle exec ruby tests/apple-installer-certificate.test.rb
+        run: |
+          bundle exec ruby tests/apple-installer-certificate.test.rb
+          bundle exec ruby tests/app-store-release.test.rb
 
       - name: Package and compile Safari apps
         env:

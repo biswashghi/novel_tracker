@@ -76,40 +76,47 @@ try {
     const amo = createAmoClient({ key: process.env.AMO_API_KEY, secret: process.env.AMO_API_SECRET, addonId });
     const { default_locale: locale = 'en-US' } = await amo.getAddon();
 
-    const metadataPath = path.join(sourceDir, '..', `${path.basename(sourceDir)}-amo-metadata.json`);
-    await writeFile(metadataPath, JSON.stringify({ version: { release_notes: { [locale]: plan.notes.firefox } } }));
+    // A re-run of a release whose version AMO already took (because a later
+    // step or another store failed) skips the upload AMO would refuse as a
+    // duplicate, and carries on with the steps after it.
+    if (await amo.hasVersion(plan.version)) {
+      console.log(`AMO already has ${plan.version}; not uploading it again.`);
+    } else {
+      const metadataPath = path.join(sourceDir, '..', `${path.basename(sourceDir)}-amo-metadata.json`);
+      await writeFile(metadataPath, JSON.stringify({ version: { release_notes: { [locale]: plan.notes.firefox } } }));
 
-    const result = spawnSync(
-      'npm',
-      [
-        'exec',
-        '--',
-        'web-ext',
-        'sign',
-        '--source-dir',
-        sourceDir,
-        // Public, searchable AMO listing (novel-tracker@bghimire.com) rather
-        // than a self-distributed unlisted build — matches how this
-        // extension has been published so far. `--channel` is required by
-        // web-ext; there is no default.
-        '--channel',
-        'listed',
-        '--api-key',
-        process.env.AMO_API_KEY,
-        '--api-secret',
-        process.env.AMO_API_SECRET,
-        // Release notes for this version, under the listing's own language.
-        '--amo-metadata',
-        metadataPath,
-      ],
-      {
-        stdio: 'inherit',
-      },
-    );
+      const result = spawnSync(
+        'npm',
+        [
+          'exec',
+          '--',
+          'web-ext',
+          'sign',
+          '--source-dir',
+          sourceDir,
+          // Public, searchable AMO listing (novel-tracker@bghimire.com) rather
+          // than a self-distributed unlisted build — matches how this
+          // extension has been published so far. `--channel` is required by
+          // web-ext; there is no default.
+          '--channel',
+          'listed',
+          '--api-key',
+          process.env.AMO_API_KEY,
+          '--api-secret',
+          process.env.AMO_API_SECRET,
+          // Release notes for this version, under the listing's own language.
+          '--amo-metadata',
+          metadataPath,
+        ],
+        {
+          stdio: 'inherit',
+        },
+      );
 
-    await rm(metadataPath, { force: true });
-    if (result.error) throw result.error;
-    exitCode = result.status ?? 0;
+      await rm(metadataPath, { force: true });
+      if (result.error) throw result.error;
+      exitCode = result.status ?? 0;
+    }
 
     // Screenshots belong to the listing rather than the version; replace
     // them only once the version itself went through, and only if changed.
