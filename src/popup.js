@@ -429,7 +429,7 @@ async function loadCurrentPage() {
     // that doesn't let extensions in at all.
     setStatus(
       isSafariExtension()
-        ? "Novel Tracker isn't allowed to read this page yet. Close this, tap Novel Tracker in Safari's page menu again, and choose Always Allow."
+        ? "Novel Tracker isn't allowed to read this page yet. Close this, open Novel Tracker from Safari again, and choose Always Allow for this website."
         : "Novel Tracker can't read this page. Some sites and browser pages don't let extensions in.",
       "error"
     );
