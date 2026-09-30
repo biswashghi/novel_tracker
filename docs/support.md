@@ -21,11 +21,17 @@ extension version, the reading site involved, and what you expected to happen.
 ### iPhone and iPad
 
 1. Install Novel Tracker from the App Store.
-2. Open **Settings → Apps → Safari → Extensions**, select **Novel Tracker**, and
-   turn it on.
-3. Allow Novel Tracker to access the reading sites you use.
-4. In Safari, open a chapter page and tap the extensions button in the address
-   bar, then choose **Novel Tracker**.
+2. In Safari, tap the page menu button in the address bar, choose **Manage
+   Extensions**, and switch on **Novel Tracker**. (Or: **Settings → Apps →
+   Safari → Extensions → Novel Tracker**.)
+3. Tap **Novel Tracker** in that menu, then **Always Allow** and **Always Allow
+   on Every Website**. It only reads the novel sites it supports. If you choose
+   **Allow for One Day**, tracking stops the next day.
+4. On a chapter, open **Novel Tracker** from the page menu and tap **Save
+   bookmark**. From then on it follows you from chapter to chapter by itself.
+
+On iOS 26.2 and later, the Novel Tracker app shows whether the extension is on,
+and its **Turn On in Settings** button opens the extension's settings directly.
 
 ### Mac
 
